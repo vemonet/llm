@@ -3,7 +3,7 @@
 //! This module provides a flexible builder pattern for creating and configuring
 //! LLM (Large Language Model) provider instances with various settings and options.
 
-use crate::{error::RllmError, LLMProvider};
+use crate::{error::LLMError, LLMProvider};
 
 /// A function type for validating LLM provider outputs.
 /// Takes a response string and returns Ok(()) if valid, or Err with an error message if invalid.
@@ -40,13 +40,13 @@ pub enum LLMBackend {
 /// # Returns
 ///
 /// * `Ok(LLMBackend)` - The corresponding backend variant if valid
-/// * `Err(RllmError)` - An error if the string doesn't match any known backend
+/// * `Err(LLMError)` - An error if the string doesn't match any known backend
 ///
 /// # Examples
 ///
 /// ```
 /// use std::str::FromStr;
-/// use rllm::LLMBackend;
+/// use llm::LLMBackend;
 ///
 /// let backend = LLMBackend::from_str("openai").unwrap();
 /// assert!(matches!(backend, LLMBackend::OpenAI));
@@ -55,7 +55,7 @@ pub enum LLMBackend {
 /// assert!(err.to_string().contains("Unknown LLM backend"));
 /// ```
 impl std::str::FromStr for LLMBackend {
-    type Err = RllmError;
+    type Err = LLMError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -65,7 +65,7 @@ impl std::str::FromStr for LLMBackend {
             "deepseek" => Ok(LLMBackend::DeepSeek),
             "xai" => Ok(LLMBackend::XAI),
             "phind" => Ok(LLMBackend::Phind),
-            _ => Err(RllmError::InvalidRequest(format!(
+            _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {}",
                 s
             ))),
@@ -230,23 +230,23 @@ impl LLMBuilder {
     /// - No backend is specified
     /// - Required backend feature is not enabled
     /// - Required configuration like API keys are missing
-    pub fn build(self) -> Result<Box<dyn LLMProvider>, RllmError> {
+    pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
         let backend = self
             .backend
-            .ok_or_else(|| RllmError::InvalidRequest("No backend specified".to_string()))?;
+            .ok_or_else(|| LLMError::InvalidRequest("No backend specified".to_string()))?;
 
         #[allow(unused_variables)]
         let provider: Box<dyn LLMProvider> = match backend {
             LLMBackend::OpenAI => {
                 #[cfg(not(feature = "openai"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "OpenAI feature not enabled".to_string(),
                 ));
 
                 #[cfg(feature = "openai")]
                 {
                     let key = self.api_key.ok_or_else(|| {
-                        RllmError::InvalidRequest("No API key provided for OpenAI".to_string())
+                        LLMError::InvalidRequest("No API key provided for OpenAI".to_string())
                     })?;
                     Box::new(crate::backends::openai::OpenAI::new(
                         key,
@@ -265,14 +265,14 @@ impl LLMBuilder {
             }
             LLMBackend::Anthropic => {
                 #[cfg(not(feature = "anthropic"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "Anthropic feature not enabled".to_string(),
                 ));
 
                 #[cfg(feature = "anthropic")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        RllmError::InvalidRequest("No API key provided for Anthropic".to_string())
+                        LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
                     })?;
 
                     let anthro = crate::backends::anthropic::Anthropic::new(
@@ -292,7 +292,7 @@ impl LLMBuilder {
             }
             LLMBackend::Ollama => {
                 #[cfg(not(feature = "ollama"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "Ollama feature not enabled".to_string(),
                 ));
 
@@ -319,14 +319,14 @@ impl LLMBuilder {
             }
             LLMBackend::DeepSeek => {
                 #[cfg(not(feature = "deepseek"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "DeepSeek feature not enabled".to_string(),
                 ));
 
                 #[cfg(feature = "deepseek")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        RllmError::InvalidRequest("No API key provided for DeepSeek".to_string())
+                        LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
                     })?;
 
                     let deepseek = crate::backends::deepseek::DeepSeek::new(
@@ -344,14 +344,14 @@ impl LLMBuilder {
             }
             LLMBackend::XAI => {
                 #[cfg(not(feature = "xai"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "XAI feature not enabled".to_string(),
                 ));
 
                 #[cfg(feature = "xai")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        RllmError::InvalidRequest("No API key provided for XAI".to_string())
+                        LLMError::InvalidRequest("No API key provided for XAI".to_string())
                     })?;
 
                     let xai = crate::backends::xai::XAI::new(
@@ -372,7 +372,7 @@ impl LLMBuilder {
             }
             LLMBackend::Phind => {
                 #[cfg(not(feature = "phind"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "Phind feature not enabled".to_string(),
                 ));
 
@@ -393,14 +393,14 @@ impl LLMBuilder {
             },
             LLMBackend::Google => {
                 #[cfg(not(feature = "google"))]
-                return Err(RllmError::InvalidRequest(
+                return Err(LLMError::InvalidRequest(
                     "Google feature not enabled".to_string(),
                 ));
 
                 #[cfg(feature = "google")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        RllmError::InvalidRequest("No API key provided for Google".to_string())
+                        LLMError::InvalidRequest("No API key provided for Google".to_string())
                     })?;
 
                     let google = crate::backends::google::Google::new(
