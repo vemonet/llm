@@ -1,5 +1,5 @@
-use crate::error::RllmError;
+use crate::error::LLMError;
 
 pub trait EmbeddingProvider {
-    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError>;
+    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError>;
 }
