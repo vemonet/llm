@@ -1,5 +1,5 @@
-// Import required builder types from rllm
-use rllm::builder::{LLMBackend, LLMBuilder};
+// Import required builder types from llm
+use llm::builder::{LLMBackend, LLMBuilder};
 
 /// Example demonstrating how to generate embeddings using OpenAI's API
 ///
