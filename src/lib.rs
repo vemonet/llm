@@ -1,4 +1,4 @@
-//! RLLM (Rust LLM) is a unified interface for interacting with Large Language Model providers.
+//! LLM (Rust LLM) is a unified interface for interacting with Large Language Model providers.
 //!
 //! # Overview
 //! This crate provides a consistent API for working with different LLM backends by abstracting away
