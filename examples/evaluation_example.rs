@@ -6,7 +6,7 @@
 //! 3. Send the same prompt to all providers
 //! 4. Compare and score the responses
 
-use rllm::{
+use llm::{
     builder::{LLMBackend, LLMBuilder},
     chat::{ChatMessage, ChatRole},
     evaluator::{EvalResult, LLMEvaluator},
