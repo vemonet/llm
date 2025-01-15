@@ -1,5 +1,5 @@
-// Import required modules from the RLLM library for OpenAI integration
-use rllm::{
+// Import required modules from the LLM library for OpenAI integration
+use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
