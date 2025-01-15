@@ -6,7 +6,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
 };
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -140,9 +140,9 @@ impl ChatProvider for Ollama {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.base_url.is_empty() {
-            return Err(RllmError::InvalidRequest("Missing base_url".to_string()));
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
 
         let mut chat_messages: Vec<OllamaChatMessage> = messages
@@ -207,9 +207,9 @@ impl CompletionProvider for Ollama {
     /// # Returns
     ///
     /// The completion response containing the generated text or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         if self.base_url.is_empty() {
-            return Err(RllmError::InvalidRequest("Missing base_url".to_string()));
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
         let url = format!("{}/api/generate", self.base_url);
 
@@ -234,9 +234,9 @@ impl CompletionProvider for Ollama {
 }
 
 impl EmbeddingProvider for Ollama {
-    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
+    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.base_url.is_empty() {
-            return Err(RllmError::InvalidRequest("Missing base_url".to_string()));
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
         let url = format!("{}/api/embed", self.base_url);
 
