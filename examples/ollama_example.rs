@@ -1,5 +1,5 @@
-// Import required modules from the RLLM library
-use rllm::{
+// Import required modules from the LLM library
+use llm::{
     builder::{LLMBackend, LLMBuilder},
     chat::{ChatMessage, ChatRole},
 };
