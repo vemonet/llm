@@ -3,7 +3,7 @@
 //! This module provides functionality to run the same prompt through multiple LLMs
 //! and score their responses using custom evaluation functions.
 
-use crate::{chat::ChatMessage, error::RllmError, LLMProvider};
+use crate::{chat::ChatMessage, error::LLMError, LLMProvider};
 
 /// Type alias for scoring functions that evaluate LLM responses
 pub type ScoringFn = dyn Fn(&str) -> f32 + Send + Sync + 'static;
@@ -47,7 +47,7 @@ impl LLMEvaluator {
     ///
     /// # Returns
     /// Vector of evaluation results containing responses and scores
-    pub fn evaluate_chat(&self, messages: &[ChatMessage]) -> Result<Vec<EvalResult>, RllmError> {
+    pub fn evaluate_chat(&self, messages: &[ChatMessage]) -> Result<Vec<EvalResult>, LLMError> {
         let mut results = Vec::new();
         for llm in &self.llms {
             let response = llm.chat(messages)?;
