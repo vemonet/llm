@@ -1,4 +1,4 @@
-use crate::error::RllmError;
+use crate::error::LLMError;
 
 /// Role of a participant in a chat conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,5 +29,5 @@ pub trait ChatProvider {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError>;
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError>;
 }
