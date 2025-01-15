@@ -8,7 +8,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 use reqwest::blocking::Client;
@@ -180,9 +180,9 @@ impl ChatProvider for XAI {
     /// # Returns
     ///
     /// The generated response text, or an error if the request fails.
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing X.AI API key".to_string()));
+            return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
         }
 
         let mut xai_msgs: Vec<XAIChatMessage> = messages
@@ -227,7 +227,7 @@ impl ChatProvider for XAI {
         let json_resp: XAIChatResponse = resp.json()?;
         let first_choice =
             json_resp.choices.into_iter().next().ok_or_else(|| {
-                RllmError::ProviderError("No choices returned by X.AI".to_string())
+                LLMError::ProviderError("No choices returned by X.AI".to_string())
             })?;
 
         Ok(first_choice.message.content)
@@ -246,7 +246,7 @@ impl CompletionProvider for XAI {
     /// # Returns
     ///
     /// A placeholder response indicating the functionality is not implemented.
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "X.AI completion not implemented.".into(),
         })
@@ -254,9 +254,9 @@ impl CompletionProvider for XAI {
 }
 
 impl EmbeddingProvider for XAI {
-    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
+    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing X.AI API key".into()));
+            return Err(LLMError::AuthError("Missing X.AI API key".into()));
         }
 
         let emb_format = self
