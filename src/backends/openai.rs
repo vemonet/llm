@@ -7,7 +7,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 use reqwest::blocking::Client;
@@ -153,9 +153,9 @@ impl ChatProvider for OpenAI {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing OpenAI API key".to_string()));
+            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
 
         let mut openai_msgs: Vec<OpenAIChatMessage> = messages
@@ -200,7 +200,7 @@ impl ChatProvider for OpenAI {
         let json_resp: OpenAIChatResponse = resp.json()?;
         let first_choice =
             json_resp.choices.into_iter().next().ok_or_else(|| {
-                RllmError::ProviderError("No choices returned by OpenAI".to_string())
+                LLMError::ProviderError("No choices returned by OpenAI".to_string())
             })?;
 
         Ok(first_choice.message.content)
@@ -211,7 +211,7 @@ impl CompletionProvider for OpenAI {
     /// Sends a completion request to OpenAI's API.
     ///
     /// Currently not implemented.
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "OpenAI completion not implemented.".into(),
         })
@@ -220,9 +220,9 @@ impl CompletionProvider for OpenAI {
 
 #[cfg(feature = "openai")]
 impl EmbeddingProvider for OpenAI {
-    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
+    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing OpenAI API key".into()));
+            return Err(LLMError::AuthError("Missing OpenAI API key".into()));
         }
 
         let emb_format = self
