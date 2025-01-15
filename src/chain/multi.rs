@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{
     chat::{ChatMessage, ChatRole},
     completion::CompletionRequest,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 
@@ -137,16 +137,16 @@ impl MultiChainStepBuilder {
     }
 
     /// Builds the step
-    pub fn build(self) -> Result<MultiChainStep, RllmError> {
+    pub fn build(self) -> Result<MultiChainStep, LLMError> {
         let provider_id = self
             .provider_id
-            .ok_or_else(|| RllmError::InvalidRequest("No provider_id set".into()))?;
+            .ok_or_else(|| LLMError::InvalidRequest("No provider_id set".into()))?;
         let id = self
             .id
-            .ok_or_else(|| RllmError::InvalidRequest("No step id set".into()))?;
+            .ok_or_else(|| LLMError::InvalidRequest("No step id set".into()))?;
         let tmpl = self
             .template
-            .ok_or_else(|| RllmError::InvalidRequest("No template set".into()))?;
+            .ok_or_else(|| LLMError::InvalidRequest("No template set".into()))?;
 
         Ok(MultiChainStep {
             provider_id,
@@ -182,14 +182,14 @@ impl<'a> MultiPromptChain<'a> {
     }
 
     /// Executes all steps
-    pub fn run(mut self) -> Result<HashMap<String, String>, RllmError> {
+    pub fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
         for step in &self.steps {
             // 1) Replace {{xyz}} in template with existing memory
             let prompt_text = self.replace_template(&step.template);
 
             // 2) Get the right backend
             let llm = self.registry.get(&step.provider_id).ok_or_else(|| {
-                RllmError::InvalidRequest(format!(
+                LLMError::InvalidRequest(format!(
                     "No provider with id '{}' found in registry",
                     step.provider_id
                 ))
