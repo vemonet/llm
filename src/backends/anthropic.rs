@@ -6,7 +6,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
 };
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -119,9 +119,9 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError(
+            return Err(LLMError::AuthError(
                 "Missing Anthropic API key".to_string(),
             ));
         }
@@ -160,7 +160,7 @@ impl ChatProvider for Anthropic {
 
         let json_resp: AnthropicCompleteResponse = resp.json()?;
         if json_resp.content.is_empty() {
-            return Err(RllmError::ProviderError(
+            return Err(LLMError::ProviderError(
                 "No content returned by Anthropic".to_string(),
             ));
         }
@@ -173,7 +173,7 @@ impl CompletionProvider for Anthropic {
     /// Sends a completion request to Anthropic's API.
     ///
     /// Converts the completion request into a chat message format.
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage {
             role: ChatRole::User,
             content: req.prompt.clone(),
@@ -184,8 +184,8 @@ impl CompletionProvider for Anthropic {
 }
 
 impl EmbeddingProvider for Anthropic {
-    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
-        Err(RllmError::ProviderError(
+    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+        Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
         ))
     }
