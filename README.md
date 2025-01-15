@@ -24,7 +24,7 @@ Simply add **LLM** to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-llm = { version = "1.0.0", features = ["openai", "anthropic", "ollama"] }
+llm = { version = "1.0.1", features = ["openai", "anthropic", "ollama"] }
 ```
 
 ## Examples
