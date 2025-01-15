@@ -1,6 +1,6 @@
 mod multi;
 
-use crate::{error::RllmError, LLMProvider};
+use crate::{error::LLMError, LLMProvider};
 use std::collections::HashMap;
 
 pub use multi::{LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain};
@@ -122,7 +122,7 @@ impl<'a> PromptChain<'a> {
     }
 
     /// Executes all steps in the chain and returns the results
-    pub fn run(mut self) -> Result<HashMap<String, String>, RllmError> {
+    pub fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
         for step in &self.steps {
             let prompt = self.apply_template(&step.template);
 
