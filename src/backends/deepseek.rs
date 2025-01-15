@@ -7,7 +7,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 use reqwest::blocking::Client;
@@ -82,9 +82,9 @@ impl DeepSeek {
 }
 
 impl ChatProvider for DeepSeek {
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing DeepSeek API key".to_string()));
+            return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
         }
 
         let mut deepseek_msgs: Vec<DeepSeekChatMessage> = messages
@@ -125,7 +125,7 @@ impl ChatProvider for DeepSeek {
 
         let json_resp: DeepSeekChatResponse = resp.json()?;
         let first_choice = json_resp.choices.into_iter().next().ok_or_else(|| {
-            RllmError::ProviderError("No choices returned by DeepSeek".to_string())
+            LLMError::ProviderError("No choices returned by DeepSeek".to_string())
         })?;
 
         Ok(first_choice.message.content)
@@ -133,7 +133,7 @@ impl ChatProvider for DeepSeek {
 }
 
 impl CompletionProvider for DeepSeek {
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "DeepSeek completion not implemented.".into(),
         })
@@ -141,8 +141,8 @@ impl CompletionProvider for DeepSeek {
 }
 
 impl EmbeddingProvider for DeepSeek {
-    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
-        Err(RllmError::ProviderError(
+    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+        Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
         ))
     }
