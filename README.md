@@ -1,5 +1,8 @@
 # LLM
 
+> **Note**: This crate name previously belonged to another project for approximately one year. The current implementation represents a new and different library. The previous crate is now archived and will not receive any updates. **ref: https://github.com/philpax/llm**
+
+
 **LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com) and [Google](https://cloud.google.com/gemini).
 With a **unified API** and **builder style** - similar to the Stripe experience - you can easily create **chat** or text **completion** requests without multiplying structures and crates.
 
