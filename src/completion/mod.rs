@@ -1,4 +1,4 @@
-use crate::error::RllmError;
+use crate::error::LLMError;
 
 /// A request for text completion from an LLM provider.
 #[derive(Debug, Clone)]
@@ -91,5 +91,5 @@ pub trait CompletionProvider {
     /// # Returns
     ///
     /// The generated completion text or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, RllmError>;
+    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError>;
 }
