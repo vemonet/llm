@@ -5,7 +5,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 use reqwest::blocking::{Client, Response};
@@ -69,7 +69,7 @@ impl Phind {
     }
 
     /// Creates the required headers for API requests.
-    fn create_headers() -> Result<HeaderMap, RllmError> {
+    fn create_headers() -> Result<HeaderMap, LLMError> {
         let mut headers = HeaderMap::new();
         headers.insert("Content-Type", HeaderValue::from_static("application/json"));
         headers.insert("User-Agent", HeaderValue::from_static(""));
@@ -102,14 +102,14 @@ impl Phind {
     }
 
     /// Interprets the API response and handles any errors.
-    fn interpret_response(&self, response: Response) -> Result<String, RllmError> {
+    fn interpret_response(&self, response: Response) -> Result<String, LLMError> {
         let status = response.status();
         match status {
             StatusCode::OK => {
                 let response_text = response.text()?;
                 let full_text = Self::parse_stream_response(&response_text);
                 if full_text.is_empty() {
-                    Err(RllmError::ProviderError(
+                    Err(LLMError::ProviderError(
                         "No completion choice returned.".to_string(),
                     ))
                 } else {
@@ -128,7 +128,7 @@ impl Phind {
                     .unwrap_or("Unexpected error from Phind")
                     .to_string();
 
-                Err(RllmError::ProviderError(format!(
+                Err(LLMError::ProviderError(format!(
                     "APIError {}: {}",
                     status, error_message
                 )))
@@ -139,7 +139,7 @@ impl Phind {
 
 /// Implementation of chat functionality for Phind.
 impl ChatProvider for Phind {
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         let mut message_history = vec![];
         for m in messages {
             let role_str = match m.role {
@@ -190,7 +190,7 @@ impl ChatProvider for Phind {
 
 /// Implementation of completion functionality for Phind.
 impl CompletionProvider for Phind {
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_resp = self.chat(&[crate::chat::ChatMessage {
             role: ChatRole::User,
             content: _req.prompt.clone(),
@@ -203,8 +203,8 @@ impl CompletionProvider for Phind {
 /// Implementation of embedding functionality for Phind.
 #[cfg(feature = "phind")]
 impl EmbeddingProvider for Phind {
-    fn embed(&self, _input: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
-        Err(RllmError::ProviderError(
+    fn embed(&self, _input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+        Err(LLMError::ProviderError(
             "Phind does not implement embeddings endpoint yet.".into(),
         ))
     }
