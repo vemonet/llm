@@ -11,8 +11,8 @@
 //!
 //! # Example
 //! ```no_run
-//! use rllm::backends::google::Google;
-//! use rllm::chat::{ChatMessage, ChatRole};
+//! use llm::backends::google::Google;
+//! use llm::chat::{ChatMessage, ChatRole};
 //!
 //! let client = Google::new(
 //!     "your-api-key",
@@ -41,7 +41,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
-    error::RllmError,
+    error::LLMError,
     LLMProvider,
 };
 use reqwest::blocking::Client;
@@ -227,9 +227,9 @@ impl ChatProvider for Google {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing Google API key".to_string()));
+            return Err(LLMError::AuthError("Missing Google API key".to_string()));
         }
 
         let mut chat_contents = Vec::new();
@@ -290,7 +290,7 @@ impl ChatProvider for Google {
 
         let json_resp: GoogleChatResponse = resp.json()?;
         let first_candidate = json_resp.candidates.into_iter().next().ok_or_else(|| {
-            RllmError::ProviderError("No candidates returned by Google".to_string())
+            LLMError::ProviderError("No candidates returned by Google".to_string())
         })?;
 
         let response_text = first_candidate
@@ -315,7 +315,7 @@ impl CompletionProvider for Google {
     /// # Returns
     ///
     /// The completion response or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage {
             role: ChatRole::User,
             content: req.prompt.clone(),
@@ -326,9 +326,9 @@ impl CompletionProvider for Google {
 }
 
 impl EmbeddingProvider for Google {
-    fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
+    fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(RllmError::AuthError("Missing Google API key".to_string()));
+            return Err(LLMError::AuthError("Missing Google API key".to_string()));
         }
 
         let mut embeddings = Vec::new();
