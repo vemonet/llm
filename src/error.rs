@@ -2,7 +2,7 @@ use std::fmt;
 
 /// Error types that can occur when interacting with LLM providers.
 #[derive(Debug)]
-pub enum RllmError {
+pub enum LLMError {
     /// HTTP request/response errors
     HttpError(String),
     /// Authentication and authorization errors
@@ -15,23 +15,23 @@ pub enum RllmError {
     JsonError(String),
 }
 
-impl fmt::Display for RllmError {
+impl fmt::Display for LLMError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RllmError::HttpError(e) => write!(f, "HTTP Error: {}", e),
-            RllmError::AuthError(e) => write!(f, "Auth Error: {}", e),
-            RllmError::InvalidRequest(e) => write!(f, "Invalid Request: {}", e),
-            RllmError::ProviderError(e) => write!(f, "Provider Error: {}", e),
-            RllmError::JsonError(e) => write!(f, "JSON Parse Error: {}", e),
+            LLMError::HttpError(e) => write!(f, "HTTP Error: {}", e),
+            LLMError::AuthError(e) => write!(f, "Auth Error: {}", e),
+            LLMError::InvalidRequest(e) => write!(f, "Invalid Request: {}", e),
+            LLMError::ProviderError(e) => write!(f, "Provider Error: {}", e),
+            LLMError::JsonError(e) => write!(f, "JSON Parse Error: {}", e),
         }
     }
 }
 
-impl std::error::Error for RllmError {}
+impl std::error::Error for LLMError {}
 
-/// Converts reqwest HTTP errors into RllmErrors
-impl From<reqwest::Error> for RllmError {
+/// Converts reqwest HTTP errors into LlmErrors
+impl From<reqwest::Error> for LLMError {
     fn from(err: reqwest::Error) -> Self {
-        RllmError::HttpError(err.to_string())
+        LLMError::HttpError(err.to_string())
     }
 }
