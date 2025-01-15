@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use rllm::{LLMBuilder, LLMBackend};
+//! use llm::{LLMBuilder, LLMBackend};
 //!
 //! let llm = LLMBuilder::new()
 //!     .backend(LLMBackend::OpenAI)
@@ -26,7 +26,7 @@
 use crate::chat::{ChatMessage, ChatProvider, ChatRole};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
-use crate::error::RllmError;
+use crate::error::LLMError;
 use crate::{builder::ValidatorFn, LLMProvider};
 
 /// A wrapper around an LLM provider that validates responses before returning them.
@@ -85,8 +85,8 @@ impl ChatProvider for ValidatedLLM {
     /// # Returns
     ///
     /// * `Ok(String)` - The validated response from the model
-    /// * `Err(RllmError)` - If validation fails after max attempts or other errors occur
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, RllmError> {
+    /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         let mut local_messages = messages.to_vec();
         let mut remaining_attempts = self.attempts;
 
@@ -103,7 +103,7 @@ impl ChatProvider for ValidatedLLM {
                 Err(err) => {
                     remaining_attempts -= 1;
                     if remaining_attempts == 0 {
-                        return Err(RllmError::InvalidRequest(format!(
+                        return Err(LLMError::InvalidRequest(format!(
                             "Validation error after max attempts: {}",
                             err
                         )));
@@ -136,8 +136,8 @@ impl CompletionProvider for ValidatedLLM {
     /// # Returns
     ///
     /// * `Ok(CompletionResponse)` - The validated completion response
-    /// * `Err(RllmError)` - If validation fails after max attempts or other errors occur
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, RllmError> {
+    /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
+    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let mut remaining_attempts = self.attempts;
 
         loop {
@@ -153,7 +153,7 @@ impl CompletionProvider for ValidatedLLM {
                 Err(err) => {
                     remaining_attempts -= 1;
                     if remaining_attempts == 0 {
-                        return Err(RllmError::InvalidRequest(format!(
+                        return Err(LLMError::InvalidRequest(format!(
                             "Validation error after max attempts: {}",
                             err
                         )));
@@ -177,8 +177,8 @@ impl EmbeddingProvider for ValidatedLLM {
     /// # Returns
     ///
     /// * `Ok(Vec<Vec<f32>>)` - Vector of embedding vectors
-    /// * `Err(RllmError)` - If the embedding generation fails
-    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, RllmError> {
+    /// * `Err(LLMError)` - If the embedding generation fails
+    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         // Pass through to inner provider since embeddings don't need validation
         self.inner.embed(input)
     }
