@@ -86,7 +86,6 @@ impl ChatProvider for ValidatedLLM {
     ///
     /// * `Ok(String)` - The validated response from the model
     /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
-
     fn chat_with_tools(
         &self,
         messages: &[ChatMessage],

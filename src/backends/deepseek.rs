@@ -132,7 +132,11 @@ impl ChatProvider for DeepSeek {
         Ok(first_choice.message.content)
     }
 
-    fn chat_with_tools(&self, _messages: &[ChatMessage], _tools: Option<&[Tool]>) -> Result<String, LLMError> {
+    fn chat_with_tools(
+        &self,
+        _messages: &[ChatMessage],
+        _tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
         todo!()
     }
 }

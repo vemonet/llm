@@ -85,7 +85,6 @@ struct AnthropicContent {
     id: Option<String>,
 }
 
-
 impl Anthropic {
     /// Creates a new Anthropic client with the specified configuration.
     ///
@@ -170,7 +169,7 @@ impl ChatProvider for Anthropic {
         });
 
         let tool_choice = if let Some(_) = tools {
-            Some(HashMap::from([("type".to_string(), "any".to_string())]))
+            Some(HashMap::from([("type".to_string(), "auto".to_string())]))
         } else {
             None
         };
@@ -194,13 +193,10 @@ impl ChatProvider for Anthropic {
             .header("Content-Type", "application/json")
             .header("anthropic-version", "2023-06-01")
             .json(&req_body)
-            .send()
-            .unwrap()
-            .error_for_status()
-            .unwrap();
+            .send()?
+            .error_for_status()?;
 
-        let json_resp: AnthropicCompleteResponse = resp.json().unwrap();
-
+        let json_resp: AnthropicCompleteResponse = resp.json()?;
 
         if json_resp.content.is_empty() {
             return Err(LLMError::ProviderError(
@@ -208,14 +204,18 @@ impl ChatProvider for Anthropic {
             ));
         }
 
-        let outputs = json_resp.content.iter().map(|c| {
-            if c.content_type == Some("tool_use".to_string()) {
-                let tool_call = serde_json::to_string(c).unwrap();
-                tool_call
-            } else {
-                c.text.clone().unwrap()
-            }
-        }).collect::<Vec<_>>();
+        let outputs = json_resp
+            .content
+            .iter()
+            .map(|c| {
+                if c.content_type == Some("tool_use".to_string()) {
+                    let tool_call = serde_json::to_string(c).unwrap();
+                    tool_call
+                } else {
+                    c.text.clone().unwrap()
+                }
+            })
+            .collect::<Vec<_>>();
 
         Ok(serde_json::to_string(&outputs).unwrap())
     }

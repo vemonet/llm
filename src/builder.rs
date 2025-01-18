@@ -60,7 +60,7 @@ impl std::str::FromStr for LLMBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "openai" => Ok(LLMBackend::OpenAI),
-            "anthropic" => Ok(LLMBackend::Anthropic), 
+            "anthropic" => Ok(LLMBackend::Anthropic),
             "ollama" => Ok(LLMBackend::Ollama),
             "deepseek" => Ok(LLMBackend::DeepSeek),
             "xai" => Ok(LLMBackend::XAI),
@@ -389,7 +389,7 @@ impl LLMBuilder {
                     );
                     Box::new(phind)
                 }
-            },
+            }
             LLMBackend::Google => {
                 #[cfg(not(feature = "google"))]
                 return Err(LLMError::InvalidRequest(
@@ -430,5 +430,3 @@ impl LLMBuilder {
         }
     }
 }
-
-

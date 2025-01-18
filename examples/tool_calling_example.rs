@@ -7,21 +7,34 @@ use llm::{
 };
 
 fn main() {
-    // Get OpenAI API key from environment variable or use test key as fallback
-    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into());
+    // // Get OpenAI API key from environment variable or use test key as fallback
+    // let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into());
 
-    // Initialize and configure the LLM client
-    let llm = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI) // Use OpenAI as the LLM provider
-        .api_key(api_key) // Set the API key
-        .model("gpt-3.5-turbo") // Use GPT-3.5 Turbo model
-        .max_tokens(512) // Limit response length
-        .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
-        .build()
-        .expect("Failed to build LLM (OpenAI)");
+    // // Initialize and configure the LLM client
+    // let llm = LLMBuilder::new()
+    //     .backend(LLMBackend::OpenAI) // Use OpenAI as the LLM provider
+    //     .api_key(api_key) // Set the API key
+    //     .model("gpt-3.5-turbo") // Use GPT-3.5 Turbo model
+    //     .max_tokens(512) // Limit response length
+    //     .temperature(0.7) // Control response randomness (0.0-1.0)
+    //     .stream(false) // Disable streaming responses
+    //     .build()
+    //     .expect("Failed to build LLM (OpenAI)");
 
-    
+        // Get Anthropic API key from environment variable or use test key as fallback
+        let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into());
+
+        // Initialize and configure the LLM client
+        let llm = LLMBuilder::new()
+            .backend(LLMBackend::Anthropic) // Use Anthropic (Claude) as the LLM provider
+            .api_key(api_key) // Set the API key
+            .model("claude-3-5-sonnet-20240620") // Use Claude Instant model
+            .max_tokens(512) // Limit response length
+            .temperature(0.7) // Control response randomness (0.0-1.0)
+            // Uncomment to set system prompt:
+            // .system("You are a helpful assistant specialized in concurrency.")
+            .build()
+            .expect("Failed to build LLM (Anthropic)");
 
     let tool = Tool {
         tool_type: "function".to_string(),
