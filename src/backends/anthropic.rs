@@ -217,7 +217,7 @@ impl ChatProvider for Anthropic {
             })
             .collect::<Vec<_>>();
 
-        Ok(serde_json::to_string(&outputs).unwrap())
+        Ok(outputs[0].clone())
     }
 
     fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {

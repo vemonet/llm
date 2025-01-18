@@ -25,4 +25,3 @@ reqwest = { version = "0.12.12", features = ["blocking", "json"] }
 serde_json = "1.0"
 
 [dev-dependencies]
-llm = { path = ".", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google"] }
