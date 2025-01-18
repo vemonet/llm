@@ -2,8 +2,10 @@
 //!
 //! This module provides integration with Anthropic's Claude models through their API.
 
+use std::collections::HashMap;
+
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole},
+    chat::{ChatMessage, ChatProvider, ChatRole, ParametersSchema, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -28,8 +30,16 @@ pub struct Anthropic {
     client: Client,
 }
 
+/// Anthropic-specific tool format that matches their API structure
+#[derive(Serialize, Debug)]
+struct AnthropicTool<'a> {
+    name: &'a str,
+    description: &'a str,
+    input_schema: &'a ParametersSchema,
+}
+
 /// Request payload for Anthropic's messages API endpoint.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct AnthropicCompleteRequest<'a> {
     messages: Vec<AnthropicMessage<'a>>,
     model: &'a str,
@@ -45,26 +55,36 @@ struct AnthropicCompleteRequest<'a> {
     top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<AnthropicTool<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<HashMap<String, String>>,
 }
 
 /// Individual message in an Anthropic chat conversation.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct AnthropicMessage<'a> {
     role: &'a str,
     content: &'a str,
 }
 
 /// Response from Anthropic's messages API endpoint.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AnthropicCompleteResponse {
     content: Vec<AnthropicContent>,
 }
 
 /// Content block within an Anthropic API response.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct AnthropicContent {
-    text: String,
+    text: Option<String>,
+    #[serde(rename = "type")]
+    content_type: Option<String>,
+    name: Option<String>,
+    input: Option<HashMap<String, String>>,
+    id: Option<String>,
 }
+
 
 impl Anthropic {
     /// Creates a new Anthropic client with the specified configuration.
@@ -119,11 +139,13 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    fn chat_with_tools(
+        &self,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError(
-                "Missing Anthropic API key".to_string(),
-            ));
+            return Err(LLMError::AuthError("Missing Anthropic API key".to_string()));
         }
 
         let anthropic_messages: Vec<AnthropicMessage> = messages
@@ -137,6 +159,21 @@ impl ChatProvider for Anthropic {
             })
             .collect();
 
+        let anthropic_tools = tools.map(|t| {
+            t.iter()
+                .map(|tool| AnthropicTool {
+                    name: &tool.function.name,
+                    description: &tool.function.description,
+                    input_schema: &tool.function.parameters,
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let tool_choice = if let Some(_) = tools {
+            Some(HashMap::from([("type".to_string(), "any".to_string())]))
+        } else {
+            None
+        };
         let req_body = AnthropicCompleteRequest {
             messages: anthropic_messages,
             model: &self.model,
@@ -146,6 +183,8 @@ impl ChatProvider for Anthropic {
             stream: Some(self.stream),
             top_p: self.top_p,
             top_k: self.top_k,
+            tools: anthropic_tools,
+            tool_choice,
         };
 
         let resp = self
@@ -155,17 +194,34 @@ impl ChatProvider for Anthropic {
             .header("Content-Type", "application/json")
             .header("anthropic-version", "2023-06-01")
             .json(&req_body)
-            .send()?
-            .error_for_status()?;
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap();
 
-        let json_resp: AnthropicCompleteResponse = resp.json()?;
+        let json_resp: AnthropicCompleteResponse = resp.json().unwrap();
+
+
         if json_resp.content.is_empty() {
             return Err(LLMError::ProviderError(
                 "No content returned by Anthropic".to_string(),
             ));
         }
 
-        Ok(json_resp.content[0].text.clone())
+        let outputs = json_resp.content.iter().map(|c| {
+            if c.content_type == Some("tool_use".to_string()) {
+                let tool_call = serde_json::to_string(c).unwrap();
+                tool_call
+            } else {
+                c.text.clone().unwrap()
+            }
+        }).collect::<Vec<_>>();
+
+        Ok(serde_json::to_string(&outputs).unwrap())
+    }
+
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+        self.chat_with_tools(messages, None)
     }
 }
 
@@ -190,3 +246,5 @@ impl EmbeddingProvider for Anthropic {
         ))
     }
 }
+
+impl crate::LLMProvider for Anthropic {}

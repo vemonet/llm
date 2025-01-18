@@ -286,7 +286,7 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                     );
-                    impl crate::LLMProvider for crate::backends::anthropic::Anthropic {}
+
                     Box::new(anthro)
                 }
             }
@@ -313,7 +313,6 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                     );
-                    impl crate::LLMProvider for crate::backends::ollama::Ollama {}
                     Box::new(ollama)
                 }
             }

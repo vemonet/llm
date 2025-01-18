@@ -2,6 +2,7 @@
 //!
 //! This module provides integration with DeepSeek's models through their API.
 
+use crate::chat::Tool;
 #[cfg(feature = "deepseek")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
@@ -129,6 +130,10 @@ impl ChatProvider for DeepSeek {
         })?;
 
         Ok(first_choice.message.content)
+    }
+
+    fn chat_with_tools(&self, _messages: &[ChatMessage], _tools: Option<&[Tool]>) -> Result<String, LLMError> {
+        todo!()
     }
 }
 

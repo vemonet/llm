@@ -4,6 +4,7 @@
 
 #[cfg(feature = "openai")]
 use crate::{
+    chat::Tool,
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -65,6 +66,22 @@ struct OpenAIChatRequest<'a> {
     top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Tool>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub function: FunctionCall,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: String,
 }
 
 /// Response from OpenAI's chat API endpoint.
@@ -84,7 +101,8 @@ struct OpenAIChatChoice {
 struct OpenAIChatMsg {
     #[allow(dead_code)]
     role: String,
-    content: String,
+    content: Option<String>,
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Deserialize)]
@@ -153,7 +171,11 @@ impl ChatProvider for OpenAI {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    fn chat_with_tools(
+        &self,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
@@ -187,6 +209,7 @@ impl ChatProvider for OpenAI {
             stream: self.stream.unwrap_or(false),
             top_p: self.top_p,
             top_k: self.top_k,
+            tools: tools.map(|t| t.to_vec()),
         };
 
         let resp = self
@@ -196,14 +219,38 @@ impl ChatProvider for OpenAI {
             .json(&body)
             .send()?
             .error_for_status()?;
-
         let json_resp: OpenAIChatResponse = resp.json()?;
-        let first_choice =
-            json_resp.choices.into_iter().next().ok_or_else(|| {
-                LLMError::ProviderError("No choices returned by OpenAI".to_string())
-            })?;
 
-        Ok(first_choice.message.content)
+        let first_choice = json_resp
+            .choices
+            .first()
+            .ok_or_else(|| LLMError::ProviderError("No choices returned by OpenAI".to_string()))?;
+
+        match (
+            &first_choice.message.tool_calls,
+            &first_choice.message.content,
+        ) {
+            (Some(tool_calls), _) => {
+                // Prioritize tool calls if present
+                serde_json::to_string(tool_calls).map_err(|e| {
+                    LLMError::ProviderError(format!("Failed to serialize tool calls: {}", e))
+                })
+            }
+            (None, Some(content)) => {
+                // Return content if no tool calls but content exists
+                Ok(content.clone())
+            }
+            (None, None) => {
+                // Neither tool calls nor content present
+                Err(LLMError::ProviderError(
+                    "OpenAI response contained neither content nor tool calls".to_string(),
+                ))
+            }
+        }
+    }
+
+    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+        self.chat_with_tools(messages, None)
     }
 }
 

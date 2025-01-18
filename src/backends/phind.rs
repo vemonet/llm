@@ -1,3 +1,4 @@
+use crate::chat::Tool;
 /// Implementation of the Phind LLM provider.
 /// This module provides integration with Phind's language model API.
 #[cfg(feature = "phind")]
@@ -185,6 +186,10 @@ impl ChatProvider for Phind {
             .send()?;
 
         self.interpret_response(response)
+    }
+
+    fn chat_with_tools(&self, _messages: &[ChatMessage], _tools: Option<&[Tool]>) -> Result<String, LLMError> {
+        todo!()
     }
 }
 

@@ -3,7 +3,7 @@
 //! This module provides integration with Ollama's local LLM server through its API.
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole},
+    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -195,6 +195,10 @@ impl ChatProvider for Ollama {
 
         Ok(answer)
     }
+
+    fn chat_with_tools(&self, _messages: &[ChatMessage], _tools: Option<&[Tool]>) -> Result<String, LLMError> {
+        todo!()
+    }
 }
 
 impl CompletionProvider for Ollama {
@@ -256,3 +260,5 @@ impl EmbeddingProvider for Ollama {
         Ok(json_resp.embeddings)
     }
 }
+
+impl crate::LLMProvider for Ollama {}

@@ -23,7 +23,7 @@
 //!     .unwrap();
 //! ```
 
-use crate::chat::{ChatMessage, ChatProvider, ChatRole};
+use crate::chat::{ChatMessage, ChatProvider, ChatRole, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::error::LLMError;
@@ -86,12 +86,17 @@ impl ChatProvider for ValidatedLLM {
     ///
     /// * `Ok(String)` - The validated response from the model
     /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+
+    fn chat_with_tools(
+        &self,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
         let mut local_messages = messages.to_vec();
         let mut remaining_attempts = self.attempts;
 
         loop {
-            let response = match self.inner.chat(&local_messages) {
+            let response = match self.inner.chat_with_tools(&local_messages, tools) {
                 Ok(resp) => resp,
                 Err(e) => return Err(e),
             };
