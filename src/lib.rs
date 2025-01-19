@@ -13,6 +13,8 @@
 //! # Architecture
 //! The crate is organized into modules that handle different aspects of LLM interactions:
 
+use chat::Tool;
+
 /// Backend implementations for supported LLM providers like OpenAI, Anthropic, etc.
 pub mod backends;
 
@@ -45,4 +47,7 @@ pub mod evaluator;
 pub trait LLMProvider:
     chat::ChatProvider + completion::CompletionProvider + embedding::EmbeddingProvider
 {
+    fn tools(&self) -> Option<&[Tool]> {
+        None
+    }
 }

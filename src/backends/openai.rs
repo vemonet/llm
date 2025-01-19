@@ -27,7 +27,7 @@ pub struct OpenAI {
     pub stream: Option<bool>,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
-
+    pub tools: Option<Vec<Tool>>,
     /// Embedding parameters
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
@@ -145,6 +145,7 @@ impl OpenAI {
         top_k: Option<u32>,
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
+        tools: Option<Vec<Tool>>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -160,6 +161,7 @@ impl OpenAI {
             stream,
             top_p,
             top_k,
+            tools,
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -177,11 +179,7 @@ impl ChatProvider for OpenAI {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat_with_tools(
-        &self,
-        messages: &[ChatMessage],
-        tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    fn chat_with_tools(&self, messages: &[ChatMessage], tools: Option<&[Tool]>) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
@@ -206,6 +204,8 @@ impl ChatProvider for OpenAI {
                 },
             );
         }
+
+
 
         let body = OpenAIChatRequest {
             model: &self.model,
@@ -305,4 +305,8 @@ impl EmbeddingProvider for OpenAI {
     }
 }
 
-impl LLMProvider for OpenAI {}
+impl LLMProvider for OpenAI {
+    fn tools(&self) -> Option<&[Tool]> {
+        self.tools.as_ref().map(|t| t.as_slice())
+    }
+}

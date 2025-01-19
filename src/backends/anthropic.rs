@@ -27,6 +27,7 @@ pub struct Anthropic {
     pub stream: bool,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
+    pub tools: Option<Vec<Tool>>,
     client: Client,
 }
 
@@ -108,6 +109,7 @@ impl Anthropic {
         stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
+        tools: Option<Vec<Tool>>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -123,6 +125,7 @@ impl Anthropic {
             stream: stream.unwrap_or(false),
             top_p,
             top_k,
+            tools,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -257,4 +260,8 @@ impl EmbeddingProvider for Anthropic {
     }
 }
 
-impl crate::LLMProvider for Anthropic {}
+impl crate::LLMProvider for Anthropic {
+    fn tools(&self) -> Option<&[Tool]> {
+        self.tools.as_ref().map(|t| t.as_slice())
+    }
+}

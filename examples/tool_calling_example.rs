@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 // Import required modules from the LLM library for OpenAI integration
 use llm::{
-    builder::{LLMBackend, LLMBuilder},
-    chat::{ChatMessage, ChatRole, FunctionTool, ParameterProperty, ParametersSchema, Tool}, // Chat-related structures
+    builder::{LLMBackend, LLMBuilder, FunctionBuilder, ParamBuilder},
+    chat::{ChatMessage, ChatRole}, // Chat-related structures
 };
 
 fn main() {
@@ -18,36 +16,18 @@ fn main() {
         .max_tokens(512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
         .stream(false) // Disable streaming responses
+        .function(
+            FunctionBuilder::new("weather_function")
+                .description("Use this tool to get the weather in a specific city")
+                .param(
+                    ParamBuilder::new("url")
+                        .type_of("string")
+                        .description("The url to get the weather from for the city")
+                )
+                .required(vec!["url".to_string()])
+        )
         .build()
-        .expect("Failed to build LLM (OpenAI)");
-
- 
-
-    let tool = Tool {
-        tool_type: "function".to_string(),
-        function: FunctionTool {
-            name: "weather_function".to_string(),
-            description: "Use this tool to get the weather in a specific city".to_string(),
-            parameters: ParametersSchema {
-                schema_type: "object".to_string(),
-                properties: {
-                    let mut props = HashMap::new();
-                    props.insert(
-                        "url".to_string(),
-                        ParameterProperty {
-                            property_type: "string".to_string(),
-                            description: "The url to get the weather from for the city".to_string(),
-                            items: None,
-                            enum_list: None,
-                        },
-                    );
-                    props
-                },
-
-                required: vec!["url".to_string()],
-            },
-        },
-    };
+        .expect("Failed to build LLM");
 
     // Prepare conversation history with example messages
     let messages = vec![ChatMessage {
@@ -57,7 +37,7 @@ fn main() {
 
     // Send chat request and handle the response
     // this returns the response as a string. The tool call is also returned as a serialized string. We can deserialize if needed.
-    match llm.chat_with_tools(&messages, Some(&[tool])) {
+    match llm.chat_with_tools(&messages, llm.tools()) {
         Ok(text) => println!("Chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
