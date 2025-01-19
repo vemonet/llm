@@ -70,17 +70,23 @@ struct OpenAIChatRequest<'a> {
     tools: Option<Vec<Tool>>,
 }
 
+/// Tool call from OpenAI's API.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ToolCall {
+    /// The ID of the tool call.
     pub id: String,
+    /// The type of the tool call.
     #[serde(rename = "type")]
     pub call_type: String,
+    /// The function to call.
     pub function: FunctionCall,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct FunctionCall {
+    /// The name of the function to call.
     pub name: String,
+    /// The arguments to pass to the function.
     pub arguments: String,
 }
 
@@ -167,7 +173,7 @@ impl ChatProvider for OpenAI {
     /// # Arguments
     ///
     /// * `messages` - Slice of chat messages representing the conversation
-    ///
+    /// * `tools` - Optional slice of tools to use in the chat
     /// # Returns
     ///
     /// The model's response text or an error

@@ -134,6 +134,7 @@ impl ChatProvider for Anthropic {
     /// # Arguments
     ///
     /// * `messages` - Slice of chat messages representing the conversation
+    /// * `tools` - Optional slice of tools to use in the chat
     ///
     /// # Returns
     ///
@@ -220,6 +221,15 @@ impl ChatProvider for Anthropic {
         Ok(outputs[0].clone())
     }
 
+    /// Sends a chat request to Anthropic's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         self.chat_with_tools(messages, None)
     }

@@ -85,6 +85,17 @@ pub trait ChatProvider {
     fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         self.chat_with_tools(messages, None)
     }
+
+    /// Sends a chat request to the provider with a sequence of messages and tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat_with_tools(
         &self,
         messages: &[ChatMessage],

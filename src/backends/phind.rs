@@ -140,6 +140,15 @@ impl Phind {
 
 /// Implementation of chat functionality for Phind.
 impl ChatProvider for Phind {
+    /// Sends a chat request to Phind's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         let mut message_history = vec![];
         for m in messages {
@@ -188,6 +197,16 @@ impl ChatProvider for Phind {
         self.interpret_response(response)
     }
 
+    /// Sends a chat request to Phind's API with tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],

@@ -83,6 +83,15 @@ impl DeepSeek {
 }
 
 impl ChatProvider for DeepSeek {
+    /// Sends a chat request to DeepSeek's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
@@ -132,6 +141,16 @@ impl ChatProvider for DeepSeek {
         Ok(first_choice.message.content)
     }
 
+    /// Sends a chat request to DeepSeek's API with tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error    
     fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],

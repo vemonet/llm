@@ -234,6 +234,16 @@ impl ChatProvider for XAI {
         Ok(first_choice.message.content)
     }
 
+    /// Sends a chat request to X.AI's API with tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
     fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
