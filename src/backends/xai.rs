@@ -3,6 +3,7 @@
 //! This module provides integration with X.AI's models through their API.
 //! It implements chat and completion capabilities using the X.AI API endpoints.
 
+use crate::chat::Tool;
 #[cfg(feature = "xai")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
@@ -231,6 +232,24 @@ impl ChatProvider for XAI {
             })?;
 
         Ok(first_choice.message.content)
+    }
+
+    /// Sends a chat request to X.AI's API with tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
+    fn chat_with_tools(
+        &self,
+        _messages: &[ChatMessage],
+        _tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
+        todo!()
     }
 }
 

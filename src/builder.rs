@@ -3,7 +3,8 @@
 //! This module provides a flexible builder pattern for creating and configuring
 //! LLM (Large Language Model) provider instances with various settings and options.
 
-use crate::{error::LLMError, LLMProvider};
+use crate::{chat::{FunctionTool, ParameterProperty, ParametersSchema, Tool}, error::LLMError, LLMProvider};
+use std::collections::HashMap;
 
 /// A function type for validating LLM provider outputs.
 /// Takes a response string and returns Ok(()) if valid, or Err with an error message if invalid.
@@ -60,7 +61,7 @@ impl std::str::FromStr for LLMBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "openai" => Ok(LLMBackend::OpenAI),
-            "anthropic" => Ok(LLMBackend::Anthropic), 
+            "anthropic" => Ok(LLMBackend::Anthropic),
             "ollama" => Ok(LLMBackend::Ollama),
             "deepseek" => Ok(LLMBackend::DeepSeek),
             "xai" => Ok(LLMBackend::XAI),
@@ -109,6 +110,8 @@ pub struct LLMBuilder {
     validator: Option<Box<ValidatorFn>>,
     /// Number of retry attempts when validation fails
     validator_attempts: usize,
+    /// Function tools
+    tools: Option<Vec<Tool>>,
 }
 
 impl LLMBuilder {
@@ -222,6 +225,17 @@ impl LLMBuilder {
         self
     }
 
+    /// Adds a function tool to the builder
+    pub fn function(mut self, function_builder: FunctionBuilder) -> Self {
+        if self.tools.is_none() {
+            self.tools = Some(Vec::new());
+        }
+        if let Some(tools) = &mut self.tools {
+            tools.push(function_builder.build());
+        }
+        self
+    }
+
     /// Builds and returns a configured LLM provider instance.
     ///
     /// # Errors
@@ -260,6 +274,7 @@ impl LLMBuilder {
                         self.top_k,
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
+                        self.tools,
                     ))
                 }
             }
@@ -285,8 +300,9 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
+                        self.tools,
                     );
-                    impl crate::LLMProvider for crate::backends::anthropic::Anthropic {}
+
                     Box::new(anthro)
                 }
             }
@@ -313,7 +329,6 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                     );
-                    impl crate::LLMProvider for crate::backends::ollama::Ollama {}
                     Box::new(ollama)
                 }
             }
@@ -390,7 +405,7 @@ impl LLMBuilder {
                     );
                     Box::new(phind)
                 }
-            },
+            }
             LLMBackend::Google => {
                 #[cfg(not(feature = "google"))]
                 return Err(LLMError::InvalidRequest(
@@ -432,4 +447,121 @@ impl LLMBuilder {
     }
 }
 
+/// Builder for function parameters
+pub struct ParamBuilder {
+    name: String,
+    property_type: String,
+    description: String,
+    items: Option<Box<ParameterProperty>>,
+    enum_list: Option<Vec<String>>,
+}
 
+impl ParamBuilder {
+    /// Creates a new parameter builder
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            property_type: "string".to_string(),
+            description: String::new(),
+            items: None,
+            enum_list: None,
+        }
+    }
+
+    /// Sets the parameter type
+    pub fn type_of(mut self, type_str: impl Into<String>) -> Self {
+        self.property_type = type_str.into();
+        self
+    }
+
+    /// Sets the parameter description
+    pub fn description(mut self, desc: impl Into<String>) -> Self {
+        self.description = desc.into();
+        self
+    }
+
+    /// Sets the array item type for array parameters
+    pub fn items(mut self, item_property: ParameterProperty) -> Self {
+        self.items = Some(Box::new(item_property));
+        self
+    }
+
+    /// Sets the enum values for enum parameters
+    pub fn enum_values(mut self, values: Vec<String>) -> Self {
+        self.enum_list = Some(values);
+        self
+    }
+
+    /// Builds the parameter property
+    fn build(self) -> (String, ParameterProperty) {
+        (
+            self.name,
+            ParameterProperty {
+                property_type: self.property_type,
+                description: self.description,
+                items: self.items,
+                enum_list: self.enum_list,
+            },
+        )
+    }
+}
+
+/// Builder for function tools
+pub struct FunctionBuilder {
+    name: String,
+    description: String,
+    parameters: Vec<ParamBuilder>,
+    required: Vec<String>,
+}
+
+impl FunctionBuilder {
+    /// Creates a new function builder
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: String::new(),
+            parameters: Vec::new(),
+            required: Vec::new(),
+        }
+    }
+
+    /// Sets the function description
+    pub fn description(mut self, desc: impl Into<String>) -> Self {
+        self.description = desc.into();
+        self
+    }
+
+    /// Adds a parameter to the function
+    pub fn param(mut self, param: ParamBuilder) -> Self {
+        self.parameters.push(param);
+        self
+    }
+
+    /// Marks parameters as required
+    pub fn required(mut self, param_names: Vec<String>) -> Self {
+        self.required = param_names;
+        self
+    }
+
+    /// Builds the function tool
+    fn build(self) -> Tool {
+        let mut properties = HashMap::new();
+        for param in self.parameters {
+            let (name, prop) = param.build();
+            properties.insert(name, prop);
+        }
+
+        Tool {
+            tool_type: "function".to_string(),
+            function: FunctionTool {
+                name: self.name,
+                description: self.description,
+                parameters: ParametersSchema {
+                    schema_type: "object".to_string(),
+                    properties,
+                    required: self.required,
+                },
+            },
+        }
+    }
+}

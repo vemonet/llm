@@ -38,7 +38,7 @@
 //! ```
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole},
+    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -249,17 +249,16 @@ impl ChatProvider for Google {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "model",
                 },
-                parts: vec![GoogleContentPart {
-                    text: &msg.content,
-                }],
+                parts: vec![GoogleContentPart { text: &msg.content }],
             });
         }
 
         // Remove generation_config if empty to avoid validation errors
-        let generation_config = if self.max_tokens.is_none() 
-            && self.temperature.is_none() 
-            && self.top_p.is_none() 
-            && self.top_k.is_none() {
+        let generation_config = if self.max_tokens.is_none()
+            && self.temperature.is_none()
+            && self.top_p.is_none()
+            && self.top_k.is_none()
+        {
             None
         } else {
             Some(GoogleGenerationConfig {
@@ -302,6 +301,24 @@ impl ChatProvider for Google {
             .join("");
 
         Ok(response_text)
+    }
+
+    /// Sends a chat request to Google's Gemini API with tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    /// * `tools` - Optional slice of tools to use in the chat
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
+    fn chat_with_tools(
+        &self,
+        _messages: &[ChatMessage],
+        _tools: Option<&[Tool]>,
+    ) -> Result<String, LLMError> {
+        todo!()
     }
 }
 
