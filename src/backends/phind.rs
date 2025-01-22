@@ -187,12 +187,17 @@ impl ChatProvider for Phind {
         });
 
         let headers = Self::create_headers()?;
-        let response = self
+        let mut request = self
             .client
             .post(&self.api_base_url)
             .headers(headers)
-            .json(&payload)
-            .send()?;
+            .json(&payload);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send()?;
 
         self.interpret_response(response)
     }

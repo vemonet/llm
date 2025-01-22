@@ -190,16 +190,19 @@ impl ChatProvider for Anthropic {
             tool_choice,
         };
 
-        let resp = self
+        let mut request = self
             .client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("Content-Type", "application/json")
             .header("anthropic-version", "2023-06-01")
-            .json(&req_body)
-            .send()?
-            .error_for_status()?;
+            .json(&req_body);
 
+        if self.timeout_seconds > 0 {
+            request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
+        }
+
+        let resp = request.send()?.error_for_status()?;
         let json_resp: AnthropicCompleteResponse = resp.json()?;
 
         if json_resp.content.is_empty() {

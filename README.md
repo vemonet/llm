@@ -17,6 +17,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Rust-friendly**: Designed with clear traits, unified error handling, and conditional compilation via *features*.
 - **Validation**: Add validation to your requests to ensure the output is what you expect.
 - **Evaluation**: Add evaluation to your requests to score the output of LLMs.
+- **Function calling**: Add function calling to your requests to use tools in your LLMs.
 
 ## Installation
 
@@ -24,7 +25,7 @@ Simply add **LLM** to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-llm = { version = "1.0.1", features = ["openai", "anthropic", "ollama"] }
+llm = { version = "1.0.3", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google"] }
 ```
 
 ## Examples
@@ -44,6 +45,6 @@ llm = { version = "1.0.1", features = ["openai", "anthropic", "ollama"] }
 | [`evaluation_example`](examples/evaluation_example.rs) | Basic evaluation example with Anthropic, Phind and DeepSeek |
 | [`google_example`](examples/google_example.rs) | Basic Google Gemini chat completion example with Gemini models |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
-
+| [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.

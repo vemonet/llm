@@ -178,12 +178,16 @@ impl ChatProvider for Ollama {
 
         let url = format!("{}/api/chat", self.base_url);
 
-        let resp = self
+        let mut request = self
             .client
             .post(&url)
-            .json(&req_body)
-            .send()?
-            .error_for_status()?;
+            .json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send()?.error_for_status()?;
         let json_resp: OllamaResponse = resp.json()?;
 
         let answer = json_resp

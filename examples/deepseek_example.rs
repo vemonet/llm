@@ -13,7 +13,8 @@ fn main() {
         .backend(LLMBackend::DeepSeek) // Use DeepSeek as the LLM provider
         .system("You are a helpful assistant and you response only with words begin with deepseek_")
         .api_key(api_key) // Set the API key
-        .model("deepseek-chat") // Use DeepSeek Chat model
+        .model("deepseek-reasoner") // Use DeepSeek Chat model
+        .timeout_seconds(1200)
         .temperature(0.7) // Control response randomness (0.0-1.0)
         .stream(false) // Disable streaming responses
         .build()

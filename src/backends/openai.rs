@@ -218,13 +218,17 @@ impl ChatProvider for OpenAI {
             tools: tools.map(|t| t.to_vec()),
         };
 
-        let resp = self
+        let mut request = self
             .client
             .post("https://api.openai.com/v1/chat/completions")
             .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()?
-            .error_for_status()?;
+            .json(&body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send()?.error_for_status()?;
         let json_resp: OpenAIChatResponse = resp.json()?;
 
         let first_choice = json_resp
