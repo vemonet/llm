@@ -280,12 +280,16 @@ impl ChatProvider for Google {
             key = self.api_key
         );
 
-        let resp = self
+        let mut request = self
             .client
             .post(&url)
-            .json(&req_body)
-            .send()?
-            .error_for_status()?;
+            .json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send()?.error_for_status()?;
 
         let json_resp: GoogleChatResponse = resp.json()?;
         let first_candidate = json_resp.candidates.into_iter().next().ok_or_else(|| {
