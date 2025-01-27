@@ -18,3 +18,6 @@ pub mod phind;
 
 #[cfg(feature = "google")]
 pub mod google;
+
+#[cfg(feature = "groq")]
+pub mod groq;
