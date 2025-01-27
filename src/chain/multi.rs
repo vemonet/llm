@@ -57,6 +57,9 @@ impl LLMRegistryBuilder {
     }
 }
 
+/// Response transformation function
+type ResponseTransform = Box<dyn Fn(String) -> String + Send + Sync>;
+
 /// Execution mode for a step: Chat or Completion
 #[derive(Debug, Clone)]
 pub enum MultiChainStepMode {
@@ -65,7 +68,6 @@ pub enum MultiChainStepMode {
 }
 
 /// Multi-backend chain step
-#[derive(Debug, Clone)]
 pub struct MultiChainStep {
     provider_id: String,
     id: String,
@@ -75,6 +77,9 @@ pub struct MultiChainStep {
     // Override parameters
     temperature: Option<f32>,
     max_tokens: Option<u32>,
+
+    // Response transformation
+    response_transform: Option<ResponseTransform>,
 }
 
 /// Builder for MultiChainStep (Stripe-style)
@@ -87,6 +92,7 @@ pub struct MultiChainStepBuilder {
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    response_transform: Option<ResponseTransform>,
 }
 
 impl MultiChainStepBuilder {
@@ -99,6 +105,7 @@ impl MultiChainStepBuilder {
             temperature: None,
             top_p: None,
             max_tokens: None,
+            response_transform: None,
         }
     }
 
@@ -136,6 +143,14 @@ impl MultiChainStepBuilder {
         self
     }
 
+    pub fn response_transform<F>(mut self, func: F) -> Self
+    where
+        F: Fn(String) -> String + Send + Sync + 'static,
+    {
+        self.response_transform = Some(Box::new(func));
+        self
+    }
+
     /// Builds the step
     pub fn build(self) -> Result<MultiChainStep, LLMError> {
         let provider_id = self
@@ -155,6 +170,7 @@ impl MultiChainStepBuilder {
             mode: self.mode,
             temperature: self.temperature,
             max_tokens: self.max_tokens,
+            response_transform: self.response_transform,
         })
     }
 }
@@ -196,7 +212,7 @@ impl<'a> MultiPromptChain<'a> {
             })?;
 
             // 3) Execute
-            let response = match step.mode {
+            let mut response = match step.mode {
                 MultiChainStepMode::Chat => {
                     let messages = vec![ChatMessage {
                         role: ChatRole::User,
@@ -212,6 +228,10 @@ impl<'a> MultiPromptChain<'a> {
                     c.text
                 }
             };
+
+            if let Some(transform) = &step.response_transform {
+                response = transform(response);
+            }
 
             // 4) Store the response
             self.memory.insert(step.id.clone(), response);
