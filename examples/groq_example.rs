@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get Groq API key from environment variable or use test key as fallback
     let api_key = std::env::var("GROQ_API_KEY").unwrap_or("gsk-TESTKEY".into());
 
@@ -27,7 +28,8 @@ fn main() {
         },
         ChatMessage {
             role: ChatRole::Assistant,
-            content: "Quantum computing is a type of computing that uses quantum phenomena...".into(),
+            content: "Quantum computing is a type of computing that uses quantum phenomena..."
+                .into(),
         },
         ChatMessage {
             role: ChatRole::User,
@@ -36,8 +38,10 @@ fn main() {
     ];
 
     // Send chat request and handle the response
-    match llm.chat(&messages) {
+    match llm.chat(&messages).await {
         Ok(text) => println!("Chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }

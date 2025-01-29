@@ -7,7 +7,8 @@ use llm::builder::{LLMBackend, LLMBuilder};
 /// - Configure an OpenAI LLM provider
 /// - Generate embeddings for text input
 /// - Access and display the resulting embedding vector
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the LLM builder with OpenAI configuration
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI) // .backend(LLMBackend::Ollama) or .backend(LLMBackend::XAI)
@@ -21,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     // Generate embedding vector for sample text
-    let vector = llm.embed(vec!["Hello world!".to_string()])?;
+    let vector = llm.embed(vec!["Hello world!".to_string()]).await?;
 
     // Print embedding statistics and data
     println!("Data: {:?}", &vector);

@@ -198,7 +198,7 @@ impl<'a> MultiPromptChain<'a> {
     }
 
     /// Executes all steps
-    pub fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
+    pub async fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
         for step in &self.steps {
             // 1) Replace {{xyz}} in template with existing memory
             let prompt_text = self.replace_template(&step.template);
@@ -218,13 +218,13 @@ impl<'a> MultiPromptChain<'a> {
                         role: ChatRole::User,
                         content: prompt_text,
                     }];
-                    llm.chat(&messages)?
+                    llm.chat(&messages).await?
                 }
                 MultiChainStepMode::Completion => {
                     let mut req = CompletionRequest::new(prompt_text);
                     req.temperature = step.temperature;
                     req.max_tokens = step.max_tokens;
-                    let c = llm.complete(&req)?;
+                    let c = llm.complete(&req).await?;
                     c.text
                 }
             };

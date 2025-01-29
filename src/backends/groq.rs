@@ -5,11 +5,12 @@
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
-    error::LLMError,
     embedding::EmbeddingProvider,
+    error::LLMError,
     LLMProvider,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with Groq's API.
@@ -94,8 +95,9 @@ impl Groq {
     }
 }
 
+#[async_trait]
 impl ChatProvider for Groq {
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing Groq API key".to_string()));
         }
@@ -142,8 +144,8 @@ impl ChatProvider for Groq {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send()?.error_for_status()?;
-        let json_resp: GroqChatResponse = resp.json()?;
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: GroqChatResponse = resp.json().await?;
 
         json_resp
             .choices
@@ -152,7 +154,7 @@ impl ChatProvider for Groq {
             .ok_or_else(|| LLMError::ProviderError("No choices returned by Groq".to_string()))
     }
 
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
@@ -161,16 +163,18 @@ impl ChatProvider for Groq {
     }
 }
 
+#[async_trait]
 impl CompletionProvider for Groq {
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "Groq completion not implemented.".into(),
         })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for Groq {
-    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
         ))

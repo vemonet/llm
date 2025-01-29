@@ -11,7 +11,8 @@ use llm::{
     chain::{ChainStepBuilder, ChainStepMode, PromptChain},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the LLM with OpenAI backend and configuration
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI)
@@ -45,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .max_tokens(500) // Allow longer response for detailed explanation
                 .build()
         )
-        .run()?;
+        .run().await?;
 
     // Display the results from all chain steps
     println!("Chain results: {:?}", chain_result);

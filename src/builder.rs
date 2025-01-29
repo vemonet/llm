@@ -3,7 +3,11 @@
 //! This module provides a flexible builder pattern for creating and configuring
 //! LLM (Large Language Model) provider instances with various settings and options.
 
-use crate::{chat::{FunctionTool, ParameterProperty, ParametersSchema, Tool}, error::LLMError, LLMProvider};
+use crate::{
+    chat::{FunctionTool, ParameterProperty, ParametersSchema, Tool},
+    error::LLMError,
+    LLMProvider,
+};
 use std::collections::HashMap;
 
 /// A function type for validating LLM provider outputs.
@@ -49,7 +53,7 @@ pub enum LLMBackend {
 ///
 /// ```
 /// use std::str::FromStr;
-/// use llm::LLMBackend;
+/// use llm::builder::LLMBackend;
 ///
 /// let backend = LLMBackend::from_str("openai").unwrap();
 /// assert!(matches!(backend, LLMBackend::OpenAI));

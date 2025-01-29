@@ -12,8 +12,10 @@
 //! # Example
 //! ```no_run
 //! use llm::backends::google::Google;
-//! use llm::chat::{ChatMessage, ChatRole};
+//! use llm::chat::{ChatMessage, ChatRole, ChatProvider};
 //!
+//! #[tokio::main]
+//! async fn main() {
 //! let client = Google::new(
 //!     "your-api-key",
 //!     None, // Use default model
@@ -33,8 +35,9 @@
 //!     }
 //! ];
 //!
-//! let response = client.chat(&messages).unwrap();
+//! let response = client.chat(&messages).await.unwrap();
 //! println!("{}", response);
+//! }
 //! ```
 
 use crate::{
@@ -44,7 +47,8 @@ use crate::{
     error::LLMError,
     LLMProvider,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with Google's Gemini API.
@@ -217,6 +221,7 @@ impl Google {
     }
 }
 
+#[async_trait]
 impl ChatProvider for Google {
     /// Sends a chat request to Google's Gemini API.
     ///
@@ -227,7 +232,7 @@ impl ChatProvider for Google {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing Google API key".to_string()));
         }
@@ -280,18 +285,15 @@ impl ChatProvider for Google {
             key = self.api_key
         );
 
-        let mut request = self
-            .client
-            .post(&url)
-            .json(&req_body);
+        let mut request = self.client.post(&url).json(&req_body);
 
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send()?.error_for_status()?;
+        let resp = request.send().await?.error_for_status()?;
 
-        let json_resp: GoogleChatResponse = resp.json()?;
+        let json_resp: GoogleChatResponse = resp.json().await?;
         let first_candidate = json_resp.candidates.into_iter().next().ok_or_else(|| {
             LLMError::ProviderError("No candidates returned by Google".to_string())
         })?;
@@ -317,7 +319,7 @@ impl ChatProvider for Google {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
@@ -326,6 +328,7 @@ impl ChatProvider for Google {
     }
 }
 
+#[async_trait]
 impl CompletionProvider for Google {
     /// Performs a completion request using the chat endpoint.
     ///
@@ -336,18 +339,19 @@ impl CompletionProvider for Google {
     /// # Returns
     ///
     /// The completion response or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage {
             role: ChatRole::User,
             content: req.prompt.clone(),
         };
-        let answer = self.chat(&[chat_message])?;
+        let answer = self.chat(&[chat_message]).await?;
         Ok(CompletionResponse { text: answer })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for Google {
-    fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing Google API key".to_string()));
         }
@@ -372,10 +376,11 @@ impl EmbeddingProvider for Google {
                 .client
                 .post(&url)
                 .json(&req_body)
-                .send()?
+                .send()
+                .await?
                 .error_for_status()?;
 
-            let embedding_resp: GoogleEmbeddingResponse = resp.json()?;
+            let embedding_resp: GoogleEmbeddingResponse = resp.json().await?;
             embeddings.push(embedding_resp.embedding.values);
         }
 

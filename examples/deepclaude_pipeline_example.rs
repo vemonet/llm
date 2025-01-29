@@ -1,5 +1,5 @@
 //! Example demonstrating a multi-LLM pipeline for system identification
-//! 
+//!
 //! This example shows how to:
 //! 1. Set up a pipeline using Groq and Claude models
 //! 2. Use Groq for creative system identification approaches
@@ -12,14 +12,15 @@ use llm::{
     chain::{LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Claude model with API key and latest model version
     let anthro_llm = LLMBuilder::new()
         .backend(LLMBackend::Anthropic)
         .api_key(std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into()))
         .model("claude-3-5-sonnet-20240620")
         .build()?;
-    
+
     // Initialize Groq model with deepseek for creative thinking
     let groq_llm = LLMBuilder::new()
         .backend(LLMBackend::Groq)
@@ -64,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .temperature(0.2) // Low temperature for more deterministic output
                 .build()?
         )
-        .run()?;
+        .run().await?;
 
     // Display results from both steps
     println!("Results: {:?}", chain_res);
