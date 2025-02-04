@@ -12,7 +12,8 @@ use llm::{
     evaluator::{EvalResult, LLMEvaluator},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Anthropic provider with Claude model
     let anthropic = LLMBuilder::new()
         .backend(LLMBackend::Anthropic)
@@ -90,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let messages = vec![ChatMessage {
         role: ChatRole::User,
         content: "\
-            Create a Rust microservice using Actix Web. 
+            Create a Rust microservice using Actix Web.
             It should have at least two routes:
             1) A GET route returning a simple JSON status.
             2) A POST route that accepts JSON data and responds with a success message.\n\
@@ -102,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }];
 
     // Run evaluation across all providers
-    let results: Vec<EvalResult> = evaluator.evaluate_chat(&messages)?;
+    let results: Vec<EvalResult> = evaluator.evaluate_chat(&messages).await?;
 
     // Display results with scores
     for (i, item) in results.iter().enumerate() {

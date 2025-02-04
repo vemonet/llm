@@ -47,10 +47,13 @@ impl LLMEvaluator {
     ///
     /// # Returns
     /// Vector of evaluation results containing responses and scores
-    pub fn evaluate_chat(&self, messages: &[ChatMessage]) -> Result<Vec<EvalResult>, LLMError> {
+    pub async fn evaluate_chat(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<Vec<EvalResult>, LLMError> {
         let mut results = Vec::new();
         for llm in &self.llms {
-            let response = llm.chat(messages)?;
+            let response = llm.chat(messages).await?;
             let score = self.compute_score(&response);
             results.push(EvalResult {
                 text: response,

@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize and configure the LLM client
     let llm = LLMBuilder::new()
         .backend(LLMBackend::Phind) // Use Phind as the LLM provider
@@ -32,8 +33,10 @@ fn main() {
     ];
 
     // Send chat request and handle the response
-    match llm.chat(&messages) {
+    match llm.chat(&messages).await {
         Ok(text) => println!("Chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }

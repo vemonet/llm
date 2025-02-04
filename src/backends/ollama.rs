@@ -8,7 +8,8 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with Ollama's API.
@@ -130,6 +131,7 @@ impl Ollama {
     }
 }
 
+#[async_trait]
 impl ChatProvider for Ollama {
     /// Sends a chat request to Ollama's API.
     ///
@@ -140,7 +142,7 @@ impl ChatProvider for Ollama {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.base_url.is_empty() {
             return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
@@ -178,17 +180,14 @@ impl ChatProvider for Ollama {
 
         let url = format!("{}/api/chat", self.base_url);
 
-        let mut request = self
-            .client
-            .post(&url)
-            .json(&req_body);
+        let mut request = self.client.post(&url).json(&req_body);
 
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send()?.error_for_status()?;
-        let json_resp: OllamaResponse = resp.json()?;
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: OllamaResponse = resp.json().await?;
 
         let answer = json_resp
             .message
@@ -200,7 +199,7 @@ impl ChatProvider for Ollama {
         Ok(answer)
     }
 
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
@@ -209,6 +208,7 @@ impl ChatProvider for Ollama {
     }
 }
 
+#[async_trait]
 impl CompletionProvider for Ollama {
     /// Sends a completion request to Ollama's API.
     ///
@@ -219,7 +219,7 @@ impl CompletionProvider for Ollama {
     /// # Returns
     ///
     /// The completion response containing the generated text or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         if self.base_url.is_empty() {
             return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
@@ -236,17 +236,19 @@ impl CompletionProvider for Ollama {
             .client
             .post(&url)
             .json(&req_body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?;
-        let json_resp: OllamaResponse = resp.json()?;
+        let json_resp: OllamaResponse = resp.json().await?;
 
         let answer = json_resp.response.or(json_resp.content).unwrap_or_default();
         Ok(CompletionResponse { text: answer })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for Ollama {
-    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.base_url.is_empty() {
             return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
@@ -261,10 +263,11 @@ impl EmbeddingProvider for Ollama {
             .client
             .post(&url)
             .json(&body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?;
 
-        let json_resp: OllamaEmbeddingResponse = resp.json()?;
+        let json_resp: OllamaEmbeddingResponse = resp.json().await?;
         Ok(json_resp.embeddings)
     }
 }

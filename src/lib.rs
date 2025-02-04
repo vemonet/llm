@@ -13,6 +13,9 @@
 //! # Architecture
 //! The crate is organized into modules that handle different aspects of LLM interactions:
 
+// Re-export for convenience
+pub use async_trait::async_trait;
+
 use chat::Tool;
 
 /// Backend implementations for supported LLM providers like OpenAI, Anthropic, etc.

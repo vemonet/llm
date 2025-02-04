@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get Anthropic API key from environment variable or use test key as fallback
     let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into());
 
@@ -27,8 +28,10 @@ fn main() {
     }];
 
     // Send chat request and handle the response
-    match llm.chat(&messages) {
+    match llm.chat(&messages).await {
         Ok(text) => println!("Anthropic chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }

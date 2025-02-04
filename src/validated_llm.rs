@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use llm::{LLMBuilder, LLMBackend};
+//! use llm::builder::{LLMBuilder, LLMBackend};
 //!
 //! let llm = LLMBuilder::new()
 //!     .backend(LLMBackend::OpenAI)
@@ -22,6 +22,8 @@
 //!     .build()
 //!     .unwrap();
 //! ```
+
+use async_trait::async_trait;
 
 use crate::chat::{ChatMessage, ChatProvider, ChatRole, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
@@ -72,6 +74,7 @@ impl ValidatedLLM {
 
 impl LLMProvider for ValidatedLLM {}
 
+#[async_trait]
 impl ChatProvider for ValidatedLLM {
     /// Sends a chat request and validates the response.
     ///
@@ -86,7 +89,7 @@ impl ChatProvider for ValidatedLLM {
     ///
     /// * `Ok(String)` - The validated response from the model
     /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
@@ -95,7 +98,7 @@ impl ChatProvider for ValidatedLLM {
         let mut remaining_attempts = self.attempts;
 
         loop {
-            let response = match self.inner.chat_with_tools(&local_messages, tools) {
+            let response = match self.inner.chat_with_tools(&local_messages, tools).await {
                 Ok(resp) => resp,
                 Err(e) => return Err(e),
             };
@@ -127,6 +130,7 @@ impl ChatProvider for ValidatedLLM {
     }
 }
 
+#[async_trait]
 impl CompletionProvider for ValidatedLLM {
     /// Sends a completion request and validates the response.
     ///
@@ -141,11 +145,11 @@ impl CompletionProvider for ValidatedLLM {
     ///
     /// * `Ok(CompletionResponse)` - The validated completion response
     /// * `Err(LLMError)` - If validation fails after max attempts or other errors occur
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let mut remaining_attempts = self.attempts;
 
         loop {
-            let response = match self.inner.complete(req) {
+            let response = match self.inner.complete(req).await {
                 Ok(resp) => resp,
                 Err(e) => return Err(e),
             };
@@ -168,6 +172,7 @@ impl CompletionProvider for ValidatedLLM {
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for ValidatedLLM {
     /// Passes through embedding requests to the inner provider without validation.
     ///
@@ -182,8 +187,8 @@ impl EmbeddingProvider for ValidatedLLM {
     ///
     /// * `Ok(Vec<Vec<f32>>)` - Vector of embedding vectors
     /// * `Err(LLMError)` - If the embedding generation fails
-    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         // Pass through to inner provider since embeddings don't need validation
-        self.inner.embed(input)
+        self.inner.embed(input).await
     }
 }

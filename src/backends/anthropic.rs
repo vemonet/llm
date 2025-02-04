@@ -10,7 +10,8 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with Anthropic's API.
@@ -131,6 +132,7 @@ impl Anthropic {
     }
 }
 
+#[async_trait]
 impl ChatProvider for Anthropic {
     /// Sends a chat request to Anthropic's API.
     ///
@@ -142,7 +144,7 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
@@ -202,8 +204,8 @@ impl ChatProvider for Anthropic {
             request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
         }
 
-        let resp = request.send()?.error_for_status()?;
-        let json_resp: AnthropicCompleteResponse = resp.json()?;
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: AnthropicCompleteResponse = resp.json().await?;
 
         if json_resp.content.is_empty() {
             return Err(LLMError::ProviderError(
@@ -236,27 +238,29 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
-        self.chat_with_tools(messages, None)
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+        self.chat_with_tools(messages, None).await
     }
 }
 
+#[async_trait]
 impl CompletionProvider for Anthropic {
     /// Sends a completion request to Anthropic's API.
     ///
     /// Converts the completion request into a chat message format.
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage {
             role: ChatRole::User,
             content: req.prompt.clone(),
         };
-        let answer = self.chat(&[chat_message])?;
+        let answer = self.chat(&[chat_message]).await?;
         Ok(CompletionResponse { text: answer })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for Anthropic {
-    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
         ))

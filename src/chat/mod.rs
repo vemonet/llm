@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use serde::Serialize;
 
 use crate::error::LLMError;
@@ -9,7 +10,7 @@ use crate::error::LLMError;
 pub enum ChatRole {
     /// The user/human participant in the conversation
     User,
-    /// The AI assistant participant in the conversation  
+    /// The AI assistant participant in the conversation
     Assistant,
 }
 
@@ -72,7 +73,8 @@ pub struct Tool {
 }
 
 /// Trait for providers that support chat-style interactions.
-pub trait ChatProvider {
+#[async_trait]
+pub trait ChatProvider: Sync + Send {
     /// Sends a chat request to the provider with a sequence of messages.
     ///
     /// # Arguments
@@ -82,8 +84,8 @@ pub trait ChatProvider {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
-        self.chat_with_tools(messages, None)
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+        self.chat_with_tools(messages, None).await
     }
 
     /// Sends a chat request to the provider with a sequence of messages and tools.
@@ -96,7 +98,7 @@ pub trait ChatProvider {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,

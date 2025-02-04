@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get Google API key from environment variable or use test key as fallback
     let api_key = std::env::var("GOOGLE_API_KEY").unwrap_or("google-key".into());
 
@@ -38,8 +39,10 @@ fn main() {
     ];
 
     // Send chat request and handle the response
-    match llm.chat(&messages) {
+    match llm.chat(&messages).await {
         Ok(text) => println!("Google Gemini response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }
