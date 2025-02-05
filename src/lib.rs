@@ -46,7 +46,7 @@ pub mod validated_llm;
 pub mod evaluator;
 
 #[cfg(feature = "api")]
-pub mod server;
+pub mod api;
 
 /// Core trait that all LLM providers must implement, combining chat, completion
 /// and embedding capabilities into a unified interface
