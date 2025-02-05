@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "api")]
-use crate::server::Server;
+use crate::api::Server;
 
 /// Stores multiple LLM backends (OpenAI, Anthropic, etc.) identified by a key
 #[derive(Default)]
