@@ -259,4 +259,10 @@ impl<'a> MultiPromptChain<'a> {
         }
         out
     }
+
+    /// Adds multiple steps at once
+    pub fn chain(mut self, steps: Vec<MultiChainStep>) -> Self {
+        self.steps.extend(steps);
+        self
+    }
 }
