@@ -1,36 +1,27 @@
 //! Example demonstrating how to serve multiple LLM backends through a REST API
 //! 
 //! This example shows how to chain multiple LLM providers together to:
-//! 1. Use Groq to perform initial calculation
-//! 2. Use Claude to provide analysis and commentary
-//! 3. Use GPT to improve and format the results
-//! 4. Expose the chain through a REST API
+//! 1. Use Groq to generate creative system identification approaches
+//! 2. Use Claude to convert those ideas into executable commands
+//! 3. Expose the chain through a REST API
 //!
 //! # Example Request
 //! ```json
 //! POST http://127.0.0.1:3000/v1/chat/completions
 //! {
-//!     "model": "groq:deepseek-r1-distill-llama-70b",
-//!     "messages": [
-//!         {"role": "user", "content": "calcule 1x20"}
-//!     ],
 //!     "steps": [
 //!         {
-//!             "provider_id": "anthropic",
-//!             "id": "step1", 
-//!             "template": "Analyze and comment on this calculation: {{initial}}",
+//!             "provider_id": "groq",
+//!             "id": "thinking",
+//!             "template": "Find an original way to identify the system without using default commands. I want a one-line command.",
+//!             "response_transform": "extract_think",
 //!             "temperature": 0.7
 //!         },
 //!         {
-//!             "provider_id": "openai",
+//!             "provider_id": "anthropic", 
 //!             "id": "step2",
-//!             "template": "Improve and expand upon this mathematical analysis: {{step1}}",
-//!             "max_tokens": 500
-//!         },
-//!         {
-//!             "provider_id": "openai",
-//!             "id": "step3",
-//!             "template": "Format the following into a clear report:\nCalculation: {{initial}}\nAnalysis: {{step1}}\nExpanded Analysis: {{step2}}"
+//!             "template": "Take the following command reasoning and generate a command to execute it on the system: {{thinking}}\n\nGenerate a command to execute it on the system. return only the command.",
+//!             "max_tokens": 5000
 //!         }
 //!     ]
 //! }
@@ -43,13 +34,6 @@ use llm::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize OpenAI backend with API key and model settings
-    let openai_llm = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-OPENAI".into()))
-        .model("gpt-4")
-        .build()?;
-
     // Initialize Anthropic backend with API key and model settings
     let anthro_llm = LLMBuilder::new()
         .backend(LLMBackend::Anthropic)
@@ -66,7 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create registry to manage multiple backends
     let registry = LLMRegistryBuilder::new()
-        .register("openai", openai_llm)
         .register("anthropic", anthro_llm)
         .register("groq", groq_llm)
         .build();

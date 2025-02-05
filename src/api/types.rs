@@ -4,9 +4,41 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
 pub struct ChatRequest {
     /// List of messages in the conversation
-    pub messages: Vec<Message>,
+    pub messages: Option<Vec<Message>>,
     /// Model identifier in format "provider:model_name"
-    pub model: String,
+    pub model: Option<String>,
+    /// Optional chain steps for multi-step processing
+    #[serde(default)]
+    pub steps: Vec<ChainStepRequest>,
+    /// Optional response transformation function
+    #[serde(default)]
+    pub response_transform: Option<String>,
+    /// Optional temperature parameter
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    /// Optional max tokens parameter
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
+}
+
+/// Chain step configuration for multi-step processing
+#[derive(Deserialize)]
+pub struct ChainStepRequest {
+    /// Provider ID for this step
+    pub provider_id: String,
+    /// Step identifier
+    pub id: String,
+    /// Template with variable substitution
+    pub template: String,
+    /// Optional temperature parameter
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    /// Optional max tokens parameter
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
+    /// Optional response transformation function
+    #[serde(default)]
+    pub response_transform: Option<String>,
 }
 
 /// Single message in a chat conversation
