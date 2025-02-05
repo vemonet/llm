@@ -30,6 +30,9 @@ llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepsee
 ```
 
 ## Serving any LLM backend as a REST API
+- Use standard messages format
+- Use step chains to chain multiple LLM backends together
+- Expose the chain through a REST API with openai standard format
 
 ```shell
 [dependencies]
@@ -58,6 +61,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
+| [`api_deepclaude_example`](examples/api_deepclaude_example.rs) | Basic API (openai standard format) example with DeepSeek and Claude |
 
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.
