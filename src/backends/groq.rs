@@ -1,9 +1,7 @@
-//! DeepSeek API client implementation for chat and completion functionality.
+//! Groq API client implementation for chat functionality.
 //!
-//! This module provides integration with DeepSeek's models through their API.
+//! This module provides integration with Groq's LLM models through their API.
 
-use crate::chat::{ChatResponse, Tool};
-#[cfg(feature = "deepseek")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -15,9 +13,8 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::ToolCall;
-
-pub struct DeepSeek {
+/// Client for interacting with Groq's API.
+pub struct Groq {
     pub api_key: String,
     pub model: String,
     pub max_tokens: Option<u32>,
@@ -25,55 +22,49 @@ pub struct DeepSeek {
     pub system: Option<String>,
     pub timeout_seconds: Option<u64>,
     pub stream: Option<bool>,
+    pub top_p: Option<f32>,
+    pub top_k: Option<u32>,
     client: Client,
 }
 
 #[derive(Serialize)]
-struct DeepSeekChatMessage<'a> {
+struct GroqChatMessage<'a> {
     role: &'a str,
     content: &'a str,
 }
 
 #[derive(Serialize)]
-struct DeepSeekChatRequest<'a> {
+struct GroqChatRequest<'a> {
     model: &'a str,
-    messages: Vec<DeepSeekChatMessage<'a>>,
+    messages: Vec<GroqChatMessage<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
 }
 
-#[derive(Deserialize, Debug)]
-struct DeepSeekChatResponse {
-    choices: Vec<DeepSeekChatChoice>,
+#[derive(Deserialize)]
+struct GroqChatResponse {
+    choices: Vec<GroqChatChoice>,
 }
 
-impl std::fmt::Display for DeepSeekChatResponse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+#[derive(Deserialize)]
+struct GroqChatChoice {
+    message: GroqChatMsg,
 }
 
-#[derive(Deserialize, Debug)]
-struct DeepSeekChatChoice {
-    message: DeepSeekChatMsg,
-}
-
-#[derive(Deserialize, Debug)]
-struct DeepSeekChatMsg {
+#[derive(Deserialize)]
+struct GroqChatMsg {
     content: String,
 }
-impl ChatResponse for DeepSeekChatResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(vec![self.choices.first().unwrap().message.content.clone()])
-    }
 
-    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        None
-    }
-}
-
-impl DeepSeek {
+impl Groq {
+    /// Creates a new Groq client with the specified configuration.
     pub fn new(
         api_key: impl Into<String>,
         model: Option<String>,
@@ -82,6 +73,8 @@ impl DeepSeek {
         timeout_seconds: Option<u64>,
         system: Option<String>,
         stream: Option<bool>,
+        top_p: Option<f32>,
+        top_k: Option<u32>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -89,36 +82,29 @@ impl DeepSeek {
         }
         Self {
             api_key: api_key.into(),
-            model: model.unwrap_or("deepseek-chat".to_string()),
+            model: model.unwrap_or("llama-3.3-70b-versatile".to_string()),
             max_tokens,
             temperature,
             system,
             timeout_seconds,
             stream,
+            top_p,
+            top_k,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
 }
 
 #[async_trait]
-impl ChatProvider for DeepSeek {
-    /// Sends a chat request to DeepSeek's API.
-    ///
-    /// # Arguments
-    ///
-    /// * `messages` - The conversation history as a slice of chat messages
-    ///
-    /// # Returns
-    ///
-    /// The provider's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
+impl ChatProvider for Groq {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
+            return Err(LLMError::AuthError("Missing Groq API key".to_string()));
         }
 
-        let mut deepseek_msgs: Vec<DeepSeekChatMessage> = messages
+        let mut groq_msgs: Vec<GroqChatMessage> = messages
             .iter()
-            .map(|m| DeepSeekChatMessage {
+            .map(|m| GroqChatMessage {
                 role: match m.role {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "assistant",
@@ -128,25 +114,29 @@ impl ChatProvider for DeepSeek {
             .collect();
 
         if let Some(system) = &self.system {
-            deepseek_msgs.insert(
+            groq_msgs.insert(
                 0,
-                DeepSeekChatMessage {
+                GroqChatMessage {
                     role: "system",
                     content: system,
                 },
             );
         }
 
-        let body = DeepSeekChatRequest {
+        let body = GroqChatRequest {
             model: &self.model,
-            messages: deepseek_msgs,
+            messages: groq_msgs,
+            max_tokens: self.max_tokens,
             temperature: self.temperature,
             stream: self.stream.unwrap_or(false),
+            top_p: self.top_p,
+            top_k: self.top_k,
         };
 
         let mut request = self
             .client
-            .post("https://api.deepseek.com/v1/chat/completions")
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .header("Content-Type", "application/json")
             .bearer_auth(&self.api_key)
             .json(&body);
 
@@ -155,42 +145,35 @@ impl ChatProvider for DeepSeek {
         }
 
         let resp = request.send().await?.error_for_status()?;
+        let json_resp: GroqChatResponse = resp.json().await?;
 
-        let json_resp: DeepSeekChatResponse = resp.json().await?;
-        
-        Ok(Box::new(json_resp))
+        json_resp
+            .choices
+            .first()
+            .map(|choice| choice.message.content.clone())
+            .ok_or_else(|| LLMError::ProviderError("No choices returned by Groq".to_string()))
     }
 
-    /// Sends a chat request to DeepSeek's API with tools.
-    ///
-    /// # Arguments
-    ///
-    /// * `messages` - The conversation history as a slice of chat messages
-    /// * `tools` - Optional slice of tools to use in the chat
-    ///
-    /// # Returns
-    ///
-    /// The provider's response text or an error
     async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<Box<dyn ChatResponse>, LLMError> {
+    ) -> Result<String, LLMError> {
         todo!()
     }
 }
 
 #[async_trait]
-impl CompletionProvider for DeepSeek {
+impl CompletionProvider for Groq {
     async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
-            text: "DeepSeek completion not implemented.".into(),
+            text: "Groq completion not implemented.".into(),
         })
     }
 }
 
 #[async_trait]
-impl EmbeddingProvider for DeepSeek {
+impl EmbeddingProvider for Groq {
     async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
@@ -198,4 +181,4 @@ impl EmbeddingProvider for DeepSeek {
     }
 }
 
-impl LLMProvider for DeepSeek {}
+impl LLMProvider for Groq {}

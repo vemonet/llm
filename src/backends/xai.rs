@@ -11,11 +11,12 @@ use crate::{
     error::LLMError,
     LLMProvider,
 };
+use async_trait::async_trait;
 use crate::{
     chat::{ChatResponse, Tool},
     ToolCall,
 };
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with X.AI's API.
@@ -191,6 +192,7 @@ impl XAI {
     }
 }
 
+#[async_trait]
 impl ChatProvider for XAI {
     /// Sends a chat request to the X.AI API and returns the response.
     ///
@@ -201,7 +203,7 @@ impl ChatProvider for XAI {
     /// # Returns
     ///
     /// The generated response text, or an error if the request fails.
-    fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
         }
@@ -237,15 +239,19 @@ impl ChatProvider for XAI {
             top_k: self.top_k,
         };
 
-        let resp = self
+        let mut request = self
             .client
             .post("https://api.x.ai/v1/chat/completions")
             .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()?
-            .error_for_status()?;
+            .json(&body);
 
-        let json_resp: XAIChatResponse = resp.json()?;
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+
+        let json_resp: XAIChatResponse = resp.json().await?;
         Ok(Box::new(json_resp))
     }
 
@@ -259,7 +265,7 @@ impl ChatProvider for XAI {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
@@ -268,6 +274,7 @@ impl ChatProvider for XAI {
     }
 }
 
+#[async_trait]
 impl CompletionProvider for XAI {
     /// Sends a completion request to X.AI's API.
     ///
@@ -280,15 +287,16 @@ impl CompletionProvider for XAI {
     /// # Returns
     ///
     /// A placeholder response indicating the functionality is not implemented.
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "X.AI completion not implemented.".into(),
         })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for XAI {
-    fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing X.AI API key".into()));
         }
@@ -310,10 +318,11 @@ impl EmbeddingProvider for XAI {
             .post("https://api.x.ai/v1/embeddings")
             .bearer_auth(&self.api_key)
             .json(&body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?;
 
-        let json_resp: XAIEmbeddingResponse = resp.json()?;
+        let json_resp: XAIEmbeddingResponse = resp.json().await?;
 
         let embeddings = json_resp.data.into_iter().map(|d| d.embedding).collect();
         Ok(embeddings)

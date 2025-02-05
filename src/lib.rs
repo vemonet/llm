@@ -13,6 +13,9 @@
 //! # Architecture
 //! The crate is organized into modules that handle different aspects of LLM interactions:
 
+// Re-export for convenience
+pub use async_trait::async_trait;
+
 use chat::Tool;
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +45,9 @@ pub mod validated_llm;
 
 /// Evaluator for LLM providers
 pub mod evaluator;
+
+#[cfg(feature = "api")]
+pub mod api;
 
 /// Core trait that all LLM providers must implement, combining chat, completion
 /// and embedding capabilities into a unified interface

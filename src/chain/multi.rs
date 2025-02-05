@@ -10,10 +10,13 @@ use crate::{
     LLMProvider,
 };
 
+#[cfg(feature = "api")]
+use crate::api::Server;
+
 /// Stores multiple LLM backends (OpenAI, Anthropic, etc.) identified by a key
 #[derive(Default)]
 pub struct LLMRegistry {
-    backends: HashMap<String, Box<dyn LLMProvider>>,
+    pub backends: HashMap<String, Box<dyn LLMProvider>>,
 }
 
 impl LLMRegistry {
@@ -31,6 +34,15 @@ impl LLMRegistry {
     /// Retrieves a backend by its identifier
     pub fn get(&self, id: &str) -> Option<&dyn LLMProvider> {
         self.backends.get(id).map(|b| b.as_ref())
+    }
+
+    #[cfg(feature = "api")]
+    /// Starts a REST API server on the specified address
+    pub async fn serve(self, addr: impl Into<String>) -> Result<(), LLMError> {
+        let server = Server::new(self);
+        server.run(&addr.into()).await?;
+
+        Ok(())
     }
 }
 
@@ -57,6 +69,9 @@ impl LLMRegistryBuilder {
     }
 }
 
+/// Response transformation function
+type ResponseTransform = Box<dyn Fn(String) -> String + Send + Sync>;
+
 /// Execution mode for a step: Chat or Completion
 #[derive(Debug, Clone)]
 pub enum MultiChainStepMode {
@@ -65,7 +80,6 @@ pub enum MultiChainStepMode {
 }
 
 /// Multi-backend chain step
-#[derive(Debug, Clone)]
 pub struct MultiChainStep {
     provider_id: String,
     id: String,
@@ -75,6 +89,9 @@ pub struct MultiChainStep {
     // Override parameters
     temperature: Option<f32>,
     max_tokens: Option<u32>,
+
+    // Response transformation
+    response_transform: Option<ResponseTransform>,
 }
 
 /// Builder for MultiChainStep (Stripe-style)
@@ -87,6 +104,7 @@ pub struct MultiChainStepBuilder {
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    response_transform: Option<ResponseTransform>,
 }
 
 impl MultiChainStepBuilder {
@@ -99,6 +117,7 @@ impl MultiChainStepBuilder {
             temperature: None,
             top_p: None,
             max_tokens: None,
+            response_transform: None,
         }
     }
 
@@ -136,6 +155,14 @@ impl MultiChainStepBuilder {
         self
     }
 
+    pub fn response_transform<F>(mut self, func: F) -> Self
+    where
+        F: Fn(String) -> String + Send + Sync + 'static,
+    {
+        self.response_transform = Some(Box::new(func));
+        self
+    }
+
     /// Builds the step
     pub fn build(self) -> Result<MultiChainStep, LLMError> {
         let provider_id = self
@@ -155,6 +182,7 @@ impl MultiChainStepBuilder {
             mode: self.mode,
             temperature: self.temperature,
             max_tokens: self.max_tokens,
+            response_transform: self.response_transform,
         })
     }
 }
@@ -182,7 +210,7 @@ impl<'a> MultiPromptChain<'a> {
     }
 
     /// Executes all steps
-    pub fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
+    pub async fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
         for step in &self.steps {
             // 1) Replace {{xyz}} in template with existing memory
             let prompt_text = self.replace_template(&step.template);
@@ -196,32 +224,31 @@ impl<'a> MultiPromptChain<'a> {
             })?;
 
             // 3) Execute
-            let response = match step.mode {
+            let mut response = match step.mode {
                 MultiChainStepMode::Chat => {
                     let messages = vec![ChatMessage {
                         role: ChatRole::User,
                         content: prompt_text,
                     }];
-                    llm.chat(&messages)?
+                    llm.chat(&messages).await?.texts().unwrap_or_default().first().unwrap_or(&String::new()).to_string()
                 }
                 MultiChainStepMode::Completion => {
                     let mut req = CompletionRequest::new(prompt_text);
                     req.temperature = step.temperature;
                     req.max_tokens = step.max_tokens;
-                    let c = llm.complete(&req)?;
-                    Box::new(c)
+                    let c = llm.complete(&req).await?;
+                    c.text.to_string()
                 }
             };
+
+            if let Some(transform) = &step.response_transform {
+                response = transform(response);
+            }
 
             // 4) Store the response
             self.memory.insert(
                 step.id.clone(),
                 response
-                    .texts()
-                    .unwrap_or_default()
-                    .first()
-                    .unwrap_or(&String::new())
-                    .clone(),
             );
         }
         Ok(self.memory)
@@ -234,5 +261,11 @@ impl<'a> MultiPromptChain<'a> {
             out = out.replace(&pattern, v);
         }
         out
+    }
+
+    /// Adds multiple steps at once
+    pub fn chain(mut self, steps: Vec<MultiChainStep>) -> Self {
+        self.steps.extend(steps);
+        self
     }
 }

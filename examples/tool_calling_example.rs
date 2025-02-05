@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole}, // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get OpenAI API key from environment variable or use test key as fallback
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into());
 
@@ -37,8 +38,10 @@ fn main() {
 
     // Send chat request and handle the response
     // this returns the response as a string. The tool call is also returned as a serialized string. We can deserialize if needed.
-    match llm.chat_with_tools(&messages, llm.tools()) {
+    match llm.chat_with_tools(&messages, llm.tools()).await {
         Ok(text) => println!("Chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }

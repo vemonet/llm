@@ -11,7 +11,8 @@ use llm::{
     chain::{LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize OpenAI backend with API key and model settings
     let openai_llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI)
@@ -85,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .temperature(0.2)
                 .build()?
         )
-        .run()?;
+        .run().await?;
 
     // Display results from all steps
     println!("Results: {:?}", chain_res);

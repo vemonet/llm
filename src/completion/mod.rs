@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::{chat::ChatResponse, error::LLMError, ToolCall};
 
 /// A request for text completion from an LLM provider.
@@ -91,6 +93,7 @@ impl CompletionRequestBuilder {
 }
 
 /// Trait for providers that support text completion requests.
+#[async_trait]
 pub trait CompletionProvider {
     /// Sends a completion request to generate text.
     ///
@@ -101,7 +104,7 @@ pub trait CompletionProvider {
     /// # Returns
     ///
     /// The generated completion text or an error
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError>;
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError>;
 }
 
 impl std::fmt::Display for CompletionResponse {

@@ -12,9 +12,10 @@ use crate::{
     chat::{ChatResponse, Tool},
     ToolCall,
 };
-use reqwest::blocking::{Client, Response};
+use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
+use reqwest::{Client, Response};
 use serde_json::{json, Value};
 
 /// Represents a Phind LLM client with configuration options.
@@ -127,11 +128,11 @@ impl Phind {
     }
 
     /// Interprets the API response and handles any errors.
-    fn interpret_response(&self, response: Response) -> Result<Box<dyn ChatResponse>, LLMError> {
+    async fn interpret_response(&self, response: Response) -> Result<Box<dyn ChatResponse>, LLMError> {
         let status = response.status();
         match status {
             StatusCode::OK => {
-                let response_text = response.text()?;
+                let response_text = response.text().await?;
                 let full_text = Self::parse_stream_response(&response_text);
                 if full_text.is_empty() {
                     Err(LLMError::ProviderError(
@@ -142,7 +143,7 @@ impl Phind {
                 }
             }
             _ => {
-                let error_text = response.text()?;
+                let error_text = response.text().await?;
                 let error_json: Value = serde_json::from_str(&error_text)
                     .unwrap_or_else(|_| json!({"error": {"message": "Unknown error"}}));
 
@@ -163,6 +164,7 @@ impl Phind {
 }
 
 /// Implementation of chat functionality for Phind.
+#[async_trait]
 impl ChatProvider for Phind {
     /// Sends a chat request to Phind's API.
     ///
@@ -173,7 +175,7 @@ impl ChatProvider for Phind {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         let mut message_history = vec![];
         for m in messages {
             let role_str = match m.role {
@@ -211,14 +213,19 @@ impl ChatProvider for Phind {
         });
 
         let headers = Self::create_headers()?;
-        let response = self
+        let mut request = self
             .client
             .post(&self.api_base_url)
             .headers(headers)
-            .json(&payload)
-            .send()?;
+            .json(&payload);
 
-        self.interpret_response(response)
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send().await?;
+
+        self.interpret_response(response).await
     }
 
     /// Sends a chat request to Phind's API with tools.
@@ -231,7 +238,7 @@ impl ChatProvider for Phind {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
@@ -241,12 +248,15 @@ impl ChatProvider for Phind {
 }
 
 /// Implementation of completion functionality for Phind.
+#[async_trait]
 impl CompletionProvider for Phind {
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
-        let chat_resp = self.chat(&[crate::chat::ChatMessage {
-            role: ChatRole::User,
-            content: _req.prompt.clone(),
-        }])?;
+    async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+        let chat_resp = self
+            .chat(&[crate::chat::ChatMessage {
+                role: ChatRole::User,
+                content: _req.prompt.clone(),
+            }])
+            .await?;
 
         Ok(CompletionResponse {
             text: chat_resp.to_string(),
@@ -256,8 +266,9 @@ impl CompletionProvider for Phind {
 
 /// Implementation of embedding functionality for Phind.
 #[cfg(feature = "phind")]
+#[async_trait]
 impl EmbeddingProvider for Phind {
-    fn embed(&self, _input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, _input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Phind does not implement embeddings endpoint yet.".into(),
         ))

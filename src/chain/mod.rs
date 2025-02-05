@@ -3,7 +3,9 @@ mod multi;
 use crate::{error::LLMError, LLMProvider};
 use std::collections::HashMap;
 
-pub use multi::{LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain};
+pub use multi::{
+    LLMRegistry, LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain,
+};
 
 /// Execution mode for a chain step
 #[derive(Debug, Clone)]
@@ -122,7 +124,7 @@ impl<'a> PromptChain<'a> {
     }
 
     /// Executes all steps in the chain and returns the results
-    pub fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
+    pub async fn run(mut self) -> Result<HashMap<String, String>, LLMError> {
         for step in &self.steps {
             let prompt = self.apply_template(&step.template);
 
@@ -132,13 +134,13 @@ impl<'a> PromptChain<'a> {
                         role: crate::chat::ChatRole::User,
                         content: prompt,
                     }];
-                    self.llm.chat(&messages)?
+                    self.llm.chat(&messages).await?
                 }
                 ChainStepMode::Completion => {
                     let mut req = crate::completion::CompletionRequest::new(prompt);
                     req.max_tokens = step.max_tokens;
                     req.temperature = step.temperature;
-                    let resp = self.llm.complete(&req)?;
+                    let resp = self.llm.complete(&req).await?;
                     Box::new(resp)
                 }
             };

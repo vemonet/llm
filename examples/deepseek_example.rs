@@ -4,7 +4,8 @@ use llm::{
     chat::{ChatMessage, ChatRole},     // Chat-related structures
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get DeepSeek API key from environment variable or use test key as fallback
     let api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or("sk-TESTKEY".into());
 
@@ -13,7 +14,8 @@ fn main() {
         .backend(LLMBackend::DeepSeek) // Use DeepSeek as the LLM provider
         .system("You are a helpful assistant and you response only with words begin with deepseek_")
         .api_key(api_key) // Set the API key
-        .model("deepseek-chat") // Use DeepSeek Chat model
+        .model("deepseek-reasoner") // Use DeepSeek Chat model
+        .timeout_seconds(1200)
         .temperature(0.7) // Control response randomness (0.0-1.0)
         .stream(false) // Disable streaming responses
         .build()
@@ -36,8 +38,10 @@ fn main() {
     ];
 
     // Send chat request and handle the response
-    match llm.chat(&messages) {
+    match llm.chat(&messages).await {
         Ok(text) => println!("Chat response:\n{}", text),
         Err(e) => eprintln!("Chat error: {}", e),
     }
+
+    Ok(())
 }

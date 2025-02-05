@@ -10,7 +10,8 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::{FunctionCall, ToolCall};
@@ -194,6 +195,7 @@ impl Anthropic {
     }
 }
 
+#[async_trait]
 impl ChatProvider for Anthropic {
     /// Sends a chat request to Anthropic's API.
     ///
@@ -205,7 +207,7 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
@@ -253,38 +255,21 @@ impl ChatProvider for Anthropic {
             tool_choice,
         };
 
-        let resp = self
+        let mut request = self
             .client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("Content-Type", "application/json")
             .header("anthropic-version", "2023-06-01")
-            .json(&req_body)
-            .send()?
-            .error_for_status()?;
+            .json(&req_body);
 
-        let json_resp: AnthropicCompleteResponse = resp.json()?;
+        if self.timeout_seconds > 0 {
+            request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: AnthropicCompleteResponse = resp.json().await?;
         Ok(Box::new(json_resp))
-        // if json_resp.content.is_empty() {
-        //     return Err(LLMError::ProviderError(
-        //         "No content returned by Anthropic".to_string(),
-        //     ));
-        // }
-
-        // let outputs = json_resp
-        //     .content
-        //     .iter()
-        //     .map(|c| {
-        //         if c.content_type == Some("tool_use".to_string()) {
-        //             let tool_call = serde_json::to_string(c).unwrap();
-        //             tool_call
-        //         } else {
-        //             c.text.clone().unwrap()
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // Ok(outputs[0].clone())
     }
 
     /// Sends a chat request to Anthropic's API.
@@ -296,34 +281,29 @@ impl ChatProvider for Anthropic {
     /// # Returns
     ///
     /// The provider's response text or an error
-    fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
-        self.chat_with_tools(messages, None)
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
+        self.chat_with_tools(messages, None).await
     }
 }
 
+#[async_trait]
 impl CompletionProvider for Anthropic {
     /// Sends a completion request to Anthropic's API.
     ///
     /// Converts the completion request into a chat message format.
-    fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage {
             role: ChatRole::User,
             content: req.prompt.clone(),
         };
-        let answer = self.chat(&[chat_message])?;
-        Ok(CompletionResponse {
-            text: answer
-                .texts()
-                .unwrap_or_default()
-                .first()
-                .unwrap_or(&String::new())
-                .clone(),
-        })
+        let answer = self.chat(&[chat_message]).await?;
+        Ok(CompletionResponse { text: answer })
     }
 }
 
+#[async_trait]
 impl EmbeddingProvider for Anthropic {
-    fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
         ))

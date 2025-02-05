@@ -3,12 +3,12 @@
 > **Note**: This crate name previously belonged to another project. The current implementation represents a new and different library. The previous crate is now archived and will not receive any updates. **ref: https://github.com/rustformers/llm**
 
 
-**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com) and [Google](https://cloud.google.com/gemini).
+**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com) and [Google](https://cloud.google.com/gemini).
 With a **unified API** and **builder style** - similar to the Stripe experience - you can easily create **chat** or text **completion** requests without multiplying structures and crates.
 
 ## Key Features
 
-- **Multi-backend**: Manage OpenAI, Anthropic, Ollama, DeepSeek, xAI, Phind and Google through a single entry point.
+- **Multi-backend**: Manage OpenAI, Anthropic, Ollama, DeepSeek, xAI, Phind, Groq and Google through a single entry point.
 - **Multi-step chains**: Create multi-step chains with different backends at each step.
 - **Templates**: Use templates to create complex prompts with variables.
 - **Builder pattern**: Configure your LLM (model, temperature, max_tokens, timeouts...) with a few simple calls.
@@ -17,17 +17,31 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Rust-friendly**: Designed with clear traits, unified error handling, and conditional compilation via *features*.
 - **Validation**: Add validation to your requests to ensure the output is what you expect.
 - **Evaluation**: Add evaluation to your requests to score the output of LLMs.
+- **Function calling**: Add function calling to your requests to use tools in your LLMs.
+- **REST API**: Serve any LLM backend as a REST API with openai standard format.
 
-## Installation
+## Use any LLM backend on your project
 
 Simply add **LLM** to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-llm = { version = "1.0.1", features = ["openai", "anthropic", "ollama"] }
+llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq"] }
 ```
 
-## Examples
+## Serving any LLM backend as a REST API
+- Use standard messages format
+- Use step chains to chain multiple LLM backends together
+- Expose the chain through a REST API with openai standard format
+
+```shell
+[dependencies]
+llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api"] }
+```
+
+More details in the [`api_example`](examples/api_example.rs)
+
+## More examples
 
 | Name | Description |
 |------|-------------|
@@ -44,6 +58,10 @@ llm = { version = "1.0.1", features = ["openai", "anthropic", "ollama"] }
 | [`evaluation_example`](examples/evaluation_example.rs) | Basic evaluation example with Anthropic, Phind and DeepSeek |
 | [`google_example`](examples/google_example.rs) | Basic Google Gemini chat completion example with Gemini models |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
+| [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
+| [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
+| [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
+| [`api_deepclaude_example`](examples/api_deepclaude_example.rs) | Basic API (openai standard format) example with DeepSeek and Claude |
 
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.

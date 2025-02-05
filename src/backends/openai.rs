@@ -12,7 +12,8 @@ use crate::{
     error::LLMError,
     LLMProvider,
 };
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Client for interacting with OpenAI's API.
@@ -215,6 +216,7 @@ impl OpenAI {
     }
 }
 
+#[async_trait]
 impl ChatProvider for OpenAI {
     /// Sends a chat request to OpenAI's API.
     ///
@@ -225,7 +227,7 @@ impl ChatProvider for OpenAI {
     /// # Returns
     ///
     /// The model's response text or an error
-    fn chat_with_tools(
+    async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
@@ -266,28 +268,33 @@ impl ChatProvider for OpenAI {
             tools: tools.map(|t| t.to_vec()),
         };
 
-        let resp = self
+        let mut request = self
             .client
             .post("https://api.openai.com/v1/chat/completions")
             .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()?
-            .error_for_status()?;
-        let json_resp: OpenAIChatResponse = resp.json()?;
+            .json(&body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: OpenAIChatResponse = resp.json().await?;
 
         Ok(Box::new(json_resp))
     }
 
-    fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
-        self.chat_with_tools(messages, None)
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+        self.chat_with_tools(messages, None).await
     }
 }
 
+#[async_trait]
 impl CompletionProvider for OpenAI {
     /// Sends a completion request to OpenAI's API.
     ///
     /// Currently not implemented.
-    fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+    async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
             text: "OpenAI completion not implemented.".into(),
         })
@@ -295,8 +302,9 @@ impl CompletionProvider for OpenAI {
 }
 
 #[cfg(feature = "openai")]
+#[async_trait]
 impl EmbeddingProvider for OpenAI {
-    fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
+    async fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".into()));
         }
@@ -318,10 +326,11 @@ impl EmbeddingProvider for OpenAI {
             .post("https://api.openai.com/v1/embeddings")
             .bearer_auth(&self.api_key)
             .json(&body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?;
 
-        let json_resp: OpenAIEmbeddingResponse = resp.json()?;
+        let json_resp: OpenAIEmbeddingResponse = resp.json().await?;
 
         let embeddings = json_resp.data.into_iter().map(|d| d.embedding).collect();
         Ok(embeddings)

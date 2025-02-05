@@ -31,6 +31,8 @@ pub enum LLMBackend {
     Phind,
     /// Google Gemini API provider
     Google,
+    /// Groq API provider
+    Groq,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -51,7 +53,7 @@ pub enum LLMBackend {
 ///
 /// ```
 /// use std::str::FromStr;
-/// use llm::LLMBackend;
+/// use llm::builder::LLMBackend;
 ///
 /// let backend = LLMBackend::from_str("openai").unwrap();
 /// assert!(matches!(backend, LLMBackend::OpenAI));
@@ -70,6 +72,7 @@ impl std::str::FromStr for LLMBackend {
             "deepseek" => Ok(LLMBackend::DeepSeek),
             "xai" => Ok(LLMBackend::XAI),
             "phind" => Ok(LLMBackend::Phind),
+            "groq" => Ok(LLMBackend::Groq),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {}",
                 s
@@ -434,6 +437,32 @@ impl LLMBuilder {
                         self.top_k,
                     );
                     Box::new(google)
+                }
+            }
+            LLMBackend::Groq => {
+                #[cfg(not(feature = "groq"))]
+                return Err(LLMError::InvalidRequest(
+                    "Groq feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "groq")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for Groq".to_string())
+                    })?;
+
+                    let groq = crate::backends::groq::Groq::new(
+                        api_key,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.stream,
+                        self.top_p,
+                        self.top_k,
+                    );
+                    Box::new(groq)
                 }
             }
         };
