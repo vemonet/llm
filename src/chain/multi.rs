@@ -10,10 +10,13 @@ use crate::{
     LLMProvider,
 };
 
+#[cfg(feature = "api")]
+use crate::server::Server;
+
 /// Stores multiple LLM backends (OpenAI, Anthropic, etc.) identified by a key
 #[derive(Default)]
 pub struct LLMRegistry {
-    backends: HashMap<String, Box<dyn LLMProvider>>,
+    pub backends: HashMap<String, Box<dyn LLMProvider>>,
 }
 
 impl LLMRegistry {
@@ -31,6 +34,15 @@ impl LLMRegistry {
     /// Retrieves a backend by its identifier
     pub fn get(&self, id: &str) -> Option<&dyn LLMProvider> {
         self.backends.get(id).map(|b| b.as_ref())
+    }
+
+    #[cfg(feature = "api")]
+    /// Starts a REST API server on the specified address
+    pub async fn serve(self, addr: impl Into<String>) -> Result<(), LLMError> {
+        let server = Server::new(self);
+        server.run(&addr.into()).await?;
+
+        Ok(())
     }
 }
 
