@@ -18,8 +18,9 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Validation**: Add validation to your requests to ensure the output is what you expect.
 - **Evaluation**: Add evaluation to your requests to score the output of LLMs.
 - **Function calling**: Add function calling to your requests to use tools in your LLMs.
+- **REST API**: Serve any LLM backend as a REST API with openai standard format.
 
-## Installation
+## Use any LLM backend on your project
 
 Simply add **LLM** to your `Cargo.toml`:
 
@@ -28,7 +29,16 @@ Simply add **LLM** to your `Cargo.toml`:
 llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq"] }
 ```
 
-## Examples
+## Serving any LLM backend as a REST API
+
+```shell
+[dependencies]
+llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api"] }
+```
+
+More details in the [`api_example`](examples/api_example.rs)
+
+## More examples
 
 | Name | Description |
 |------|-------------|
@@ -47,6 +57,7 @@ llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepsee
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
+| [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
 
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.

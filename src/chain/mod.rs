@@ -3,7 +3,9 @@ mod multi;
 use crate::{error::LLMError, LLMProvider};
 use std::collections::HashMap;
 
-pub use multi::{LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain};
+pub use multi::{
+    LLMRegistry, LLMRegistryBuilder, MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain,
+};
 
 /// Execution mode for a chain step
 #[derive(Debug, Clone)]
