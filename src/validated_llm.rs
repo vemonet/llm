@@ -25,7 +25,7 @@
 
 use async_trait::async_trait;
 
-use crate::chat::{ChatMessage, ChatProvider, ChatRole, Tool};
+use crate::chat::{ChatMessage, ChatProvider, ChatRole, MessageType, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::error::LLMError;
@@ -118,6 +118,7 @@ impl ChatProvider for ValidatedLLM {
 
                     local_messages.push(ChatMessage {
                         role: ChatRole::User,
+                        message_type: MessageType::Text,
                         content: format!(
                             "Your previous output was invalid because: {}\n\
                              Please try again and produce a valid response.",
