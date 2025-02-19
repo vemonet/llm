@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for Anthropic integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::{ChatMessage, ChatRole},     // Chat-related structures
+    chat::{ChatMessage, ChatRole, MessageType}, // Chat-related structures
 };
 
 #[tokio::main]
@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Prepare conversation history with example message about Rust concurrency
     let messages = vec![ChatMessage {
         role: ChatRole::User,
+        message_type: MessageType::Text,
         content: "Tell me something about Rust concurrency".into(),
     }];
 
