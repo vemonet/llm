@@ -132,6 +132,7 @@ impl<'a> PromptChain<'a> {
                 ChainStepMode::Chat => {
                     let messages = vec![crate::chat::ChatMessage {
                         role: crate::chat::ChatRole::User,
+                        message_type: crate::chat::MessageType::Text,
                         content: prompt,
                     }];
                     self.llm.chat(&messages).await?
