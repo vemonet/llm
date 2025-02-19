@@ -1,7 +1,7 @@
 // Import required modules from the LLM library
 use llm::{
     builder::{LLMBackend, LLMBuilder},
-    chat::{ChatMessage, ChatRole},
+    chat::ChatMessage,
 };
 
 #[tokio::main]
@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let llm = LLMBuilder::new()
         .backend(LLMBackend::Ollama) // Use Ollama as the LLM backend
         .base_url(base_url) // Set the Ollama server URL
-        .model("deepseek-r1:1.5b")
+        .model("llama3.2:latest")
         .max_tokens(1000) // Set maximum response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
         .stream(false) // Disable streaming responses
@@ -22,18 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare conversation history with example messages
     let messages = vec![
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Hello, how do I run a local LLM in Rust?".into(),
-        },
-        ChatMessage {
-            role: ChatRole::Assistant,
-            content: "One way is to use Ollama with a local model!".into(),
-        },
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Tell me more about that".into(),
-        },
+        ChatMessage::user().content("Hello, how do I run a local LLM in Rust?").build(),
+        ChatMessage::assistant().content("One way is to use Ollama with a local model!").build(),
+        ChatMessage::user().content("Tell me more about that").build(),
     ];
 
     // Send chat request and handle the response
