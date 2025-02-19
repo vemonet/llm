@@ -3,14 +3,16 @@
 //! This module provides integration with Anthropic's Claude models through their API.
 
 use std::collections::HashMap;
+use std::fs;
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, ParametersSchema, Tool},
+    chat::{ChatMessage, ChatProvider, ChatRole, MessageType, ParametersSchema, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
 };
 use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +31,7 @@ pub struct Anthropic {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
+    pub default_image_type: String,
     client: Client,
 }
 
@@ -67,7 +70,32 @@ struct AnthropicCompleteRequest<'a> {
 #[derive(Serialize, Debug)]
 struct AnthropicMessage<'a> {
     role: &'a str,
-    content: &'a str,
+    content: Vec<MessageContent<'a>>,
+}
+
+#[derive(Serialize, Debug)]
+struct MessageContent<'a> {
+    #[serde(rename = "type")]
+    message_type: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    image_url: Option<ImageUrlContent<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<ImageSource<'a>>,
+}
+
+#[derive(Serialize, Debug)]
+struct ImageUrlContent<'a> {
+    url: &'a str,
+}
+
+#[derive(Serialize, Debug)]
+struct ImageSource<'a> {
+    #[serde(rename = "type")]
+    source_type: &'a str,
+    media_type: &'a str,
+    data: String,
 }
 
 /// Response from Anthropic's messages API endpoint.
@@ -88,6 +116,22 @@ struct AnthropicContent {
 }
 
 impl Anthropic {
+    /// Encodes binary image data to base64
+    fn encode_image_base64(data: &[u8]) -> String {
+        BASE64.encode(data)
+    }
+
+    /// Reads and encodes an image file to base64
+    fn read_and_encode_image(path: &str) -> String {
+        match fs::read(path) {
+            Ok(bytes) => Self::encode_image_base64(&bytes),
+            Err(e) => {
+                eprintln!("Warning: Failed to read image: {}", e);
+                String::new()
+            }
+        }
+    }
+
     /// Creates a new Anthropic client with the specified configuration.
     ///
     /// # Arguments
@@ -127,6 +171,7 @@ impl Anthropic {
             top_p,
             top_k,
             tools,
+            default_image_type: "image/jpeg".to_string(),
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -160,7 +205,33 @@ impl ChatProvider for Anthropic {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "assistant",
                 },
-                content: &m.content,
+                content: match m.message_type {
+                    MessageType::Text => vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                        source: None,
+                    }],
+                    MessageType::Image => {
+                        let encoded = Self::read_and_encode_image(&m.content);
+                        vec![MessageContent {
+                            message_type: Some("image"),
+                            text: None,
+                            image_url: None,
+                            source: Some(ImageSource {
+                                source_type: "base64",
+                                media_type: &self.default_image_type,
+                                data: encoded,
+                            }),
+                        }]
+                    }
+                    MessageType::ImageURL => vec![MessageContent {
+                        message_type: Some("image_url"),
+                        text: None,
+                        image_url: Some(ImageUrlContent { url: &m.content }),
+                        source: None,
+                    }],
+                },
             })
             .collect();
 
@@ -248,13 +319,8 @@ impl CompletionProvider for Anthropic {
     /// Sends a completion request to Anthropic's API.
     ///
     /// Converts the completion request into a chat message format.
-    async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
-        let chat_message = ChatMessage {
-            role: ChatRole::User,
-            content: req.prompt.clone(),
-        };
-        let answer = self.chat(&[chat_message]).await?;
-        Ok(CompletionResponse { text: answer })
+    async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
+        unimplemented!()
     }
 }
 
