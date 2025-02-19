@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use async_trait::async_trait;
 use serde::Serialize;
@@ -129,13 +130,12 @@ pub trait ChatProvider: Sync + Send {
     ) -> Result<String, LLMError>;
 }
 
-impl ReasoningEffort {
-    /// Convert a ReasoningEffort enum to a string
-    pub fn to_string(&self) -> String {
+impl fmt::Display for ReasoningEffort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ReasoningEffort::Low => "low".to_string(),
-            ReasoningEffort::Medium => "medium".to_string(),
-            ReasoningEffort::High => "high".to_string(),
+            ReasoningEffort::Low => write!(f, "low"),
+            ReasoningEffort::Medium => write!(f, "medium"),
+            ReasoningEffort::High => write!(f, "high"),
         }
     }
 }
