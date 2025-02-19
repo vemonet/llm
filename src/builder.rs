@@ -220,8 +220,7 @@ impl LLMBuilder {
     ///
     /// # Arguments
     ///
-    /// * `f` - Function that takes a response string and returns Ok(()) if valid,
-    ///         or Err with error message if invalid
+    /// * `f` - Function that takes a response string and returns Ok(()) if valid, or Err with error message if invalid
     pub fn validator<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> Result<(), String> + Send + Sync + 'static,
