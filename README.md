@@ -19,6 +19,8 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Evaluation**: Add evaluation to your requests to score the output of LLMs.
 - **Function calling**: Add function calling to your requests to use tools in your LLMs.
 - **REST API**: Serve any LLM backend as a REST API with openai standard format.
+- **Vision**: Add vision to your requests to use images in your LLMs.
+- **Reasoning**: Add reasoning to your requests to use reasoning in your LLMs.
 
 ## Use any LLM backend on your project
 
@@ -62,6 +64,9 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
 | [`api_deepclaude_example`](examples/api_deepclaude_example.rs) | Basic API (openai standard format) example with DeepSeek and Claude |
+| [`anthropic_vision_example`](examples/anthropic_vision_example.rs) | Basic anthropic vision example with Anthropic |
+| [`openai_vision_example`](examples/openai_vision_example.rs) | Basic openai vision example with OpenAI |
+| [`openai_reasoning_example`](examples/openai_reasoning_example.rs) | Basic openai reasoning example with OpenAI |
 
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.
