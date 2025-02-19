@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for Phind integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::{ChatMessage, ChatRole},     // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]
@@ -18,18 +18,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare conversation history with example messages
     let messages = vec![
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Tell me that you love cats".into(),
-        },
-        ChatMessage {
-            role: ChatRole::Assistant,
-            content: "I am an assistant, I cannot love cats but I can love dogs".into(),
-        },
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Tell me that you love dogs in 2000 chars".into(),
-        },
+        ChatMessage::user()
+            .content("Tell me that you love cats")
+            .build(),
+        ChatMessage::assistant()
+            .content("I am an assistant, I cannot love cats but I can love dogs")
+            .build(),
+        ChatMessage::user()
+            .content("Tell me that you love dogs in 2000 chars")
+            .build(),
     ];
 
     // Send chat request and handle the response
