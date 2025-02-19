@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    chat::{ChatMessage, ChatRole},
+    chat::{ChatMessage, ChatRole, MessageType},
     completion::CompletionRequest,
     error::LLMError,
     LLMProvider,
@@ -228,6 +228,7 @@ impl<'a> MultiPromptChain<'a> {
                 MultiChainStepMode::Chat => {
                     let messages = vec![ChatMessage {
                         role: ChatRole::User,
+                        message_type: MessageType::Text,
                         content: prompt_text,
                     }];
                     llm.chat(&messages).await?
