@@ -56,8 +56,7 @@ impl ValidatedLLM {
     /// # Arguments
     ///
     /// * `inner` - The LLM provider to wrap with validation
-    /// * `validator` - Function that takes a response string and returns Ok(()) if valid,
-    ///                or Err with error message if invalid
+    /// * `validator` - Function that takes a response string and returns Ok(()) if valid, or Err with error message if invalid
     /// * `attempts` - Maximum number of validation attempts before failing
     ///
     /// # Returns
