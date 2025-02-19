@@ -228,10 +228,9 @@ impl ChatProvider for Phind {
 impl CompletionProvider for Phind {
     async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_resp = self
-            .chat(&[crate::chat::ChatMessage {
-                role: ChatRole::User,
-                content: _req.prompt.clone(),
-            }])
+            .chat(&[crate::chat::ChatMessage::user()
+                .content(_req.prompt.clone())
+                .build()])
             .await?;
 
         Ok(CompletionResponse { text: chat_resp })
