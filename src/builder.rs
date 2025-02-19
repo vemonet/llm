@@ -4,7 +4,7 @@
 //! LLM (Large Language Model) provider instances with various settings and options.
 
 use crate::{
-    chat::{FunctionTool, ParameterProperty, ParametersSchema, Tool},
+    chat::{FunctionTool, ParameterProperty, ParametersSchema, ReasoningEffort, Tool},
     error::LLMError,
     LLMProvider,
 };
@@ -119,6 +119,8 @@ pub struct LLMBuilder {
     validator_attempts: usize,
     /// Function tools
     tools: Option<Vec<Tool>>,
+    /// Enable reasoning
+    reasoning_effort: Option<String>,
 }
 
 impl LLMBuilder {
@@ -166,6 +168,12 @@ impl LLMBuilder {
     /// Sets the system prompt/context.
     pub fn system(mut self, system: impl Into<String>) -> Self {
         self.system = Some(system.into());
+        self
+    }
+
+    /// Sets the reasoning flag.
+    pub fn reasoning_effort(mut self, reasoning_effort: ReasoningEffort) -> Self {
+        self.reasoning_effort = Some(reasoning_effort.to_string());
         self
     }
 
@@ -282,6 +290,7 @@ impl LLMBuilder {
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                         self.tools,
+                        self.reasoning_effort,
                     ))
                 }
             }

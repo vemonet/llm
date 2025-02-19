@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for Google Gemini integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::{ChatMessage, ChatRole},     // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]
@@ -24,18 +24,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare conversation history with example messages
     let messages = vec![
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Explain the concept of async/await in Rust".into(),
-        },
-        ChatMessage {
-            role: ChatRole::Assistant,
-            content: "Async/await in Rust is a way to write asynchronous code...".into(),
-        },
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Can you show me a simple example?".into(),
-        },
+        ChatMessage::user()
+            .content("Explain the concept of async/await in Rust")
+            .build(),
+        ChatMessage::assistant()
+            .content("Async/await in Rust is a way to write asynchronous code...")
+            .build(),
+        ChatMessage::user()
+            .content("Can you show me a simple example?")
+            .build(),
     ];
 
     // Send chat request and handle the response

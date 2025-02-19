@@ -340,10 +340,7 @@ impl CompletionProvider for Google {
     ///
     /// The completion response or an error
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
-        let chat_message = ChatMessage {
-            role: ChatRole::User,
-            content: req.prompt.clone(),
-        };
+        let chat_message = ChatMessage::user().content(req.prompt.clone()).build();
         let answer = self.chat(&[chat_message]).await?;
         Ok(CompletionResponse { text: answer })
     }

@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for OpenAI integration
 use llm::{
-    builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::ChatMessage,                 // Chat-related structures
+    builder::{LLMBackend, LLMBuilder},    // Builder pattern components
+    chat::{ChatMessage, ReasoningEffort}, // Chat-related structures
 };
 
 #[tokio::main]
@@ -13,25 +13,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI) // Use OpenAI as the LLM provider
         .api_key(api_key) // Set the API key
-        .model("gpt-3.5-turbo") // Use GPT-3.5 Turbo model
-        .max_tokens(512) // Limit response length
-        .temperature(0.7) // Control response randomness (0.0-1.0)
+        .model("o1-preview") // Use GPT-3.5 Turbo model
         .stream(false) // Disable streaming responses
+        .reasoning_effort(ReasoningEffort::High) // Enable reasoning effort
         .build()
         .expect("Failed to build LLM (OpenAI)");
 
     // Prepare conversation history with example messages
-    let messages = vec![
-        ChatMessage::user()
-            .content("Tell me that you love cats")
-            .build(),
-        ChatMessage::assistant()
-            .content("I am an assistant, I cannot love cats but I can love dogs")
-            .build(),
-        ChatMessage::user()
-            .content("Tell me that you love dogs in 2000 chars")
-            .build(),
-    ];
+    let messages = vec![ChatMessage::user()
+        .content("How muck r in strawberry")
+        .build()];
 
     // Send chat request and handle the response
     match llm.chat(&messages).await {
