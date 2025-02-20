@@ -54,8 +54,8 @@ impl std::fmt::Display for PhindResponse {
 }
 
 impl ChatResponse for PhindResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(vec![self.content.clone()])
+    fn text(&self) -> Option<String> {
+        Some(self.content.clone())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
@@ -128,7 +128,10 @@ impl Phind {
     }
 
     /// Interprets the API response and handles any errors.
-    async fn interpret_response(&self, response: Response) -> Result<Box<dyn ChatResponse>, LLMError> {
+    async fn interpret_response(
+        &self,
+        response: Response,
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         let status = response.status();
         match status {
             StatusCode::OK => {
@@ -252,15 +255,17 @@ impl ChatProvider for Phind {
 impl CompletionProvider for Phind {
     async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_resp = self
-            .chat(&[crate::chat::ChatMessage {
-                role: ChatRole::User,
-                content: _req.prompt.clone(),
-            }])
+            .chat(&[crate::chat::ChatMessage::user()
+                .content(_req.prompt.clone())
+                .build()])
             .await?;
-
-        Ok(CompletionResponse {
-            text: chat_resp.to_string(),
-        })
+        if let Some(text) = chat_resp.text() {
+            Ok(CompletionResponse { text })
+        } else {
+            Err(LLMError::ProviderError(
+                "No completion text returned by Phind".to_string(),
+            ))
+        }
     }
 }
 

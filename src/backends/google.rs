@@ -151,16 +151,13 @@ struct GoogleResponseContent {
 }
 
 impl ChatResponse for GoogleChatResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(
-            self.candidates
-                .iter()
-                .map(|c| c.content.parts.iter().map(|p| p.text.clone()).collect())
-                .collect(),
-        )
+    fn text(&self) -> Option<String> {
+        self.candidates
+            .first()
+            .map(|c| c.content.parts.iter().map(|p| p.text.clone()).collect())
     }
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        None
+        todo!()
     }
 }
 
@@ -350,14 +347,14 @@ impl CompletionProvider for Google {
     ///
     /// The completion response or an error
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
-        let chat_message = ChatMessage {
-            role: ChatRole::User,
-            content: req.prompt.clone(),
-        };
-        let answer = self.chat(&[chat_message])?;
-        Ok(CompletionResponse {
-            text: answer.texts().unwrap().join("\n"),
-        })
+        let chat_message = ChatMessage::user().content(req.prompt.clone()).build();
+        if let Some(text) = self.chat(&[chat_message]).await?.text() {
+            Ok(CompletionResponse { text })
+        } else {
+            Err(LLMError::ProviderError(
+                "No answer returned by Google".to_string(),
+            ))
+        }
     }
 }
 

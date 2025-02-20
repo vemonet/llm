@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use async_trait::async_trait;
 use serde::Serialize;
@@ -14,11 +15,35 @@ pub enum ChatRole {
     Assistant,
 }
 
+/// The type of a message in a chat conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum MessageType {
+    /// A text message
+    #[default]
+    Text,
+    /// An image message
+    Image,
+    /// An image URL message
+    ImageURL,
+}
+
+/// The type of reasoning effort for a message in a chat conversation.
+pub enum ReasoningEffort {
+    /// Low reasoning effort
+    Low,
+    /// Medium reasoning effort
+    Medium,
+    /// High reasoning effort
+    High,
+}
+
 /// A single message in a chat conversation.
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     /// The role of who sent this message (user or assistant)
     pub role: ChatRole,
+    /// The type of the message (text, image, audio, video, etc)
+    pub message_type: MessageType,
     /// The text content of the message
     pub content: String,
 }
@@ -72,8 +97,8 @@ pub struct Tool {
     pub function: FunctionTool,
 }
 
-pub trait ChatResponse: std::fmt::Display + std::fmt::Debug {
-    fn texts(&self) -> Option<Vec<String>>;
+pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
+    fn text(&self) -> Option<String>;
     fn tool_calls(&self) -> Option<Vec<ToolCall>>;
 }
 
@@ -108,4 +133,72 @@ pub trait ChatProvider: Sync + Send {
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError>;
+}
+
+impl fmt::Display for ReasoningEffort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReasoningEffort::Low => write!(f, "low"),
+            ReasoningEffort::Medium => write!(f, "medium"),
+            ReasoningEffort::High => write!(f, "high"),
+        }
+    }
+}
+
+impl ChatMessage {
+    /// Create a new builder for a user message
+    pub fn user() -> ChatMessageBuilder {
+        ChatMessageBuilder::new(ChatRole::User)
+    }
+
+    /// Create a new builder for an assistant message
+    pub fn assistant() -> ChatMessageBuilder {
+        ChatMessageBuilder::new(ChatRole::Assistant)
+    }
+}
+
+/// Builder for ChatMessage
+#[derive(Debug)]
+pub struct ChatMessageBuilder {
+    role: ChatRole,
+    message_type: MessageType,
+    content: String,
+}
+
+impl ChatMessageBuilder {
+    /// Create a new ChatMessageBuilder with specified role
+    pub fn new(role: ChatRole) -> Self {
+        Self {
+            role,
+            message_type: MessageType::default(),
+            content: String::new(),
+        }
+    }
+
+    /// Set the message content
+    pub fn content<S: Into<String>>(mut self, content: S) -> Self {
+        self.content = content.into();
+        self
+    }
+
+    /// Set the message type as Image
+    pub fn image(mut self) -> Self {
+        self.message_type = MessageType::Image;
+        self
+    }
+
+    /// Set the message type as ImageURL
+    pub fn image_url(mut self) -> Self {
+        self.message_type = MessageType::ImageURL;
+        self
+    }
+
+    /// Build the ChatMessage
+    pub fn build(self) -> ChatMessage {
+        ChatMessage {
+            role: self.role,
+            message_type: self.message_type,
+            content: self.content,
+        }
+    }
 }

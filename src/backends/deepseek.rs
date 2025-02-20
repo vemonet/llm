@@ -5,7 +5,7 @@
 use crate::chat::{ChatResponse, Tool};
 #[cfg(feature = "deepseek")]
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -64,8 +64,14 @@ struct DeepSeekChatMsg {
     content: String,
 }
 impl ChatResponse for DeepSeekChatResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(vec![self.choices.first().unwrap().message.content.clone()])
+    fn text(&self) -> Option<String> {
+        self.choices.first().and_then(|c| {
+            if c.message.content.is_empty() {
+                None
+            } else {
+                Some(c.message.content.clone())
+            }
+        })
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
@@ -157,7 +163,7 @@ impl ChatProvider for DeepSeek {
         let resp = request.send().await?.error_for_status()?;
 
         let json_resp: DeepSeekChatResponse = resp.json().await?;
-        
+
         Ok(Box::new(json_resp))
     }
 

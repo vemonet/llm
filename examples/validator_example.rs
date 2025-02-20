@@ -1,7 +1,7 @@
 // Import required modules from the LLM library
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder components for LLM configuration
-    chat::{ChatMessage, ChatRole},     // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]
@@ -29,10 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare the chat message requesting JSON output
     let messages = vec![
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Please give me a valid JSON describing a cat named Garfield, color 'orange'. with format {name: string, color: string}. Return only the JSON, no other text".into(),
-        },
+        ChatMessage::user().content("Please give me a valid JSON describing a cat named Garfield, color 'orange'. with format {name: string, color: string}. Return only the JSON, no other text").build(),
     ];
 
     // Send chat request and handle the response

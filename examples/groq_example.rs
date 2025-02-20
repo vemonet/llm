@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for Groq integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::{ChatMessage, ChatRole},     // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]
@@ -22,19 +22,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare conversation history with example messages
     let messages = vec![
-        ChatMessage {
-            role: ChatRole::User,
-            content: "Tell me about quantum computing".into(),
-        },
-        ChatMessage {
-            role: ChatRole::Assistant,
-            content: "Quantum computing is a type of computing that uses quantum phenomena..."
-                .into(),
-        },
-        ChatMessage {
-            role: ChatRole::User,
-            content: "What are qubits?".into(),
-        },
+        ChatMessage::user()
+            .content("Tell me about quantum computing")
+            .build(),
+        ChatMessage::assistant()
+            .content("Quantum computing is a type of computing that uses quantum phenomena...")
+            .build(),
+        ChatMessage::user().content("What are qubits?").build(),
     ];
 
     // Send chat request and handle the response

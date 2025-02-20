@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for OpenAI integration
 use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
-    chat::{ChatMessage, ChatRole}, // Chat-related structures
+    chat::ChatMessage, // Chat-related structures
 };
 
 #[tokio::main]
@@ -31,10 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to build LLM");
 
     // Prepare conversation history with example messages
-    let messages = vec![ChatMessage {
-        role: ChatRole::User,
-        content: "You are a weather assistant. What is the weather in Tokyo? Always use the tools that you have available".into(),
-    }];
+    let messages = vec![ChatMessage::user().content("You are a weather assistant. What is the weather in Tokyo? Use the tools that you have available").build()];
 
     // Send chat request and handle the response
     // this returns the response as a string. The tool call is also returned as a serialized string. We can deserialize if needed.

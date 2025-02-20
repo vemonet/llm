@@ -6,15 +6,17 @@ use crate::{chat::ChatResponse, FunctionCall, ToolCall};
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
-    chat::{ChatMessage, ChatProvider, ChatRole},
+    chat::{ChatMessage, ChatProvider, ChatRole, MessageType},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
     LLMProvider,
 };
 use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::fs;
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -33,15 +35,33 @@ pub struct OpenAI {
     /// Embedding parameters
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
+    pub reasoning_effort: Option<String>,
     client: Client,
 }
 
 /// Individual message in an OpenAI chat conversation.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct OpenAIChatMessage<'a> {
     #[allow(dead_code)]
     role: &'a str,
-    content: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<Vec<MessageContent<'a>>>,
+}
+
+#[derive(Serialize, Debug)]
+struct MessageContent<'a> {
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    message_type: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    image_url: Option<ImageUrlContent<'a>>,
+}
+
+/// Individual image message in an OpenAI chat conversation.
+#[derive(Serialize, Debug)]
+struct ImageUrlContent<'a> {
+    url: &'a str,
 }
 
 #[derive(Serialize)]
@@ -70,6 +90,8 @@ struct OpenAIChatRequest<'a> {
     top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
 }
 
 impl std::fmt::Display for ToolCall {
@@ -123,23 +145,14 @@ struct OpenAIEmbeddingResponse {
 }
 
 impl ChatResponse for OpenAIChatResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(
-            self.choices
-                .iter()
-                .map(|c| c.message.content.clone().unwrap())
-                .collect(),
-        )
+    fn text(&self) -> Option<String> {
+        self.choices.first().and_then(|c| c.message.content.clone())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        Some(
-            self.choices
-                .iter()
-                .map(|c| c.message.tool_calls.clone().unwrap())
-                .flatten()
-                .collect(),
-        )
+        self.choices
+            .first()
+            .and_then(|c| c.message.tool_calls.clone())
     }
 }
 
@@ -193,6 +206,7 @@ impl OpenAI {
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
         tools: Option<Vec<Tool>>,
+        reasoning_effort: Option<String>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -212,6 +226,7 @@ impl OpenAI {
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
+            reasoning_effort,
         }
     }
 }
@@ -236,14 +251,44 @@ impl ChatProvider for OpenAI {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
 
+        // Clone the messages to have an owned mutable vector.
+        let mut messages = messages.to_vec();
+
         let mut openai_msgs: Vec<OpenAIChatMessage> = messages
-            .iter()
+            .iter_mut() // Use mutable iterator to allow content modification.
             .map(|m| OpenAIChatMessage {
                 role: match m.role {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "assistant",
                 },
-                content: &m.content,
+                content: match m.message_type {
+                    MessageType::Text => Some(vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                    }]),
+                    MessageType::Image => None,
+                    MessageType::ImageURL => Some(vec![MessageContent {
+                        message_type: Some("image_url"),
+                        text: None,
+                        image_url: Some(ImageUrlContent {
+                            url: if m.content.starts_with("http") {
+                                &m.content
+                            } else {
+                                match fs::read(&m.content) {
+                                    Ok(bytes) => {
+                                        let base64_image = BASE64.encode(&bytes);
+                                        // Modify the content: m is now mutable thanks to iter_mut()
+                                        m.content =
+                                            format!("data:image/jpeg;base64,{}", base64_image);
+                                        &m.content
+                                    }
+                                    Err(_) => &m.content,
+                                }
+                            },
+                        }),
+                    }]),
+                },
             })
             .collect();
 
@@ -252,7 +297,11 @@ impl ChatProvider for OpenAI {
                 0,
                 OpenAIChatMessage {
                     role: "system",
-                    content: system,
+                    content: Some(vec![MessageContent {
+                        message_type: None,
+                        text: Some(system),
+                        image_url: None,
+                    }]),
                 },
             );
         }
@@ -266,6 +315,7 @@ impl ChatProvider for OpenAI {
             top_p: self.top_p,
             top_k: self.top_k,
             tools: tools.map(|t| t.to_vec()),
+            reasoning_effort: self.reasoning_effort.clone(),
         };
 
         let mut request = self
@@ -284,7 +334,7 @@ impl ChatProvider for OpenAI {
         Ok(Box::new(json_resp))
     }
 
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
 }
@@ -339,6 +389,6 @@ impl EmbeddingProvider for OpenAI {
 
 impl LLMProvider for OpenAI {
     fn tools(&self) -> Option<&[Tool]> {
-        self.tools.as_ref().map(|t| t.as_slice())
+        self.tools.as_deref()
     }
 }

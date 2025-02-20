@@ -11,11 +11,11 @@ use crate::{
     error::LLMError,
     LLMProvider,
 };
-use async_trait::async_trait;
 use crate::{
     chat::{ChatResponse, Tool},
     ToolCall,
 };
+use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -91,14 +91,13 @@ struct XAIChatResponse {
 
 impl std::fmt::Display for XAIChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = self.choices.first().unwrap().message.content.clone();
-        write!(f, "{}", text)
+        write!(f, "{}", self.text().unwrap_or_default())
     }
 }
 
 impl ChatResponse for XAIChatResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(vec![self.to_string()])
+    fn text(&self) -> Option<String> {
+        self.choices.first().map(|c| c.message.content.clone())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {

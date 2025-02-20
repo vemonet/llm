@@ -75,16 +75,16 @@ impl std::fmt::Display for OllamaResponse {
 }
 
 impl ChatResponse for OllamaResponse {
-    fn texts(&self) -> Option<Vec<String>> {
+    fn text(&self) -> Option<String> {
         self.content
             .as_ref()
             .or(self.response.as_ref())
             .or(self.message.as_ref().map(|m| &m.content))
-            .map(|s| vec![s.to_string()])
+            .map(|s| s.to_string())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        None
+        todo!()
     }
 }
 
@@ -262,8 +262,13 @@ impl CompletionProvider for Ollama {
             .error_for_status()?;
         let json_resp: OllamaResponse = resp.json().await?;
 
-        let answer = json_resp.response.or(json_resp.content).unwrap_or_default();
-        Ok(CompletionResponse { text: answer })
+        if let Some(answer) = json_resp.response.or(json_resp.content) {
+            Ok(CompletionResponse { text: answer })
+        } else {
+            Err(LLMError::ProviderError(
+                "No answer returned by Ollama".to_string(),
+            ))
+        }
     }
 }
 

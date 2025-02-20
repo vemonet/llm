@@ -25,7 +25,7 @@
 
 use async_trait::async_trait;
 
-use crate::chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool};
+use crate::chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::error::LLMError;
@@ -56,8 +56,7 @@ impl ValidatedLLM {
     /// # Arguments
     ///
     /// * `inner` - The LLM provider to wrap with validation
-    /// * `validator` - Function that takes a response string and returns Ok(()) if valid,
-    ///                or Err with error message if invalid
+    /// * `validator` - Function that takes a response string and returns Ok(()) if valid, or Err with error message if invalid
     /// * `attempts` - Maximum number of validation attempts before failing
     ///
     /// # Returns
@@ -103,13 +102,7 @@ impl ChatProvider for ValidatedLLM {
                 Err(e) => return Err(e),
             };
 
-            match (self.validator)(
-                response
-                    .texts()
-                    .unwrap_or_default()
-                    .first()
-                    .unwrap_or(&String::new()),
-            ) {
+            match (self.validator)(&response.text().unwrap_or_default()) {
                 Ok(()) => {
                     return Ok(response);
                 }
@@ -124,6 +117,7 @@ impl ChatProvider for ValidatedLLM {
 
                     local_messages.push(ChatMessage {
                         role: ChatRole::User,
+                        message_type: MessageType::Text,
                         content: format!(
                             "Your previous output was invalid because: {}\n\
                              Please try again and produce a valid response.",

@@ -4,7 +4,7 @@
 //! LLM (Large Language Model) provider instances with various settings and options.
 
 use crate::{
-    chat::{FunctionTool, ParameterProperty, ParametersSchema, Tool},
+    chat::{FunctionTool, ParameterProperty, ParametersSchema, ReasoningEffort, Tool},
     error::LLMError,
     LLMProvider,
 };
@@ -119,6 +119,8 @@ pub struct LLMBuilder {
     validator_attempts: usize,
     /// Function tools
     tools: Option<Vec<Tool>>,
+    /// Enable reasoning
+    reasoning_effort: Option<String>,
 }
 
 impl LLMBuilder {
@@ -169,6 +171,12 @@ impl LLMBuilder {
         self
     }
 
+    /// Sets the reasoning flag.
+    pub fn reasoning_effort(mut self, reasoning_effort: ReasoningEffort) -> Self {
+        self.reasoning_effort = Some(reasoning_effort.to_string());
+        self
+    }
+
     /// Sets the request timeout in seconds.
     pub fn timeout_seconds(mut self, timeout_seconds: u64) -> Self {
         self.timeout_seconds = Some(timeout_seconds);
@@ -212,8 +220,7 @@ impl LLMBuilder {
     ///
     /// # Arguments
     ///
-    /// * `f` - Function that takes a response string and returns Ok(()) if valid,
-    ///         or Err with error message if invalid
+    /// * `f` - Function that takes a response string and returns Ok(()) if valid, or Err with error message if invalid
     pub fn validator<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> Result<(), String> + Send + Sync + 'static,
@@ -282,6 +289,7 @@ impl LLMBuilder {
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                         self.tools,
+                        self.reasoning_effort,
                     ))
                 }
             }

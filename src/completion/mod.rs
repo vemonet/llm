@@ -21,8 +21,8 @@ pub struct CompletionResponse {
 }
 
 impl ChatResponse for CompletionResponse {
-    fn texts(&self) -> Option<Vec<String>> {
-        Some(vec![self.text.clone()])
+    fn text(&self) -> Option<String> {
+        Some(self.text.clone())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {

@@ -54,21 +54,9 @@ impl LLMEvaluator {
         let mut results = Vec::new();
         for llm in &self.llms {
             let response = llm.chat(messages).await?;
-            let score = self.compute_score(
-                &response
-                    .texts()
-                    .unwrap_or_default()
-                    .first()
-                    .unwrap_or(&String::new())
-                    .clone(),
-            );
+            let score = self.compute_score(&response.text().unwrap_or_default());
             results.push(EvalResult {
-                text: response
-                    .texts()
-                    .unwrap_or_default()
-                    .first()
-                    .unwrap_or(&String::new())
-                    .clone(),
+                text: response.text().unwrap_or_default(),
                 score,
             });
         }
