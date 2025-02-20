@@ -202,3 +202,71 @@ impl ChatMessageBuilder {
         }
     }
 }
+
+impl fmt::Display for ReasoningEffort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReasoningEffort::Low => write!(f, "low"),
+            ReasoningEffort::Medium => write!(f, "medium"),
+            ReasoningEffort::High => write!(f, "high"),
+        }
+    }
+}
+
+impl ChatMessage {
+    /// Create a new builder for a user message
+    pub fn user() -> ChatMessageBuilder {
+        ChatMessageBuilder::new(ChatRole::User)
+    }
+
+    /// Create a new builder for an assistant message
+    pub fn assistant() -> ChatMessageBuilder {
+        ChatMessageBuilder::new(ChatRole::Assistant)
+    }
+}
+
+/// Builder for ChatMessage
+#[derive(Debug)]
+pub struct ChatMessageBuilder {
+    role: ChatRole,
+    message_type: MessageType,
+    content: String,
+}
+
+impl ChatMessageBuilder {
+    /// Create a new ChatMessageBuilder with specified role
+    pub fn new(role: ChatRole) -> Self {
+        Self {
+            role,
+            message_type: MessageType::default(),
+            content: String::new(),
+        }
+    }
+
+    /// Set the message content
+    pub fn content<S: Into<String>>(mut self, content: S) -> Self {
+        self.content = content.into();
+        self
+    }
+
+    /// Set the message type as Image
+    pub fn image(mut self) -> Self {
+        self.message_type = MessageType::Image;
+        self
+    }
+
+    /// Set the message type as ImageURL
+    pub fn image_url(mut self) -> Self {
+        self.message_type = MessageType::ImageURL;
+        self
+    }
+
+    /// Build the ChatMessage
+    pub fn build(self) -> ChatMessage {
+        ChatMessage {
+            role: self.role,
+            message_type: self.message_type,
+            content: self.content,
+        }
+    }
+}
