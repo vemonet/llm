@@ -4,7 +4,7 @@ use std::fmt;
 use async_trait::async_trait;
 use serde::Serialize;
 
-use crate::error::LLMError;
+use crate::{error::LLMError, ToolCall};
 
 /// Role of a participant in a chat conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +97,11 @@ pub struct Tool {
     pub function: FunctionTool,
 }
 
+pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
+    fn text(&self) -> Option<String>;
+    fn tool_calls(&self) -> Option<Vec<ToolCall>>;
+}
+
 /// Trait for providers that support chat-style interactions.
 #[async_trait]
 pub trait ChatProvider: Sync + Send {
@@ -109,7 +114,7 @@ pub trait ChatProvider: Sync + Send {
     /// # Returns
     ///
     /// The provider's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
 
@@ -127,7 +132,7 @@ pub trait ChatProvider: Sync + Send {
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError>;
+    ) -> Result<Box<dyn ChatResponse>, LLMError>;
 }
 
 impl fmt::Display for ReasoningEffort {

@@ -1,4 +1,3 @@
-use crate::chat::Tool;
 /// Implementation of the Phind LLM provider.
 /// This module provides integration with Phind's language model API.
 #[cfg(feature = "phind")]
@@ -8,6 +7,10 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
     LLMProvider,
+};
+use crate::{
+    chat::{ChatResponse, Tool},
+    ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -37,6 +40,27 @@ pub struct Phind {
     pub api_base_url: String,
     /// HTTP client for making requests
     client: Client,
+}
+
+#[derive(Debug)]
+pub struct PhindResponse {
+    content: String,
+}
+
+impl std::fmt::Display for PhindResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.content)
+    }
+}
+
+impl ChatResponse for PhindResponse {
+    fn text(&self) -> Option<String> {
+        Some(self.content.clone())
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        None
+    }
 }
 
 impl Phind {
@@ -104,7 +128,10 @@ impl Phind {
     }
 
     /// Interprets the API response and handles any errors.
-    async fn interpret_response(&self, response: Response) -> Result<String, LLMError> {
+    async fn interpret_response(
+        &self,
+        response: Response,
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         let status = response.status();
         match status {
             StatusCode::OK => {
@@ -115,7 +142,7 @@ impl Phind {
                         "No completion choice returned.".to_string(),
                     ))
                 } else {
-                    Ok(full_text)
+                    Ok(Box::new(PhindResponse { content: full_text }))
                 }
             }
             _ => {
@@ -151,7 +178,7 @@ impl ChatProvider for Phind {
     /// # Returns
     ///
     /// The provider's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         let mut message_history = vec![];
         for m in messages {
             let role_str = match m.role {
@@ -218,7 +245,7 @@ impl ChatProvider for Phind {
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         todo!()
     }
 }
@@ -232,8 +259,13 @@ impl CompletionProvider for Phind {
                 .content(_req.prompt.clone())
                 .build()])
             .await?;
-
-        Ok(CompletionResponse { text: chat_resp })
+        if let Some(text) = chat_resp.text() {
+            Ok(CompletionResponse { text })
+        } else {
+            Err(LLMError::ProviderError(
+                "No completion text returned by Phind".to_string(),
+            ))
+        }
     }
 }
 

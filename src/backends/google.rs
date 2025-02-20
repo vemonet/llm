@@ -41,7 +41,7 @@
 //! ```
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -50,6 +50,8 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+
+use crate::ToolCall;
 
 /// Client for interacting with Google's Gemini API.
 ///
@@ -122,28 +124,45 @@ struct GoogleGenerationConfig {
 }
 
 /// Response from the chat completion API
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GoogleChatResponse {
     /// Generated completion candidates
     candidates: Vec<GoogleCandidate>,
 }
 
+impl std::fmt::Display for GoogleChatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// Individual completion candidate
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GoogleCandidate {
     /// Content of the candidate response
     content: GoogleResponseContent,
 }
 
 /// Content block within a response
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GoogleResponseContent {
     /// Parts making up the content
     parts: Vec<GoogleResponsePart>,
 }
 
+impl ChatResponse for GoogleChatResponse {
+    fn text(&self) -> Option<String> {
+        self.candidates
+            .first()
+            .map(|c| c.content.parts.iter().map(|p| p.text.clone()).collect())
+    }
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        todo!()
+    }
+}
+
 /// Individual part of response content
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GoogleResponsePart {
     /// Text content of this part
     text: String,
@@ -232,7 +251,7 @@ impl ChatProvider for Google {
     /// # Returns
     ///
     /// The model's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing Google API key".to_string()));
         }
@@ -294,19 +313,7 @@ impl ChatProvider for Google {
         let resp = request.send().await?.error_for_status()?;
 
         let json_resp: GoogleChatResponse = resp.json().await?;
-        let first_candidate = json_resp.candidates.into_iter().next().ok_or_else(|| {
-            LLMError::ProviderError("No candidates returned by Google".to_string())
-        })?;
-
-        let response_text = first_candidate
-            .content
-            .parts
-            .into_iter()
-            .map(|part| part.text)
-            .collect::<Vec<_>>()
-            .join("");
-
-        Ok(response_text)
+        Ok(Box::new(json_resp))
     }
 
     /// Sends a chat request to Google's Gemini API with tools.
@@ -323,7 +330,7 @@ impl ChatProvider for Google {
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         todo!()
     }
 }
@@ -341,8 +348,13 @@ impl CompletionProvider for Google {
     /// The completion response or an error
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         let chat_message = ChatMessage::user().content(req.prompt.clone()).build();
-        let answer = self.chat(&[chat_message]).await?;
-        Ok(CompletionResponse { text: answer })
+        if let Some(text) = self.chat(&[chat_message]).await?.text() {
+            Ok(CompletionResponse { text })
+        } else {
+            Err(LLMError::ProviderError(
+                "No answer returned by Google".to_string(),
+            ))
+        }
     }
 }
 

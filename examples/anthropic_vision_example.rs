@@ -1,7 +1,7 @@
 // Import required modules from the LLM library for Anthropic integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::ChatMessage, // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]

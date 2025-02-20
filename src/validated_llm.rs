@@ -25,7 +25,7 @@
 
 use async_trait::async_trait;
 
-use crate::chat::{ChatMessage, ChatProvider, ChatRole, MessageType, Tool};
+use crate::chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::error::LLMError;
@@ -92,7 +92,7 @@ impl ChatProvider for ValidatedLLM {
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         let mut local_messages = messages.to_vec();
         let mut remaining_attempts = self.attempts;
 
@@ -102,7 +102,7 @@ impl ChatProvider for ValidatedLLM {
                 Err(e) => return Err(e),
             };
 
-            match (self.validator)(&response) {
+            match (self.validator)(&response.text().unwrap_or_default()) {
                 Ok(()) => {
                     return Ok(response);
                 }

@@ -7,8 +7,11 @@ use uuid::Uuid;
 
 use super::types::{ChatRequest, ChatResponse, Choice, Message};
 use super::ServerState;
-use crate::chain::{MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain};
 use crate::chat::{ChatMessage, ChatRole};
+use crate::{
+    chain::{MultiChainStepBuilder, MultiChainStepMode, MultiPromptChain},
+    chat::MessageType,
+};
 
 /// Handles chat completion requests to the API server.
 ///
@@ -80,6 +83,7 @@ pub async fn handle_chat(
                 "assistant" => ChatRole::Assistant,
                 _ => ChatRole::User,
             },
+            message_type: MessageType::Text,
             content: msg.content,
         })
         .collect();
@@ -101,7 +105,7 @@ pub async fn handle_chat(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    return Ok(Json(ChatResponse {
+    Ok(Json(ChatResponse {
         id: format!("chatcmpl-{}", Uuid::new_v4()),
         object: "chat.completion".to_string(),
         created: std::time::SystemTime::now()
@@ -113,11 +117,11 @@ pub async fn handle_chat(
             index: 0,
             message: Message {
                 role: "assistant".to_string(),
-                content: response,
+                content: response.text().unwrap_or_default(),
             },
             finish_reason: "stop".to_string(),
         }],
-    }));
+    }))
 }
 
 /// Handles multi-step chain requests by orchestrating message flow through multiple models.
@@ -167,9 +171,8 @@ async fn handle_chain_request(
                 let json_start = resp.find("```json").unwrap_or(0);
                 let json_end = resp.find("```").unwrap_or(resp.len());
                 let json_str = &resp[json_start..json_end];
-                serde_json::from_str(json_str).unwrap_or_else(|_| {
-                    (StatusCode::BAD_REQUEST, "Invalid JSON response".to_string())
-                })
+                serde_json::from_str::<String>(json_str)
+                    .unwrap_or_else(|_| "Invalid JSON response".to_string())
             }
             _ => resp.to_string(),
         }
@@ -181,13 +184,13 @@ async fn handle_chain_request(
             .ok_or((StatusCode::BAD_REQUEST, "Invalid model format".to_string()))?;
 
         provider_ids.push(provider_id.to_string());
-        let messages = req.messages.unwrap_or(vec![]);
+        let messages = req.messages.unwrap_or_default();
 
         chain = chain.step(
             MultiChainStepBuilder::new(MultiChainStepMode::Chat)
                 .provider_id(provider_id.to_string())
                 .id("initial")
-                .template(format!("{}", messages.last().unwrap().content))
+                .template(messages.last().unwrap().content.clone())
                 .max_tokens(req.max_tokens.unwrap_or(1000))
                 .temperature(req.temperature.unwrap_or(0.7))
                 .response_transform({
@@ -235,7 +238,7 @@ async fn handle_chain_request(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs(),
-        model: format!("{}", provider_ids.join(",")),
+        model: provider_ids.join(",").to_string(),
         choices: vec![Choice {
             index: 0,
             message: Message {

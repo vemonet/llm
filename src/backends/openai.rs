@@ -2,6 +2,7 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
+use crate::{chat::ChatResponse, FunctionCall, ToolCall};
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
@@ -93,40 +94,40 @@ struct OpenAIChatRequest<'a> {
     reasoning_effort: Option<String>,
 }
 
-/// Tool call from OpenAI's API.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ToolCall {
-    /// The ID of the tool call.
-    pub id: String,
-    /// The type of the tool call.
-    #[serde(rename = "type")]
-    pub call_type: String,
-    /// The function to call.
-    pub function: FunctionCall,
+impl std::fmt::Display for ToolCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{\n  \"id\": \"{}\",\n  \"type\": \"{}\",\n  \"function\": {}\n}}",
+            self.id, self.call_type, self.function
+        )
+    }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct FunctionCall {
-    /// The name of the function to call.
-    pub name: String,
-    /// The arguments to pass to the function.
-    pub arguments: String,
+impl std::fmt::Display for FunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{\n  \"name\": \"{}\",\n  \"arguments\": {}\n}}",
+            self.name, self.arguments
+        )
+    }
 }
 
 /// Response from OpenAI's chat API endpoint.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OpenAIChatResponse {
     choices: Vec<OpenAIChatChoice>,
 }
 
 /// Individual choice within an OpenAI chat API response.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OpenAIChatChoice {
     message: OpenAIChatMsg,
 }
 
 /// Message content within an OpenAI chat API response.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OpenAIChatMsg {
     #[allow(dead_code)]
     role: String,
@@ -134,13 +135,49 @@ struct OpenAIChatMsg {
     tool_calls: Option<Vec<ToolCall>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OpenAIEmbeddingData {
     embedding: Vec<f32>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OpenAIEmbeddingResponse {
     data: Vec<OpenAIEmbeddingData>,
+}
+
+impl ChatResponse for OpenAIChatResponse {
+    fn text(&self) -> Option<String> {
+        self.choices.first().and_then(|c| c.message.content.clone())
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        self.choices
+            .first()
+            .and_then(|c| c.message.tool_calls.clone())
+    }
+}
+
+impl std::fmt::Display for OpenAIChatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (
+            &self.choices.first().unwrap().message.content,
+            &self.choices.first().unwrap().message.tool_calls,
+        ) {
+            (Some(content), Some(tool_calls)) => {
+                for tool_call in tool_calls {
+                    write!(f, "{}", tool_call)?;
+                }
+                write!(f, "{}", content)
+            }
+            (Some(content), None) => write!(f, "{}", content),
+            (None, Some(tool_calls)) => {
+                for tool_call in tool_calls {
+                    write!(f, "{}", tool_call)?;
+                }
+                Ok(())
+            }
+            (None, None) => write!(f, ""),
+        }
+    }
 }
 
 impl OpenAI {
@@ -209,7 +246,7 @@ impl ChatProvider for OpenAI {
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
@@ -294,35 +331,10 @@ impl ChatProvider for OpenAI {
         let resp = request.send().await?.error_for_status()?;
         let json_resp: OpenAIChatResponse = resp.json().await?;
 
-        let first_choice = json_resp
-            .choices
-            .first()
-            .ok_or_else(|| LLMError::ProviderError("No choices returned by OpenAI".to_string()))?;
-
-        match (
-            &first_choice.message.tool_calls,
-            &first_choice.message.content,
-        ) {
-            (Some(tool_calls), _) => {
-                // Prioritize tool calls if present
-                serde_json::to_string(tool_calls).map_err(|e| {
-                    LLMError::ProviderError(format!("Failed to serialize tool calls: {}", e))
-                })
-            }
-            (None, Some(content)) => {
-                // Return content if no tool calls but content exists
-                Ok(content.clone())
-            }
-            (None, None) => {
-                // Neither tool calls nor content present
-                Err(LLMError::ProviderError(
-                    "OpenAI response contained neither content nor tool calls".to_string(),
-                ))
-            }
-        }
+        Ok(Box::new(json_resp))
     }
 
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
 }
@@ -377,6 +389,6 @@ impl EmbeddingProvider for OpenAI {
 
 impl LLMProvider for OpenAI {
     fn tools(&self) -> Option<&[Tool]> {
-        self.tools.as_ref().map(|t| t.as_slice())
+        self.tools.as_deref()
     }
 }

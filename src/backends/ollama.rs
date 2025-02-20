@@ -3,7 +3,7 @@
 //! This module provides integration with Ollama's local LLM server through its API.
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -11,6 +11,8 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+
+use crate::ToolCall;
 
 /// Client for interacting with Ollama's API.
 ///
@@ -52,15 +54,42 @@ struct OllamaChatMessage<'a> {
 }
 
 /// Response from Ollama's API endpoints.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OllamaResponse {
     content: Option<String>,
     response: Option<String>,
     message: Option<OllamaChatResponseMessage>,
 }
 
+impl std::fmt::Display for OllamaResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let empty = String::new();
+        let text = self
+            .content
+            .as_ref()
+            .or(self.response.as_ref())
+            .or(self.message.as_ref().map(|m| &m.content))
+            .unwrap_or(&empty);
+        write!(f, "{}", text)
+    }
+}
+
+impl ChatResponse for OllamaResponse {
+    fn text(&self) -> Option<String> {
+        self.content
+            .as_ref()
+            .or(self.response.as_ref())
+            .or(self.message.as_ref().map(|m| &m.content))
+            .map(|s| s.to_string())
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        todo!()
+    }
+}
+
 /// Message content within an Ollama chat API response.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OllamaChatResponseMessage {
     content: String,
 }
@@ -80,7 +109,7 @@ struct OllamaEmbeddingRequest {
     input: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct OllamaEmbeddingResponse {
     embeddings: Vec<Vec<f32>>,
 }
@@ -142,7 +171,7 @@ impl ChatProvider for Ollama {
     /// # Returns
     ///
     /// The model's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.base_url.is_empty() {
             return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
         }
@@ -188,22 +217,14 @@ impl ChatProvider for Ollama {
 
         let resp = request.send().await?.error_for_status()?;
         let json_resp: OllamaResponse = resp.json().await?;
-
-        let answer = json_resp
-            .message
-            .map(|m| m.content)
-            .or(json_resp.content)
-            .or(json_resp.response)
-            .unwrap_or_default();
-
-        Ok(answer)
+        Ok(Box::new(json_resp))
     }
 
     async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         todo!()
     }
 }
@@ -241,8 +262,13 @@ impl CompletionProvider for Ollama {
             .error_for_status()?;
         let json_resp: OllamaResponse = resp.json().await?;
 
-        let answer = json_resp.response.or(json_resp.content).unwrap_or_default();
-        Ok(CompletionResponse { text: answer })
+        if let Some(answer) = json_resp.response.or(json_resp.content) {
+            Ok(CompletionResponse { text: answer })
+        } else {
+            Err(LLMError::ProviderError(
+                "No answer returned by Ollama".to_string(),
+            ))
+        }
     }
 }
 

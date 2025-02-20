@@ -231,14 +231,14 @@ impl<'a> MultiPromptChain<'a> {
                         message_type: MessageType::Text,
                         content: prompt_text,
                     }];
-                    llm.chat(&messages).await?
+                    llm.chat(&messages).await?.text().unwrap_or_default()
                 }
                 MultiChainStepMode::Completion => {
                     let mut req = CompletionRequest::new(prompt_text);
                     req.temperature = step.temperature;
                     req.max_tokens = step.max_tokens;
                     let c = llm.complete(&req).await?;
-                    c.text
+                    c.text.to_string()
                 }
             };
 

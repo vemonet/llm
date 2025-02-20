@@ -22,9 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Prepare conversation history with example messages
     let messages = vec![
-        ChatMessage::user().content("Hello, how do I run a local LLM in Rust?").build(),
-        ChatMessage::assistant().content("One way is to use Ollama with a local model!").build(),
-        ChatMessage::user().content("Tell me more about that").build(),
+        ChatMessage::user()
+            .content("Hello, how do I run a local LLM in Rust?")
+            .build(),
+        ChatMessage::assistant()
+            .content("One way is to use Ollama with a local model!")
+            .build(),
+        ChatMessage::user()
+            .content("Tell me more about that")
+            .build(),
     ];
 
     // Send chat request and handle the response

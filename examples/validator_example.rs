@@ -1,7 +1,7 @@
 // Import required modules from the LLM library
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder components for LLM configuration
-    chat::ChatMessage, // Chat-related structures
+    chat::ChatMessage,                 // Chat-related structures
 };
 
 #[tokio::main]

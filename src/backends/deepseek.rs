@@ -2,9 +2,10 @@
 //!
 //! This module provides integration with DeepSeek's models through their API.
 
+use crate::chat::{ChatResponse, Tool};
 #[cfg(feature = "deepseek")]
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -13,6 +14,8 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+
+use crate::ToolCall;
 
 pub struct DeepSeek {
     pub api_key: String,
@@ -40,19 +43,40 @@ struct DeepSeekChatRequest<'a> {
     stream: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct DeepSeekChatResponse {
     choices: Vec<DeepSeekChatChoice>,
 }
 
-#[derive(Deserialize)]
+impl std::fmt::Display for DeepSeekChatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Deserialize, Debug)]
 struct DeepSeekChatChoice {
     message: DeepSeekChatMsg,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct DeepSeekChatMsg {
     content: String,
+}
+impl ChatResponse for DeepSeekChatResponse {
+    fn text(&self) -> Option<String> {
+        self.choices.first().and_then(|c| {
+            if c.message.content.is_empty() {
+                None
+            } else {
+                Some(c.message.content.clone())
+            }
+        })
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        None
+    }
 }
 
 impl DeepSeek {
@@ -93,7 +117,7 @@ impl ChatProvider for DeepSeek {
     /// # Returns
     ///
     /// The provider's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
         }
@@ -139,11 +163,8 @@ impl ChatProvider for DeepSeek {
         let resp = request.send().await?.error_for_status()?;
 
         let json_resp: DeepSeekChatResponse = resp.json().await?;
-        let first_choice = json_resp.choices.into_iter().next().ok_or_else(|| {
-            LLMError::ProviderError("No choices returned by DeepSeek".to_string())
-        })?;
 
-        Ok(first_choice.message.content)
+        Ok(Box::new(json_resp))
     }
 
     /// Sends a chat request to DeepSeek's API with tools.
@@ -160,7 +181,7 @@ impl ChatProvider for DeepSeek {
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         todo!()
     }
 }

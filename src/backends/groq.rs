@@ -3,11 +3,11 @@
 //! This module provides integration with Groq's LLM models through their API.
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    LLMProvider,
+    LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::Client;
@@ -48,21 +48,44 @@ struct GroqChatRequest<'a> {
     top_k: Option<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GroqChatResponse {
     choices: Vec<GroqChatChoice>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GroqChatChoice {
     message: GroqChatMsg,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GroqChatMsg {
     content: String,
 }
 
+impl std::fmt::Display for GroqChatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.text().unwrap_or_default())
+    }
+}
+
+impl ChatResponse for GroqChatResponse {
+    fn text(&self) -> Option<String> {
+        self.choices.first().and_then(|c| {
+            if c.message.content.is_empty() {
+                None
+            } else {
+                Some(c.message.content.clone())
+            }
+        })
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        todo!()
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 impl Groq {
     /// Creates a new Groq client with the specified configuration.
     pub fn new(
@@ -97,7 +120,7 @@ impl Groq {
 
 #[async_trait]
 impl ChatProvider for Groq {
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String, LLMError> {
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing Groq API key".to_string()));
         }
@@ -147,18 +170,14 @@ impl ChatProvider for Groq {
         let resp = request.send().await?.error_for_status()?;
         let json_resp: GroqChatResponse = resp.json().await?;
 
-        json_resp
-            .choices
-            .first()
-            .map(|choice| choice.message.content.clone())
-            .ok_or_else(|| LLMError::ProviderError("No choices returned by Groq".to_string()))
+        Ok(Box::new(json_resp))
     }
 
     async fn chat_with_tools(
         &self,
         _messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
-    ) -> Result<String, LLMError> {
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         todo!()
     }
 }
