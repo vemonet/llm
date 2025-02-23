@@ -72,6 +72,7 @@ impl std::str::FromStr for LLMBackend {
             "deepseek" => Ok(LLMBackend::DeepSeek),
             "xai" => Ok(LLMBackend::XAI),
             "phind" => Ok(LLMBackend::Phind),
+            "google" => Ok(LLMBackend::Google),
             "groq" => Ok(LLMBackend::Groq),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {}",
