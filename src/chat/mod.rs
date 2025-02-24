@@ -100,6 +100,9 @@ pub struct Tool {
 pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
     fn text(&self) -> Option<String>;
     fn tool_calls(&self) -> Option<Vec<ToolCall>>;
+    fn thinking(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Trait for providers that support chat-style interactions.
