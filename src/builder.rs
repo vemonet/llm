@@ -74,10 +74,7 @@ impl std::str::FromStr for LLMBackend {
             "phind" => Ok(LLMBackend::Phind),
             "google" => Ok(LLMBackend::Google),
             "groq" => Ok(LLMBackend::Groq),
-            _ => Err(LLMError::InvalidRequest(format!(
-                "Unknown LLM backend: {}",
-                s
-            ))),
+            _ => Err(LLMError::InvalidRequest(format!("Unknown LLM backend: {s}")))
         }
     }
 }
