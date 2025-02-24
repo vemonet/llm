@@ -17,6 +17,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Rust-friendly**: Designed with clear traits, unified error handling, and conditional compilation via *features*.
 - **Validation**: Add validation to your requests to ensure the output is what you expect.
 - **Evaluation**: Add evaluation to your requests to score the output of LLMs.
+- **Parallel Evaluation**: Evaluate multiple LLM providers in parallel and select the best response based on scoring functions.
 - **Function calling**: Add function calling to your requests to use tools in your LLMs.
 - **REST API**: Serve any LLM backend as a REST API with openai standard format.
 - **Vision**: Add vision to your requests to use images in your LLMs.
