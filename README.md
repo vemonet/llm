@@ -59,6 +59,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`validator_example`](examples/validator_example.rs) | Basic validator example with Anthropic's Claude model |
 | [`xai_example`](examples/xai_example.rs) | Basic xAI chat completion example with Grok models |
 | [`evaluation_example`](examples/evaluation_example.rs) | Basic evaluation example with Anthropic, Phind and DeepSeek |
+| [`evaluator_parallel_example`](examples/evaluator_parallel_example.rs) | Evaluate multiple LLM providers in parallel |
 | [`google_example`](examples/google_example.rs) | Basic Google Gemini chat completion example with Gemini models |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
