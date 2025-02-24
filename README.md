@@ -69,6 +69,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`anthropic_vision_example`](examples/anthropic_vision_example.rs) | Basic anthropic vision example with Anthropic |
 | [`openai_vision_example`](examples/openai_vision_example.rs) | Basic openai vision example with OpenAI |
 | [`openai_reasoning_example`](examples/openai_reasoning_example.rs) | Basic openai reasoning example with OpenAI |
+| [`anthropic_thinking_example`](examples/anthropic_thinking_example.rs) | Anthropic reasoning example |
 
 ## Usage
 Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.
