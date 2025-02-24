@@ -36,6 +36,8 @@ pub struct Anthropic {
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
     pub default_image_type: String,
+    pub reasoning: bool,
+    pub thinking_budget_tokens: Option<u32>,
     client: Client,
 }
 
@@ -45,6 +47,14 @@ struct AnthropicTool<'a> {
     name: &'a str,
     description: &'a str,
     input_schema: &'a ParametersSchema,
+}
+
+/// Configuration for the thinking feature
+#[derive(Serialize, Debug)]
+struct ThinkingConfig {
+    #[serde(rename = "type")]
+    thinking_type: String,
+    budget_tokens: u32,
 }
 
 /// Request payload for Anthropic's messages API endpoint.
@@ -68,6 +78,8 @@ struct AnthropicCompleteRequest<'a> {
     tools: Option<Vec<AnthropicTool<'a>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<ThinkingConfig>,
 }
 
 /// Individual message in an Anthropic chat conversation.
@@ -114,6 +126,7 @@ struct AnthropicContent {
     text: Option<String>,
     #[serde(rename = "type")]
     content_type: Option<String>,
+    thinking: Option<String>,
     name: Option<String>,
     input: Option<HashMap<String, String>>,
     id: Option<String>,
@@ -128,6 +141,11 @@ impl std::fmt::Display for AnthropicCompleteResponse {
                     "{{\n \"name\": {}, \"input\": {:?}\n}}",
                     content.name.clone().unwrap_or_default(),
                     content.input.clone().unwrap_or_default()
+                )?,
+                Some(ref t) if t == "thinking" => write!(
+                    f,
+                    "{}",
+                    content.thinking.clone().unwrap_or_default()
                 )?,
                 _ => write!(
                     f,
@@ -146,7 +164,26 @@ impl std::fmt::Display for AnthropicCompleteResponse {
 
 impl ChatResponse for AnthropicCompleteResponse {
     fn text(&self) -> Option<String> {
-        self.content.first().and_then(|c| c.text.clone())
+        Some(
+            self.content
+                .iter()
+                .filter_map(|c| {
+                    if c.content_type == Some("text".to_string()) || c.content_type.is_none() {
+                        c.text.clone()
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
+    fn thinking(&self) -> Option<String> {
+        self.content
+            .iter()
+            .find(|c| c.content_type == Some("thinking".to_string()))
+            .and_then(|c| c.thinking.clone())
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
@@ -203,6 +240,8 @@ impl Anthropic {
     /// * `timeout_seconds` - Request timeout in seconds (defaults to 30)
     /// * `system` - System prompt (defaults to "You are a helpful assistant.")
     /// * `stream` - Whether to stream responses (defaults to false)
+    /// * 
+    /// * `thinking_budget_tokens` - Budget tokens for thinking (optional)
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         api_key: impl Into<String>,
@@ -215,6 +254,8 @@ impl Anthropic {
         top_p: Option<f32>,
         top_k: Option<u32>,
         tools: Option<Vec<Tool>>,
+        reasoning: Option<bool>,
+        thinking_budget_tokens: Option<u32>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -231,6 +272,8 @@ impl Anthropic {
             top_p,
             top_k,
             tools,
+            reasoning: reasoning.unwrap_or(false),
+            thinking_budget_tokens,
             default_image_type: "image/jpeg".to_string(),
             client: builder.build().expect("Failed to build reqwest Client"),
         }
@@ -310,6 +353,16 @@ impl ChatProvider for Anthropic {
         } else {
             None
         };
+
+        let thinking = if self.reasoning {
+            Some(ThinkingConfig {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: self.thinking_budget_tokens.unwrap_or(16000),
+            })  
+        } else {
+            None
+        };
+
         let req_body = AnthropicCompleteRequest {
             messages: anthropic_messages,
             model: &self.model,
@@ -321,6 +374,7 @@ impl ChatProvider for Anthropic {
             top_k: self.top_k,
             tools: anthropic_tools,
             tool_choice,
+            thinking,
         };
 
         let mut request = self
