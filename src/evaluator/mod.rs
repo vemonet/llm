@@ -3,7 +3,11 @@
 //! This module provides functionality to run the same prompt through multiple LLMs
 //! and score their responses using custom evaluation functions.
 
+mod parallel;
+
 use crate::{chat::ChatMessage, error::LLMError, LLMProvider};
+
+pub use parallel::{ParallelEvalResult, ParallelEvaluator};
 
 /// Type alias for scoring functions that evaluate LLM responses
 pub type ScoringFn = dyn Fn(&str) -> f32 + Send + Sync + 'static;
