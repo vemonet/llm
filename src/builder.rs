@@ -118,7 +118,11 @@ pub struct LLMBuilder {
     /// Function tools
     tools: Option<Vec<Tool>>,
     /// Enable reasoning
+    reasoning: Option<bool>,
+    /// Enable reasoning effort
     reasoning_effort: Option<String>,
+    /// reasoning_budget_tokens
+    reasoning_budget_tokens: Option<u32>,
 }
 
 impl LLMBuilder {
@@ -172,6 +176,18 @@ impl LLMBuilder {
     /// Sets the reasoning flag.
     pub fn reasoning_effort(mut self, reasoning_effort: ReasoningEffort) -> Self {
         self.reasoning_effort = Some(reasoning_effort.to_string());
+        self
+    }
+
+    /// Sets the reasoning flag.
+    pub fn reasoning(mut self, reasoning: bool) -> Self {
+        self.reasoning = Some(reasoning);
+        self
+    }
+
+    /// Sets the reasoning budget tokens.
+    pub fn reasoning_budget_tokens(mut self, reasoning_budget_tokens: u32) -> Self {
+        self.reasoning_budget_tokens = Some(reasoning_budget_tokens);
         self
     }
 
@@ -314,6 +330,8 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                         self.tools,
+                        self.reasoning,
+                        self.reasoning_budget_tokens,
                     );
 
                     Box::new(anthro)
