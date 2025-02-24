@@ -31,6 +31,7 @@ tokio = { version = "1.0", optional = true, features = ["rt", "macros", "rt-mult
 tower-http = { version = "0.5", optional = true, features = ["cors"] }
 uuid = { version = "1.0", optional = true, features = ["v4"] }
 base64 = "0.22.1"
+futures = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
