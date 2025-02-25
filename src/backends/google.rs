@@ -284,8 +284,13 @@ impl ChatProvider for Google {
                 },
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
-                    MessageType::Image => unimplemented!(),
-                    MessageType::ImageURL => unimplemented!(),
+                    MessageType::Image((image_mime, raw_bytes)) => {
+                        vec![GoogleContentPart::InlineData(GoogleInlineData {
+                            mime_type: image_mime.mime_type().to_string(),
+                            data: BASE64.encode(raw_bytes),
+                        })]
+                    }
+                    MessageType::ImageURL(_) => unimplemented!(),
                     MessageType::Pdf(raw_bytes) => {
                         vec![GoogleContentPart::InlineData(GoogleInlineData {
                             mime_type: "application/pdf".to_string(),
