@@ -61,6 +61,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`evaluator_parallel_example`](examples/evaluator_parallel_example.rs) | Evaluate multiple LLM providers in parallel |
 | [`google_example`](examples/google_example.rs) | Basic Google Gemini chat completion example with Gemini models |
 | [`google_pdf`](examples/google_pdf.rs) | Google Gemini chat with PDF attachment |
+| [`google_image`](examples/google_image.rs) | Google Gemini chat with PDF attachment |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
