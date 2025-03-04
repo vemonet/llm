@@ -31,6 +31,17 @@ Simply add **LLM** to your `Cargo.toml`:
 llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq"] }
 ```
 
+## Use any LLM on cli
+
+LLM includes a command-line tool for easily interacting with different LLM models. You can install it with: ```cargo install llm```
+
+- Use `llm` to start an interactive chat session
+- Use `llm openai:gpt-4o` to start an interactive chat session with provider:model
+- Use `llm set OPENAI_API_KEY your_key` to configure your API key
+- Use `llm default openai:gpt-4` to set a default provider
+- Use `echo "Hello World" | llm` to pipe
+- Use `llm --provider openai --model gpt-4 --temperature 0.7` for advanced options
+
 ## Serving any LLM backend as a REST API
 - Use standard messages format
 - Use step chains to chain multiple LLM backends together
