@@ -38,7 +38,7 @@ LLM includes a command-line tool for easily interacting with different LLM model
 - Use `llm` to start an interactive chat session
 - Use `llm set OPENAI_API_KEY your_key` to configure your API key
 - Use `llm default openai:gpt-4` to set a default provider
-- Use `echo "Hello World" | llm` to pipe image analysis
+- Use `echo "Hello World" | llm` to pipe
 - Use `llm --provider openai --model gpt-4 --temperature 0.7` for advanced options
 
 ## Serving any LLM backend as a REST API
