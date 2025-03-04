@@ -298,7 +298,7 @@ impl ChatProvider for OpenAI {
                 OpenAIChatMessage {
                     role: "system",
                     content: Some(vec![MessageContent {
-                        message_type: None,
+                        message_type: Some("text"),
                         text: Some(system),
                         image_url: None,
                     }]),

@@ -46,6 +46,9 @@ pub mod validated_llm;
 /// Evaluator for LLM providers
 pub mod evaluator;
 
+/// Secret store for storing API keys and other sensitive information
+pub mod secret_store;
+
 #[cfg(feature = "api")]
 pub mod api;
 
