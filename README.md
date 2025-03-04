@@ -36,6 +36,7 @@ llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepsee
 LLM includes a command-line tool for easily interacting with different LLM models. You can install it with: ```cargo install llm```
 
 - Use `llm` to start an interactive chat session
+- Use `llm openai:gpt-4o` to start an interactive chat session with provider:model
 - Use `llm set OPENAI_API_KEY your_key` to configure your API key
 - Use `llm default openai:gpt-4` to set a default provider
 - Use `echo "Hello World" | llm` to pipe
