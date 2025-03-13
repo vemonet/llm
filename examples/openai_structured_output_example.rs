@@ -10,7 +10,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get OpenAI API key from environment variable or use test key as fallback
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into());
 
-    // Define a simple JSON schema for structured output
+    // Define a simple JSON schema for structured output.
+    // Note that the schema has some [odd requirements](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat&lang=curl#supported-schemas) for OpenAI. Make sure the provided schema is compatible with OpenAI's requirements.
     let schema = r#"
         {
             "name": "Student",

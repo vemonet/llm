@@ -217,6 +217,7 @@ impl OpenAI {
     /// * `timeout_seconds` - Request timeout in seconds
     /// * `system` - System prompt
     /// * `stream` - Whether to stream responses
+    /// * `json_schema` - JSON schema for structured output
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         api_key: impl Into<String>,
@@ -336,7 +337,7 @@ impl ChatProvider for OpenAI {
 
         // OpenAI's structured output has some [odd requirements](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat&lang=curl#supported-schemas).
         // There's currently no check for these, so we'll leave it up to the user to provide a valid schema.
-        let schema: Option<OpenAIResponseFormat> =
+        let response_format: Option<OpenAIResponseFormat> =
             self.json_schema.as_ref().map(|s| OpenAIResponseFormat {
                 response_type: OpenAIResponseType::JsonSchema,
                 json_schema: Some(s.clone()),
@@ -352,7 +353,7 @@ impl ChatProvider for OpenAI {
             top_k: self.top_k,
             tools: tools.map(|t| t.to_vec()),
             reasoning_effort: self.reasoning_effort.clone(),
-            response_format: schema,
+            response_format,
         };
 
         let mut request = self

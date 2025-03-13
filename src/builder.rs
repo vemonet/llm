@@ -372,6 +372,7 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
+                        self.json_schema,
                     );
                     Box::new(ollama)
                 }
@@ -425,6 +426,7 @@ impl LLMBuilder {
                         self.top_k,
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
+                        self.json_schema,
                     );
                     Box::new(xai)
                 }
@@ -472,6 +474,7 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
+                        self.json_schema,
                     );
                     Box::new(google)
                 }
