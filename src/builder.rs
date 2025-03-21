@@ -304,6 +304,7 @@ impl LLMBuilder {
                     })?;
                     Box::new(crate::backends::openai::OpenAI::new(
                         key,
+                        self.base_url,
                         self.model,
                         self.max_tokens,
                         self.temperature,

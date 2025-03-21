@@ -14,7 +14,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use reqwest::Client;
+use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -23,6 +23,7 @@ use serde_json::Value;
 /// Provides methods for chat and completion requests using OpenAI's models.
 pub struct OpenAI {
     pub api_key: String,
+    pub base_url: Url,
     pub model: String,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
@@ -221,6 +222,7 @@ impl OpenAI {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         api_key: impl Into<String>,
+        base_url: Option<String>,
         model: Option<String>,
         max_tokens: Option<u32>,
         temperature: Option<f32>,
@@ -241,6 +243,10 @@ impl OpenAI {
         }
         Self {
             api_key: api_key.into(),
+            base_url: Url::parse(
+                &base_url.unwrap_or_else(|| "https://api.openai.com/v1/".to_owned()),
+            )
+            .expect("Failed to prase base Url"),
             model: model.unwrap_or("gpt-3.5-turbo".to_string()),
             max_tokens,
             temperature,
@@ -356,11 +362,12 @@ impl ChatProvider for OpenAI {
             response_format,
         };
 
-        let mut request = self
-            .client
-            .post("https://api.openai.com/v1/chat/completions")
-            .bearer_auth(&self.api_key)
-            .json(&body);
+        let url = self
+            .base_url
+            .join("chat/completions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
 
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
@@ -409,9 +416,14 @@ impl EmbeddingProvider for OpenAI {
             dimensions: self.embedding_dimensions,
         };
 
+        let url = self
+            .base_url
+            .join("embeddings")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
         let resp = self
             .client
-            .post("https://api.openai.com/v1/embeddings")
+            .post(url)
             .bearer_auth(&self.api_key)
             .json(&body)
             .send()
