@@ -96,6 +96,18 @@ struct MessageContent<'a> {
     image_url: Option<ImageUrlContent<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<ImageSource<'a>>,
+    // tool use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_use_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "name")]
+    tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "input")]
+    tool_input: Option<String>,
+    // tool result
+    #[serde(skip_serializing_if = "Option::is_none", rename = "tool_use_id")]
+    tool_result_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "content")]
+    tool_output: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -292,6 +304,11 @@ impl ChatProvider for Anthropic {
                         text: Some(&m.content),
                         image_url: None,
                         source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
                     }],
                     MessageType::Pdf(_) => unimplemented!(),
                     MessageType::Image((image_mime, raw_bytes)) => {
@@ -304,6 +321,11 @@ impl ChatProvider for Anthropic {
                                 media_type: image_mime.mime_type(),
                                 data: BASE64.encode(raw_bytes),
                             }),
+                            tool_use_id: None,
+                            tool_input: None,
+                            tool_name: None,
+                            tool_result_id: None,
+                            tool_output: None,
                         }]
                     }
                     MessageType::ImageURL(ref url) => vec![MessageContent {
@@ -311,9 +333,40 @@ impl ChatProvider for Anthropic {
                         text: None,
                         image_url: Some(ImageUrlContent { url }),
                         source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
                     }],
-                    MessageType::ToolUse(_) => unimplemented!("ToolUse is not supported in Anthropic API"),
-                    MessageType::ToolResult(_) => unimplemented!("ToolResult is not supported in Anthropic API"),
+                    MessageType::ToolUse(calls) => calls
+                        .iter()
+                        .map(|c| MessageContent {
+                            message_type: Some("tool_use"),
+                            text: None,
+                            image_url: None,
+                            source: None,
+                            tool_use_id: Some(c.id.clone()),
+                            tool_input: Some(c.function.arguments.clone()),
+                            tool_name: Some(c.function.name.clone()),
+                            tool_result_id: None,
+                            tool_output: None,
+                        })
+                        .collect(),
+                    MessageType::ToolResult(responses) => responses
+                        .iter()
+                        .map(|r| MessageContent {
+                            message_type: Some("tool_result"),
+                            text: None,
+                            image_url: None,
+                            source: None,
+                            tool_use_id: None,
+                            tool_input: None,
+                            tool_name: None,
+                            tool_result_id: Some(r.id.clone()),
+                            tool_output: Some(r.function.arguments.clone()),
+                        })
+                        .collect(),
                 },
             })
             .collect();
