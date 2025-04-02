@@ -7,13 +7,12 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use crate::ToolCall;
 
 /// Client for interacting with Ollama's API.
 ///
@@ -31,6 +30,8 @@ pub struct Ollama {
     pub top_k: Option<u32>,
     /// JSON schema for structured output
     pub json_schema: Option<Value>,
+    /// Available tools for function calling
+    pub tools: Option<Vec<Tool>>,
     client: Client,
 }
 
@@ -42,6 +43,8 @@ struct OllamaChatRequest<'a> {
     stream: bool,
     options: Option<OllamaOptions>,
     format: Option<OllamaResponseFormat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<OllamaTool>>,
 }
 
 #[derive(Serialize)]
@@ -63,6 +66,7 @@ struct OllamaResponse {
     content: Option<String>,
     response: Option<String>,
     message: Option<OllamaChatResponseMessage>,
+    tool_calls: Option<Vec<OllamaToolCall>>,
 }
 
 impl std::fmt::Display for OllamaResponse {
@@ -74,6 +78,17 @@ impl std::fmt::Display for OllamaResponse {
             .or(self.response.as_ref())
             .or(self.message.as_ref().map(|m| &m.content))
             .unwrap_or(&empty);
+        
+        // Write tool calls if present
+        if let Some(tool_calls) = &self.tool_calls {
+            for tc in tool_calls {
+                writeln!(f, "{{\"name\": \"{}\", \"arguments\": {}}}", 
+                    tc.name, 
+                    serde_json::to_string_pretty(&tc.arguments).unwrap_or_default()
+                )?;
+            }
+        }
+        
         write!(f, "{}", text)
     }
 }
@@ -88,7 +103,18 @@ impl ChatResponse for OllamaResponse {
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        todo!()
+        self.tool_calls.as_ref().map(|tcs| {
+            tcs.iter()
+                .map(|tc| ToolCall {
+                    id: format!("call_{}", tc.name),
+                    call_type: "function".to_string(),
+                    function: FunctionCall {
+                        name: tc.name.clone(),
+                        arguments: serde_json::to_string(&tc.arguments).unwrap_or_default(),
+                    },
+                })
+                .collect()
+        })
     }
 }
 
@@ -132,6 +158,55 @@ struct OllamaResponseFormat {
     format: OllamaResponseType,
 }
 
+/// Ollama's tool format
+#[derive(Serialize, Debug)]
+struct OllamaTool {
+    /// Name of the tool
+    name: String,
+    /// Description of what the tool does
+    description: String,
+    /// Parameters for the tool
+    parameters: OllamaParameters,
+}
+
+impl From<&crate::chat::Tool> for OllamaTool {
+    fn from(tool: &crate::chat::Tool) -> Self {
+        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
+            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        
+        OllamaTool {
+            name: tool.function.name.clone(),
+            description: tool.function.description.clone(),
+            parameters: OllamaParameters {
+                schema_type: "object".to_string(),
+                properties: properties_value,
+                required: tool.function.parameters.required.clone(),
+            },
+        }
+    }
+}
+
+/// Ollama's parameters schema
+#[derive(Serialize, Debug)]
+struct OllamaParameters {
+    /// The type of parameters object (usually "object")
+    #[serde(rename = "type")]
+    schema_type: String,
+    /// Map of parameter names to their properties
+    properties: Value,
+    /// List of required parameter names
+    required: Vec<String>,
+}
+
+/// Ollama's tool call response
+#[derive(Deserialize, Debug)]
+struct OllamaToolCall {
+    /// Name of the tool that was called
+    name: String,
+    /// Arguments provided to the tool
+    arguments: Value,
+}
+
 impl Ollama {
     /// Creates a new Ollama client with the specified configuration.
     ///
@@ -146,6 +221,7 @@ impl Ollama {
     /// * `system` - System prompt
     /// * `stream` - Whether to stream responses
     /// * `json_schema` - JSON schema for structured output
+    /// * `tools` - Function tools that the model can use
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         base_url: impl Into<String>,
@@ -159,6 +235,7 @@ impl Ollama {
         top_p: Option<f32>,
         top_k: Option<u32>,
         json_schema: Option<Value>,
+        tools: Option<Vec<Tool>>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -176,6 +253,7 @@ impl Ollama {
             top_p,
             top_k,
             json_schema,
+            tools,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -236,6 +314,7 @@ impl ChatProvider for Ollama {
                 top_k: self.top_k,
             }),
             format,
+            tools: None,
         };
 
         let url = format!("{}/api/chat", self.base_url);
@@ -253,10 +332,72 @@ impl ChatProvider for Ollama {
 
     async fn chat_with_tools(
         &self,
-        _messages: &[ChatMessage],
-        _tools: Option<&[Tool]>,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        todo!()
+        if self.base_url.is_empty() {
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
+        }
+
+        let mut chat_messages: Vec<OllamaChatMessage> = messages
+            .iter()
+            .map(|msg| OllamaChatMessage {
+                role: match msg.role {
+                    ChatRole::User => "user",
+                    ChatRole::Assistant => "assistant",
+                },
+                content: &msg.content,
+            })
+            .collect();
+
+        if let Some(system) = &self.system {
+            chat_messages.insert(
+                0,
+                OllamaChatMessage {
+                    role: "system",
+                    content: system,
+                },
+            );
+        }
+
+        // Convert tools to Ollama format if provided
+        let ollama_tools = tools.map(|t| {
+            t.iter()
+                .map(OllamaTool::from)
+                .collect()
+        });
+
+        // Set the format to structured output if a JSON schema is provided
+        let format: Option<OllamaResponseFormat> =
+            self.json_schema
+                .as_ref()
+                .map(|schema| OllamaResponseFormat {
+                    format: OllamaResponseType::StructuredOutput(schema.clone()),
+                });
+
+        let req_body = OllamaChatRequest {
+            model: self.model.clone(),
+            messages: chat_messages,
+            stream: self.stream.unwrap_or(false),
+            options: Some(OllamaOptions {
+                top_p: self.top_p,
+                top_k: self.top_k,
+            }),
+            format,
+            tools: ollama_tools,
+        };
+
+        let url = format!("{}/api/chat", self.base_url);
+
+        let mut request = self.client.post(&url).json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let json_resp: OllamaResponse = resp.json().await?;
+        Ok(Box::new(json_resp))
     }
 }
 
@@ -329,4 +470,8 @@ impl EmbeddingProvider for Ollama {
     }
 }
 
-impl crate::LLMProvider for Ollama {}
+impl crate::LLMProvider for Ollama {
+    fn tools(&self) -> Option<&[Tool]> {
+        self.tools.as_deref()
+    }
+}

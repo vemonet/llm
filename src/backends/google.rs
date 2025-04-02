@@ -45,15 +45,13 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    LLMProvider,
+    FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use crate::ToolCall;
 
 /// Client for interacting with Google's Gemini API.
 ///
@@ -80,6 +78,8 @@ pub struct Google {
     pub top_k: Option<u32>,
     /// JSON schema for structured output
     pub json_schema: Option<Value>,
+    /// Available tools for function calling
+    pub tools: Option<Vec<Tool>>,
     /// HTTP client for making API requests
     client: Client,
 }
@@ -140,6 +140,9 @@ struct GoogleGenerationConfig {
     /// A schema for structured output
     #[serde(skip_serializing_if = "Option::is_none")]
     response_schema: Option<Value>,
+    /// Tools that the model can use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<GoogleTool>>,
 }
 
 /// Response from the chat completion API
@@ -167,6 +170,9 @@ struct GoogleCandidate {
 struct GoogleResponseContent {
     /// Parts making up the content
     parts: Vec<GoogleResponsePart>,
+    /// Function calls if any are used
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_calls: Option<Vec<GoogleFunctionCall>>,
 }
 
 impl ChatResponse for GoogleChatResponse {
@@ -175,8 +181,22 @@ impl ChatResponse for GoogleChatResponse {
             .first()
             .map(|c| c.content.parts.iter().map(|p| p.text.clone()).collect())
     }
+    
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        todo!()
+        self.candidates.first().and_then(|c| {
+            c.content.function_calls.as_ref().map(|fc| {
+                fc.iter()
+                    .map(|f| ToolCall {
+                        id: format!("call_{}", f.name),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: f.name.clone(),
+                            arguments: serde_json::to_string(&f.args).unwrap_or_default(),
+                        },
+                    })
+                    .collect()
+            })
+        })
     }
 }
 
@@ -199,6 +219,62 @@ enum GoogleResponseMimeType {
     /// ENUM as a string response in the response candidates.
     #[serde(rename = "text/x.enum")]
     Enum,
+}
+
+/// Google's function calling tool definition
+#[derive(Serialize, Debug)]
+struct GoogleTool {
+    /// The function tool
+    function_declarations: Vec<GoogleFunctionDeclaration>,
+}
+
+/// Google function declaration, similar to OpenAI's function definition
+#[derive(Serialize, Debug)]
+struct GoogleFunctionDeclaration {
+    /// Name of the function
+    name: String,
+    /// Description of what the function does
+    description: String,
+    /// Parameters for the function
+    parameters: GoogleFunctionParameters,
+}
+
+impl From<&crate::chat::Tool> for GoogleFunctionDeclaration {
+    fn from(tool: &crate::chat::Tool) -> Self {
+        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
+            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        
+        GoogleFunctionDeclaration {
+            name: tool.function.name.clone(),
+            description: tool.function.description.clone(),
+            parameters: GoogleFunctionParameters {
+                schema_type: "object".to_string(),
+                properties: properties_value,
+                required: tool.function.parameters.required.clone(),
+            },
+        }
+    }
+}
+
+/// Google function parameters schema
+#[derive(Serialize, Debug)]
+struct GoogleFunctionParameters {
+    /// The type of parameters object (usually "object")
+    #[serde(rename = "type")]
+    schema_type: String,
+    /// Map of parameter names to their properties
+    properties: Value,
+    /// List of required parameter names
+    required: Vec<String>,
+}
+
+/// Google function call object in response
+#[derive(Deserialize, Debug)]
+struct GoogleFunctionCall {
+    /// Name of the function to call
+    name: String,
+    /// Arguments for the function call
+    args: Value,
 }
 
 /// Request body for embedding content
@@ -239,6 +315,7 @@ impl Google {
     /// * `top_p` - Top-p sampling parameter
     /// * `top_k` - Top-k sampling parameter
     /// * `json_schema` - JSON schema for structured output
+    /// * `tools` - Function tools that the model can use
     ///
     /// # Returns
     ///
@@ -255,6 +332,7 @@ impl Google {
         top_p: Option<f32>,
         top_k: Option<u32>,
         json_schema: Option<Value>,
+        tools: Option<Vec<Tool>>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -271,6 +349,7 @@ impl Google {
             top_p,
             top_k,
             json_schema,
+            tools,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -324,6 +403,8 @@ impl ChatProvider for Google {
                             data: BASE64.encode(raw_bytes),
                         })]
                     }
+                    MessageType::ToolUse(_) => unimplemented!("ToolUse is not supported in Google API"),
+                    MessageType::ToolResult(_) => unimplemented!("ToolResult is not supported in Google API"),
                 },
             });
         }
@@ -351,6 +432,7 @@ impl ChatProvider for Google {
                 top_k: self.top_k,
                 response_mime_type,
                 response_schema,
+                tools: None,
             })
         };
 
@@ -389,10 +471,104 @@ impl ChatProvider for Google {
     /// The provider's response text or an error
     async fn chat_with_tools(
         &self,
-        _messages: &[ChatMessage],
-        _tools: Option<&[Tool]>,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        todo!()
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Google API key".to_string()));
+        }
+
+        let mut chat_contents = Vec::with_capacity(messages.len());
+
+        // Add system message if present
+        if let Some(system) = &self.system {
+            chat_contents.push(GoogleChatContent {
+                role: "user",
+                parts: vec![GoogleContentPart::Text(system)],
+            });
+        }
+
+        // Add conversation messages in pairs to maintain context
+        for msg in messages {
+            chat_contents.push(GoogleChatContent {
+                role: match msg.role {
+                    ChatRole::User => "user",
+                    ChatRole::Assistant => "model",
+                },
+                parts: match &msg.message_type {
+                    MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
+                    MessageType::Image((image_mime, raw_bytes)) => {
+                        vec![GoogleContentPart::InlineData(GoogleInlineData {
+                            mime_type: image_mime.mime_type().to_string(),
+                            data: BASE64.encode(raw_bytes),
+                        })]
+                    }
+                    MessageType::ImageURL(_) => unimplemented!(),
+                    MessageType::Pdf(raw_bytes) => {
+                        vec![GoogleContentPart::InlineData(GoogleInlineData {
+                            mime_type: "application/pdf".to_string(),
+                            data: BASE64.encode(raw_bytes),
+                        })]
+                    }
+                    MessageType::ToolUse(_) => unimplemented!("ToolUse is not supported in Google API"),
+                    MessageType::ToolResult(_) => unimplemented!("ToolResult is not supported in Google API"),
+                },
+            });
+        }
+
+        // Convert tools to Google's format if provided
+        let google_tools = tools.map(|t| {
+            let function_declarations = t
+                .iter()
+                .map(GoogleFunctionDeclaration::from)
+                .collect();
+            
+            vec![GoogleTool {
+                function_declarations,
+            }]
+        });
+
+        // Build generation config
+        let generation_config = {
+            // If json_schema is present, use it as the response schema and set response_mime_type to JSON
+            let response_mime_type: Option<GoogleResponseMimeType> = self
+                .json_schema
+                .as_ref()
+                .map(|_| GoogleResponseMimeType::Json);
+            let response_schema: Option<Value> = self.json_schema.clone();
+
+            Some(GoogleGenerationConfig {
+                max_output_tokens: self.max_tokens,
+                temperature: self.temperature,
+                top_p: self.top_p,
+                top_k: self.top_k,
+                response_mime_type,
+                response_schema,
+                tools: google_tools,
+            })
+        };
+
+        let req_body = GoogleChatRequest {
+            contents: chat_contents,
+            generation_config,
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+            model = self.model,
+            key = self.api_key
+        );
+
+        let mut request = self.client.post(&url).json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+
+        let json_resp: GoogleChatResponse = resp.json().await?;
+        Ok(Box::new(json_resp))
     }
 }
 
@@ -458,4 +634,8 @@ impl EmbeddingProvider for Google {
     }
 }
 
-impl LLMProvider for Google {}
+impl LLMProvider for Google {
+    fn tools(&self) -> Option<&[Tool]> {
+        self.tools.as_deref()
+    }
+}

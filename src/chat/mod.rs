@@ -52,6 +52,10 @@ pub enum MessageType {
     Pdf(Vec<u8>),
     /// An image URL message
     ImageURL(String),
+    /// A tool use
+    ToolUse(Vec<ToolCall>),
+    /// Tool result
+    ToolResult(Vec<ToolCall>),
 }
 
 /// The type of reasoning effort for a message in a chat conversation.
@@ -122,6 +126,25 @@ pub struct Tool {
     pub tool_type: String,
     /// The function definition if this is a function tool
     pub function: FunctionTool,
+}
+
+/// Tool choice determines how the LLM uses available tools.
+/// The behavior is standardized across different LLM providers.
+#[derive(Debug, Clone, Serialize, Default)]
+pub enum ToolChoice {
+    /// Model can use any tool, but it must use at least one.
+    /// This is useful when you want to force the model to use tools.
+    Any,
+    
+    /// Model can use any tool, and may elect to use none.
+    /// This is the default behavior and gives the model flexibility.
+    #[default]
+    Auto,
+    
+    /// Model must use the specified tool and only the specified tool.
+    /// The string parameter is the name of the required tool.
+    /// This is useful when you want the model to call a specific function.
+    Tool(String),
 }
 
 pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
@@ -226,6 +249,18 @@ impl ChatMessageBuilder {
     /// Set the message type as ImageURL
     pub fn image_url(mut self, url: impl Into<String>) -> Self {
         self.message_type = MessageType::ImageURL(url.into());
+        self
+    }
+    
+    /// Set the message type as ToolUse
+    pub fn tool_use(mut self, tools: Vec<ToolCall>) -> Self {
+        self.message_type = MessageType::ToolUse(tools);
+        self
+    }
+    
+    /// Set the message type as ToolResult
+    pub fn tool_result(mut self, tools: Vec<ToolCall>) -> Self {
+        self.message_type = MessageType::ToolResult(tools);
         self
     }
 

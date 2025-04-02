@@ -2,7 +2,6 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
-use crate::{chat::ChatResponse, FunctionCall, ToolCall};
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
@@ -11,6 +10,10 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
     LLMProvider,
+};
+use crate::{
+    chat::{ChatResponse, ToolChoice},
+    FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -33,6 +36,7 @@ pub struct OpenAI {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
+    pub tool_choice: Option<ToolChoice>,
     /// Embedding parameters
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
@@ -93,6 +97,8 @@ struct OpenAIChatRequest<'a> {
     top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<ToolChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,6 +224,13 @@ impl OpenAI {
     /// * `timeout_seconds` - Request timeout in seconds
     /// * `system` - System prompt
     /// * `stream` - Whether to stream responses
+    /// * `top_p` - Top-p sampling parameter
+    /// * `top_k` - Top-k sampling parameter
+    /// * `embedding_encoding_format` - Format for embedding outputs
+    /// * `embedding_dimensions` - Dimensions for embedding vectors
+    /// * `tools` - Function tools that the model can use
+    /// * `tool_choice` - Determines how the model uses tools
+    /// * `reasoning_effort` - Reasoning effort level
     /// * `json_schema` - JSON schema for structured output
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -234,6 +247,7 @@ impl OpenAI {
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
         tools: Option<Vec<Tool>>,
+        tool_choice: Option<ToolChoice>,
         reasoning_effort: Option<String>,
         json_schema: Option<Value>,
     ) -> Self {
@@ -256,6 +270,7 @@ impl OpenAI {
             top_p,
             top_k,
             tools,
+            tool_choice,
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -323,6 +338,8 @@ impl ChatProvider for OpenAI {
                         text: None,
                         image_url: Some(ImageUrlContent { url }),
                     }]),
+                    MessageType::ToolUse(_) => unimplemented!("ToolUse is not supported in OpenAI API"),
+                    MessageType::ToolResult(_) => unimplemented!("ToolResult is not supported in OpenAI API"),
                 },
             })
             .collect();
@@ -358,6 +375,7 @@ impl ChatProvider for OpenAI {
             top_p: self.top_p,
             top_k: self.top_k,
             tools: tools.map(|t| t.to_vec()),
+            tool_choice: self.tool_choice.clone(),
             reasoning_effort: self.reasoning_effort.clone(),
             response_format,
         };

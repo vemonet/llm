@@ -13,6 +13,8 @@ pub enum LLMError {
     ProviderError(String),
     /// JSON serialization/deserialization errors
     JsonError(String),
+    /// Tool configuration error
+    ToolConfigError(String),
 }
 
 impl fmt::Display for LLMError {
@@ -23,6 +25,7 @@ impl fmt::Display for LLMError {
             LLMError::InvalidRequest(e) => write!(f, "Invalid Request: {}", e),
             LLMError::ProviderError(e) => write!(f, "Provider Error: {}", e),
             LLMError::JsonError(e) => write!(f, "JSON Parse Error: {}", e),
+            LLMError::ToolConfigError(e) => write!(f, "Tool Configuration Error: {}", e),
         }
     }
 }

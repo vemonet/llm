@@ -312,6 +312,8 @@ impl ChatProvider for Anthropic {
                         image_url: Some(ImageUrlContent { url }),
                         source: None,
                     }],
+                    MessageType::ToolUse(_) => unimplemented!("ToolUse is not supported in Anthropic API"),
+                    MessageType::ToolResult(_) => unimplemented!("ToolResult is not supported in Anthropic API"),
                 },
             })
             .collect();

@@ -75,6 +75,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`google_image`](examples/google_image.rs) | Google Gemini chat with PDF attachment |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
+| [`google_tool_calling_example`](examples/google_tool_calling_example.rs) | Basic tool calling example with Google Gemini |
+| [`ollama_tool_calling_example`](examples/ollama_tool_calling_example.rs) | Basic tool calling example with Ollama |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
 | [`api_deepclaude_example`](examples/api_deepclaude_example.rs) | Basic API (openai standard format) example with DeepSeek and Claude |

@@ -62,22 +62,24 @@ pub trait LLMProvider:
     }
 }
 
-/// Tool call from OpenAI's API.
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Tool call represents a function call that an LLM wants to make.
+/// This is a standardized structure used across all providers.
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
 pub struct ToolCall {
     /// The ID of the tool call.
     pub id: String,
-    /// The type of the tool call.
+    /// The type of the tool call (usually "function").
     #[serde(rename = "type")]
     pub call_type: String,
     /// The function to call.
     pub function: FunctionCall,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// FunctionCall contains details about which function to call and with what arguments.
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
 pub struct FunctionCall {
     /// The name of the function to call.
     pub name: String,
-    /// The arguments to pass to the function.
+    /// The arguments to pass to the function, typically serialized as a JSON string.
     pub arguments: String,
 }
