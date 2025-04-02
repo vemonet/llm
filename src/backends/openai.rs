@@ -391,10 +391,38 @@ impl ChatProvider for OpenAI {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
-        let json_resp: OpenAIChatResponse = resp.json().await?;
-
-        Ok(Box::new(json_resp))
+        // Print the request body for debugging
+        let request_json = serde_json::to_string_pretty(&body).unwrap_or_default();
+        println!("OpenAI API request:\n{}", request_json);
+        
+        // Send the request
+        let response = request.send().await?;
+        
+        // If we got a non-200 response, let's get the error details
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+        
+        // Parse the successful response
+        let resp_text = response.text().await?;
+        println!("OpenAI API response:\n{}", resp_text);
+        
+        let json_resp: Result<OpenAIChatResponse, serde_json::Error> = serde_json::from_str(&resp_text);
+        
+        match json_resp {
+            Ok(response) => Ok(Box::new(response)),
+            Err(e) => {
+                Err(LLMError::ResponseFormatError {
+                    message: format!("Failed to decode OpenAI API response: {}", e),
+                    raw_response: resp_text,
+                })
+            }
+        }
     }
 
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {

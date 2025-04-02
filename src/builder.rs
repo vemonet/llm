@@ -292,6 +292,12 @@ impl LLMBuilder {
         self.tool_choice = Some(choice);
         self
     }
+    
+    /// Explicitly disable the use of tools, even if they are provided.
+    pub fn disable_tools(mut self) -> Self {
+        self.tool_choice = Some(ToolChoice::None);
+        self
+    }
 
     /// Builds and returns a configured LLM provider instance.
     ///

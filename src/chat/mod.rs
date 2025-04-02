@@ -130,7 +130,7 @@ pub struct Tool {
 
 /// Tool choice determines how the LLM uses available tools.
 /// The behavior is standardized across different LLM providers.
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum ToolChoice {
     /// Model can use any tool, but it must use at least one.
     /// This is useful when you want to force the model to use tools.
@@ -145,6 +145,37 @@ pub enum ToolChoice {
     /// The string parameter is the name of the required tool.
     /// This is useful when you want the model to call a specific function.
     Tool(String),
+    
+    /// Explicitly disables the use of tools.
+    /// The model will not use any tools even if they are provided.
+    None,
+}
+
+impl Serialize for ToolChoice {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            ToolChoice::Any => serializer.serialize_str("required"),
+            ToolChoice::Auto => serializer.serialize_str("auto"),
+            ToolChoice::None => serializer.serialize_str("none"),
+            ToolChoice::Tool(name) => {
+                use serde::ser::SerializeMap;
+                
+                // For tool_choice: {"type": "function", "function": {"name": "function_name"}}
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "function")?;
+                
+                // Inner function object
+                let mut function_obj = std::collections::HashMap::new();
+                function_obj.insert("name", name.as_str());
+                
+                map.serialize_entry("function", &function_obj)?;
+                map.end()
+            }
+        }
+    }
 }
 
 pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
