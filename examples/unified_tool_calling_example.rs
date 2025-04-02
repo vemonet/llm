@@ -25,33 +25,36 @@ use std::str::FromStr;
 async fn main() -> Result<(), Box<dyn Error>> {
     // Get command line arguments
     let args: Vec<String> = env::args().collect();
-    
+
     // Default to OpenAI if no provider specified
     let provider = if args.len() > 1 { &args[1] } else { "openai" };
-    
+
     // Default to simple scenario if not specified
     let scenario = if args.len() > 2 { &args[2] } else { "simple" };
-    
+
     // Create an LLM instance with the specified provider
     let llm = create_llm(provider)?;
-    
+
     // Print example information
     println!("=== Unified Tool Calling Example ===");
     println!("Provider: {}", provider);
     println!("Scenario: {}", scenario);
     println!("=================================\n");
-    
+
     // Run the requested scenario
     match scenario {
         "simple" => run_simple_scenario(&llm).await?,
         "multi" => run_multi_turn_scenario(&llm).await?,
         "choice" => run_tool_choice_scenario(&llm).await?,
         _ => {
-            println!("Unknown scenario: {}. Available scenarios: simple, multi, choice", scenario);
+            println!(
+                "Unknown scenario: {}. Available scenarios: simple, multi, choice",
+                scenario
+            );
             println!("Example: cargo run --example unified_tool_calling_example -- openai multi");
         }
     }
-    
+
     Ok(())
 }
 
@@ -63,29 +66,36 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         "anthropic" => LLMBackend::Anthropic,
         "google" => LLMBackend::Google,
         _ => {
-            return Err(format!("Unsupported provider: {}. Use 'openai', 'anthropic', or 'google'", provider_name).into());
+            return Err(format!(
+                "Unsupported provider: {}. Use 'openai', 'anthropic', or 'google'",
+                provider_name
+            )
+            .into());
         }
     };
-    
+
     // Get appropriate API key based on provider
     let api_key = match backend {
-        LLMBackend::OpenAI => env::var("OPENAI_API_KEY")
-            .expect("OPENAI_API_KEY environment variable not set"),
-        LLMBackend::Anthropic => env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY environment variable not set"),
-        LLMBackend::Google => env::var("GOOGLE_API_KEY")
-            .expect("GOOGLE_API_KEY environment variable not set"),
+        LLMBackend::OpenAI => {
+            env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set")
+        }
+        LLMBackend::Anthropic => {
+            env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set")
+        }
+        LLMBackend::Google => {
+            env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY environment variable not set")
+        }
         _ => unreachable!(),
     };
-    
+
     // Get appropriate model name based on provider
     let model = match backend {
-        LLMBackend::OpenAI => "gpt-4",
-        LLMBackend::Anthropic => "claude-3-opus-20240229",
+        LLMBackend::OpenAI => "gpt-4o-mini",
+        LLMBackend::Anthropic => "claude-3-5-haiku-latest",
         LLMBackend::Google => "gemini-1.5-flash",
         _ => unreachable!(),
     };
-    
+
     // Build the LLM with tools
     let llm = LLMBuilder::new()
         .backend(backend)
@@ -96,11 +106,9 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         .function(
             FunctionBuilder::new("get_weather")
                 .description("Get the current weather in a specific location")
-                .param(
-                    ParamBuilder::new("location")
-                        .type_of("string")
-                        .description("The city and state/country, e.g., 'San Francisco, CA' or 'Tokyo, Japan'"),
-                )
+                .param(ParamBuilder::new("location").type_of("string").description(
+                    "The city and state/country, e.g., 'San Francisco, CA' or 'Tokyo, Japan'",
+                ))
                 .required(vec!["location".to_string()]),
         )
         .function(
@@ -129,7 +137,7 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
                 .required(vec!["location".to_string()]),
         )
         .build()?;
-        
+
     Ok(llm)
 }
 
@@ -137,71 +145,73 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
 async fn run_simple_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn Error>> {
     println!("SCENARIO: Simple Tool Calling");
     println!("This demonstrates a single query that triggers tool use\n");
-    
+
     // Create a query that should trigger tool use
-    let messages = vec![
-        ChatMessage::user()
-            .content("What's the current weather in Tokyo?")
-            .build()
-    ];
-    
+    let messages = vec![ChatMessage::user()
+        .content("What's the current weather in Tokyo?")
+        .build()];
+
     println!("User: What's the current weather in Tokyo?\n");
     println!("Sending request to model...");
-    
+
     // Send the request
     let response = llm.chat_with_tools(&messages, llm.tools()).await?;
-    
+
     // Check if model wants to use tools
     if let Some(tool_calls) = response.tool_calls() {
         println!("\nModel is using tools: {}", tool_calls.len());
-        
+
         for call in &tool_calls {
             println!("Tool call: {}", call.function.name);
             println!("Arguments: {}\n", call.function.arguments);
-            
+
             // Process the tool call
             let result = process_tool_call(call)?;
-            println!("Tool response: {}\n", serde_json::to_string_pretty(&result)?);
-            
+            println!(
+                "Tool response: {}\n",
+                serde_json::to_string_pretty(&result)?
+            );
+
             // Create a follow-up with tool results
             let mut follow_up = messages.clone();
-            
+
             // Add the assistant's response with tool use
             follow_up.push(
                 ChatMessage::assistant()
                     .tool_use(tool_calls.clone())
                     .content("")
-                    .build()
+                    .build(),
             );
-            
+
             // Add the tool results
-            let tool_results = vec![
-                ToolCall {
-                    id: call.id.clone(),
-                    call_type: "function".to_string(),
-                    function: FunctionCall {
-                        name: call.function.name.clone(),
-                        arguments: serde_json::to_string(&result)?,
-                    },
-                }
-            ];
-            
+            let tool_results = vec![ToolCall {
+                id: call.id.clone(),
+                call_type: "function".to_string(),
+                function: FunctionCall {
+                    name: call.function.name.clone(),
+                    arguments: serde_json::to_string(&result)?,
+                },
+            }];
+
             follow_up.push(
                 ChatMessage::user()
                     .tool_result(tool_results)
                     .content("")
-                    .build()
+                    .build(),
             );
-            
+
             // Get final response
             println!("Getting final response with tool results...");
-            let final_response = llm.chat(&follow_up).await?;
+            let final_response = llm.chat_with_tools(&follow_up, llm.tools()).await?;
             println!("\nFinal response: {}", final_response);
         }
     } else {
-        println!("\nModel provided a direct response (no tools used):\n{}", response);
+        println!(
+            "\nModel provided a direct response (no tools used):\n{}",
+            response
+        );
     }
-    
+
     Ok(())
 }
 
@@ -209,34 +219,35 @@ async fn run_simple_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn E
 async fn run_multi_turn_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn Error>> {
     println!("SCENARIO: Multi-turn Conversation with Tool Calling");
     println!("This demonstrates maintaining context across multiple turns with tool use\n");
-    
+
     // Initialize conversation history
     let mut conversation = Vec::new();
-    
+
     // First turn
     let user_query = "I'm planning a trip to Tokyo. What's the weather like there?";
     println!("User: {}\n", user_query);
-    
+
     await_tool_response(llm, &mut conversation, user_query).await?;
-    
+
     // Second turn - building on previous context
     let user_query = "What time is it there right now?";
     println!("\nUser: {}\n", user_query);
-    
+
     await_tool_response(llm, &mut conversation, user_query).await?;
-    
+
     // Third turn - building on full conversation context
     let user_query = "Can you recommend some good sushi restaurants in Tokyo?";
     println!("\nUser: {}\n", user_query);
-    
+
     await_tool_response(llm, &mut conversation, user_query).await?;
-    
+
     // Fourth turn - follow-up that requires memory of entire conversation
-    let user_query = "Based on the weather and time, when would be a good time to visit those restaurants?";
+    let user_query =
+        "Based on the weather and time, when would be a good time to visit those restaurants?";
     println!("\nUser: {}\n", user_query);
-    
+
     await_tool_response(llm, &mut conversation, user_query).await?;
-    
+
     Ok(())
 }
 
@@ -244,50 +255,49 @@ async fn run_multi_turn_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<d
 async fn run_tool_choice_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn Error>> {
     println!("SCENARIO: Tool Choice Options");
     println!("This demonstrates controlling how the model uses tools\n");
-    
+
     // Create a query that could use weather or time tools
     let query = "What's the weather like in Tokyo and what time is it there?";
-    
+
     // Test Auto tool choice (default behavior)
     test_tool_choice(llm, ToolChoice::Auto, query).await?;
-    
+
     // Test Any tool choice (model must use at least one tool)
     test_tool_choice(llm, ToolChoice::Any, query).await?;
-    
+
     // Test specific tool choice (force weather tool)
     test_tool_choice(llm, ToolChoice::Tool("get_weather".to_string()), query).await?;
-    
+
     // Test None tool choice (disable tools)
     test_tool_choice(llm, ToolChoice::None, query).await?;
-    
+
     Ok(())
 }
 
 /// Helper function to test different tool choice settings
 async fn test_tool_choice(
-    llm: &Box<dyn LLMProvider>, 
+    llm: &Box<dyn LLMProvider>,
     tool_choice: ToolChoice,
-    query: &str
+    query: &str,
 ) -> Result<(), Box<dyn Error>> {
     println!("\n--- Testing {:?} ---", tool_choice);
-    
+
     // Create a custom LLM with the specified tool choice
     let mut builder = LLMBuilder::new();
-    
+
     // Copy properties from the original LLM
     match llm.tools() {
         Some(tools) => {
             for tool in tools {
                 builder = builder.function(
                     FunctionBuilder::new(&tool.function.name)
-                        .description(&tool.function.description)
-                        // Note: we'd need to recreate all parameters here in a real implementation
+                        .description(&tool.function.description), // Note: we'd need to recreate all parameters here in a real implementation
                 );
             }
         }
         None => {}
     }
-    
+
     let custom_llm = builder
         .backend(match llm {
             _ if std::any::type_name::<OpenAI>().contains("OpenAI") => LLMBackend::OpenAI,
@@ -300,18 +310,16 @@ async fn test_tool_choice(
         .max_tokens(1024)
         .tool_choice(tool_choice.clone())
         .build()?;
-    
+
     // Send query with the specified tool choice
-    let messages = vec![
-        ChatMessage::user()
-            .content(query)
-            .build()
-    ];
-    
+    let messages = vec![ChatMessage::user().content(query).build()];
+
     println!("User: {}\n", query);
-    
-    let response = custom_llm.chat_with_tools(&messages, custom_llm.tools()).await?;
-    
+
+    let response = custom_llm
+        .chat_with_tools(&messages, custom_llm.tools())
+        .await?;
+
     // Check tool usage
     if let Some(tool_calls) = response.tool_calls() {
         println!("Tools called:");
@@ -321,9 +329,9 @@ async fn test_tool_choice(
     } else {
         println!("No tools called");
     }
-    
+
     println!("\nResponse: {}", response);
-    
+
     Ok(())
 }
 
@@ -331,37 +339,37 @@ async fn test_tool_choice(
 async fn await_tool_response(
     llm: &Box<dyn LLMProvider>,
     conversation: &mut Vec<ChatMessage>,
-    user_query: &str
+    user_query: &str,
 ) -> Result<(), Box<dyn Error>> {
     // Add user query to conversation
     conversation.push(ChatMessage::user().content(user_query).build());
-    
+
     // Get model's response
     let response = llm.chat_with_tools(conversation, llm.tools()).await?;
-    
+
     // Check if model wants to use tools
     if let Some(tool_calls) = response.tool_calls() {
         println!("Model is using tools: {}", tool_calls.len());
-        
+
         // Add assistant's tool use message
         conversation.push(
             ChatMessage::assistant()
                 .tool_use(tool_calls.clone())
-                .content("")
-                .build()
+                .content(response.text().unwrap_or_default())
+                .build(),
         );
-        
+
         // Process each tool call
         let mut tool_results = Vec::new();
-        
+
         for call in &tool_calls {
             println!("Tool call: {}", call.function.name);
             println!("Arguments: {}", call.function.arguments);
-            
+
             // Process the tool call
             let result = process_tool_call(call)?;
             println!("Tool response: {}", serde_json::to_string_pretty(&result)?);
-            
+
             // Add to tool results
             tool_results.push(ToolCall {
                 id: call.id.clone(),
@@ -372,40 +380,31 @@ async fn await_tool_response(
                 },
             });
         }
-        
+
         // Add tool results to conversation
-        conversation.push(
-            ChatMessage::user()
-                .tool_result(tool_results)
-                .content("")
-                .build()
-        );
-        
+        conversation.push(ChatMessage::user().tool_result(tool_results).build());
+
         // Get final response
         println!("Getting final response with tool results...");
-        let final_response = llm.chat(conversation).await?;
+        let final_response = llm.chat_with_tools(conversation, llm.tools()).await?;
         println!("\nAssistant: {}", final_response.text().unwrap_or_default());
-        
+
         // Add assistant's response to conversation
         conversation.push(
             ChatMessage::assistant()
                 .content(final_response.text().unwrap_or_default())
-                .build()
+                .build(),
         );
     } else {
         // Direct response (no tools)
         let response_text = response.text().unwrap_or_default();
-        
+
         println!("\nAssistant: {}", response_text);
-        
+
         // Add to conversation history
-        conversation.push(
-            ChatMessage::assistant()
-                .content(response_text)
-                .build()
-        );
+        conversation.push(ChatMessage::assistant().content(response_text).build());
     }
-    
+
     Ok(())
 }
 
@@ -413,12 +412,12 @@ async fn await_tool_response(
 fn process_tool_call(tool_call: &ToolCall) -> Result<Value, Box<dyn Error>> {
     // Parse the arguments as JSON
     let args: Value = serde_json::from_str(&tool_call.function.arguments)?;
-    
+
     // Generate a response based on the tool type
     match tool_call.function.name.as_str() {
         "get_weather" => {
             let location = args["location"].as_str().unwrap_or("unknown location");
-            
+
             Ok(json!({
                 "location": location,
                 "temperature": 22,
@@ -430,7 +429,7 @@ fn process_tool_call(tool_call: &ToolCall) -> Result<Value, Box<dyn Error>> {
         }
         "get_current_time" => {
             let timezone = args["timezone"].as_str().unwrap_or("UTC");
-            
+
             Ok(json!({
                 "timezone": timezone,
                 "current_time": "14:30",
@@ -441,7 +440,7 @@ fn process_tool_call(tool_call: &ToolCall) -> Result<Value, Box<dyn Error>> {
         "search_restaurants" => {
             let location = args["location"].as_str().unwrap_or("unknown location");
             let cuisine = args["cuisine"].as_str().unwrap_or("any");
-            
+
             Ok(json!({
                 "location": location,
                 "cuisine": cuisine,
@@ -467,12 +466,10 @@ fn process_tool_call(tool_call: &ToolCall) -> Result<Value, Box<dyn Error>> {
                 ]
             }))
         }
-        _ => {
-            Ok(json!({
-                "error": "Unknown function",
-                "function": tool_call.function.name
-            }))
-        }
+        _ => Ok(json!({
+            "error": "Unknown function",
+            "function": tool_call.function.name
+        })),
     }
 }
 

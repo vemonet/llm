@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -97,12 +98,12 @@ struct MessageContent<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<ImageSource<'a>>,
     // tool use
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "id")]
     tool_use_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "name")]
     tool_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "input")]
-    tool_input: Option<String>,
+    tool_input: Option<Value>,
     // tool result
     #[serde(skip_serializing_if = "Option::is_none", rename = "tool_use_id")]
     tool_result_id: Option<String>,
@@ -194,28 +195,29 @@ impl ChatResponse for AnthropicCompleteResponse {
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        Some(
-            self.content
-                .iter()
-                .filter_map(|c| {
-                    if c.content_type == Some("tool_use".to_string()) {
-                        Some(ToolCall {
-                            id: "".to_string(),
-                            call_type: "".to_string(),
-                            function: FunctionCall {
-                                name: c.name.clone().unwrap_or_default(),
-                                arguments: serde_json::to_string(
-                                    &c.input.clone().unwrap_or_default(),
-                                )
+        match self
+            .content
+            .iter()
+            .filter_map(|c| {
+                if c.content_type == Some("tool_use".to_string()) {
+                    Some(ToolCall {
+                        id: c.id.clone().unwrap_or_default(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: c.name.clone().unwrap_or_default(),
+                            arguments: serde_json::to_string(&c.input.clone().unwrap_or_default())
                                 .unwrap_or_default(),
-                            },
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-        )
+                        },
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ToolCall>>()
+        {
+            v if v.is_empty() => None,
+            v => Some(v),
+        }
     }
 }
 
@@ -347,7 +349,10 @@ impl ChatProvider for Anthropic {
                             image_url: None,
                             source: None,
                             tool_use_id: Some(c.id.clone()),
-                            tool_input: Some(c.function.arguments.clone()),
+                            tool_input: Some(
+                                serde_json::from_str(&c.function.arguments)
+                                    .unwrap_or(c.function.arguments.clone().into()),
+                            ),
                             tool_name: Some(c.function.name.clone()),
                             tool_result_id: None,
                             tool_output: None,
@@ -409,7 +414,9 @@ impl ChatProvider for Anthropic {
             tool_choice,
             thinking,
         };
-
+        let json_debugstr = serde_json::to_string_pretty(&req_body)
+            .unwrap_or_else(|_| "Failed to serialize request".to_string());
+        println!("Anthropic API request: {}", json_debugstr);
         let mut request = self
             .client
             .post("https://api.anthropic.com/v1/messages")
@@ -424,6 +431,7 @@ impl ChatProvider for Anthropic {
 
         let resp = request.send().await?.error_for_status()?;
         let json_resp: AnthropicCompleteResponse = resp.json().await?;
+        println!("Anthropic API response: {:?}", json_resp);
         Ok(Box::new(json_resp))
     }
 
