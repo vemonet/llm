@@ -292,7 +292,7 @@ impl LLMBuilder {
         self.tool_choice = Some(choice);
         self
     }
-    
+
     /// Explicitly disable the use of tools, even if they are provided.
     pub fn disable_tools(mut self) -> Self {
         self.tool_choice = Some(ToolChoice::None);
@@ -549,13 +549,17 @@ impl LLMBuilder {
 
     // Validate that tool configuration is consistent and valid
     fn validate_tool_config(&self) -> Result<(Option<Vec<Tool>>, Option<ToolChoice>), LLMError> {
-        if let Some(ToolChoice::Tool(ref name)) = self.tool_choice {
-            match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
-                Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
-                _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+        match self.tool_choice {
+            Some(ToolChoice::Tool(ref name)) => {
+                match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
+                    Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
+                    _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+                }
             }
-        } else {
-            Ok((self.tools.clone(), self.tool_choice.clone()))
+            Some(_) if self.tools.is_none() => Err(LLMError::ToolConfigError(
+                "Tool choice cannot be set without tools configured".to_string(),
+            )),
+            _ => Ok((self.tools.clone(), self.tool_choice.clone())),
         }
     }
 }
