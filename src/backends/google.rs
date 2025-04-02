@@ -112,6 +112,8 @@ enum GoogleContentPart<'a> {
     /// The actual text content
     Text(&'a str),
     InlineData(GoogleInlineData),
+    FunctionCall(GoogleFunctionCall),
+    FunctionResult(GoogleFunctionResult),
 }
 
 #[derive(Serialize)]
@@ -187,7 +189,10 @@ impl ChatResponse for GoogleChatResponse {
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
         self.candidates.first().and_then(|c| {
             // First check for function calls at the part level (new API format)
-            let part_function_calls: Vec<ToolCall> = c.content.parts.iter()
+            let part_function_calls: Vec<ToolCall> = c
+                .content
+                .parts
+                .iter()
                 .filter_map(|part| {
                     part.function_call.as_ref().map(|f| ToolCall {
                         id: format!("call_{}", f.name),
@@ -199,24 +204,26 @@ impl ChatResponse for GoogleChatResponse {
                     })
                 })
                 .collect();
-                
+
             if !part_function_calls.is_empty() {
                 return Some(part_function_calls);
             }
-                
+
             // Otherwise check for function_calls/function_call at the content level (older format)
             if let Some(fc) = &c.content.function_calls {
                 // Process array of function calls
-                Some(fc.iter()
-                    .map(|f| ToolCall {
-                        id: format!("call_{}", f.name),
-                        call_type: "function".to_string(),
-                        function: FunctionCall {
-                            name: f.name.clone(),
-                            arguments: serde_json::to_string(&f.args).unwrap_or_default(),
-                        },
-                    })
-                    .collect())
+                Some(
+                    fc.iter()
+                        .map(|f| ToolCall {
+                            id: format!("call_{}", f.name),
+                            call_type: "function".to_string(),
+                            function: FunctionCall {
+                                name: f.name.clone(),
+                                arguments: serde_json::to_string(&f.args).unwrap_or_default(),
+                            },
+                        })
+                        .collect(),
+                )
             } else if let Some(f) = &c.content.function_call {
                 // Process single function call
                 Some(vec![ToolCall {
@@ -308,13 +315,23 @@ struct GoogleFunctionParameters {
 }
 
 /// Google function call object in response
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 struct GoogleFunctionCall {
     /// Name of the function to call
     name: String,
     /// Arguments for the function call as structured JSON
     #[serde(default)]
     args: Value,
+}
+
+/// Google function result object in response
+#[derive(Deserialize, Debug, Serialize)]
+struct GoogleFunctionResult {
+    /// Name of the function to call
+    name: String,
+    /// Output of the function call as a string
+    #[serde(default)]
+    response: String,
 }
 
 /// Request body for embedding content
@@ -443,12 +460,25 @@ impl ChatProvider for Google {
                             data: BASE64.encode(raw_bytes),
                         })]
                     }
-                    MessageType::ToolUse(_) => {
-                        unimplemented!("ToolUse is not supported in Google API")
-                    }
-                    MessageType::ToolResult(_) => {
-                        unimplemented!("ToolResult is not supported in Google API")
-                    }
+                    MessageType::ToolUse(calls) => calls
+                        .iter()
+                        .map(|call| {
+                            GoogleContentPart::FunctionCall(GoogleFunctionCall {
+                                name: call.function.name.clone(),
+                                args: serde_json::from_str(&call.function.arguments)
+                                    .unwrap_or(serde_json::Value::Null),
+                            })
+                        })
+                        .collect(),
+                    MessageType::ToolResult(result) => result
+                        .iter()
+                        .map(|result| {
+                            GoogleContentPart::FunctionResult(GoogleFunctionResult {
+                                name: result.function.name.clone(),
+                                response: result.function.arguments.clone(),
+                            })
+                        })
+                        .collect(),
                 },
             });
         }
@@ -501,10 +531,11 @@ impl ChatProvider for Google {
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
-        
+
         // Try to parse the response
-        let json_resp: Result<GoogleChatResponse, serde_json::Error> = serde_json::from_str(&resp_text);
-        
+        let json_resp: Result<GoogleChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
+
         match json_resp {
             Ok(response) => Ok(Box::new(response)),
             Err(e) => {
@@ -568,12 +599,25 @@ impl ChatProvider for Google {
                             data: BASE64.encode(raw_bytes),
                         })]
                     }
-                    MessageType::ToolUse(_) => {
-                        unimplemented!("ToolUse is not supported in Google API")
-                    }
-                    MessageType::ToolResult(_) => {
-                        unimplemented!("ToolResult is not supported in Google API")
-                    }
+                    MessageType::ToolUse(calls) => calls
+                        .iter()
+                        .map(|call| {
+                            GoogleContentPart::FunctionCall(GoogleFunctionCall {
+                                name: call.function.name.clone(),
+                                args: serde_json::from_str(&call.function.arguments)
+                                    .unwrap_or(serde_json::Value::Null),
+                            })
+                        })
+                        .collect(),
+                    MessageType::ToolResult(result) => result
+                        .iter()
+                        .map(|result| {
+                            GoogleContentPart::FunctionResult(GoogleFunctionResult {
+                                name: result.function.name.clone(),
+                                response: result.function.arguments.clone(),
+                            })
+                        })
+                        .collect()
                 },
             });
         }
@@ -630,13 +674,14 @@ impl ChatProvider for Google {
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
-        
+
         // Print the raw response for debugging
         println!("Raw Google API response:\n{}", resp_text);
-        
+
         // Try to parse the response
-        let json_resp: Result<GoogleChatResponse, serde_json::Error> = serde_json::from_str(&resp_text);
-        
+        let json_resp: Result<GoogleChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
+
         match json_resp {
             Ok(response) => Ok(Box::new(response)),
             Err(e) => {
