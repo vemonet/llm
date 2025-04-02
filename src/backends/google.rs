@@ -26,13 +26,12 @@
 //!     None, // No streaming
 //!     None, // Default top_p
 //!     None, // Default top_k
+//!     None, // No JSON schema
+//!     None, // No tools
 //! );
 //!
 //! let messages = vec![
-//!     ChatMessage {
-//!         role: ChatRole::User,
-//!         content: "Hello!".into()
-//!     }
+//!     ChatMessage::user().content("Hello!").build()
 //! ];
 //!
 //! let response = client.chat(&messages).await.unwrap();
