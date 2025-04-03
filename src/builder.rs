@@ -6,7 +6,7 @@
 use serde_json::Value;
 
 use crate::{
-    chat::{FunctionTool, ParameterProperty, ParametersSchema, ReasoningEffort, Tool},
+    chat::{FunctionTool, ParameterProperty, ParametersSchema, ReasoningEffort, Tool, ToolChoice},
     error::LLMError,
     LLMProvider,
 };
@@ -121,6 +121,10 @@ pub struct LLMBuilder {
     validator_attempts: usize,
     /// Function tools
     tools: Option<Vec<Tool>>,
+    /// Tool choice
+    tool_choice: Option<ToolChoice>,
+    /// Enable parallel tool use
+    enable_parallel_tool_use: Option<bool>,
     /// Enable reasoning
     reasoning: Option<bool>,
     /// Enable reasoning effort
@@ -276,6 +280,25 @@ impl LLMBuilder {
         self
     }
 
+    /// Enable parallel tool use
+    pub fn enable_parallel_tool_use(mut self, enable: bool) -> Self {
+        self.enable_parallel_tool_use = Some(enable);
+        self
+    }
+
+    /// Set tool choice.  Note that if the choice is given as Tool(name), and that
+    /// tool isn't available, the builder will fail.
+    pub fn tool_choice(mut self, choice: ToolChoice) -> Self {
+        self.tool_choice = Some(choice);
+        self
+    }
+
+    /// Explicitly disable the use of tools, even if they are provided.
+    pub fn disable_tools(mut self) -> Self {
+        self.tool_choice = Some(ToolChoice::None);
+        self
+    }
+
     /// Builds and returns a configured LLM provider instance.
     ///
     /// # Errors
@@ -285,6 +308,7 @@ impl LLMBuilder {
     /// - Required backend feature is not enabled
     /// - Required configuration like API keys are missing
     pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
+        let (tools, tool_choice) = self.validate_tool_config()?;
         let backend = self
             .backend
             .ok_or_else(|| LLMError::InvalidRequest("No backend specified".to_string()))?;
@@ -315,7 +339,8 @@ impl LLMBuilder {
                         self.top_k,
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
-                        self.tools,
+                        tools,
+                        tool_choice,
                         self.reasoning_effort,
                         self.json_schema,
                     ))
@@ -343,7 +368,7 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
-                        self.tools,
+                        tools,
                         self.reasoning,
                         self.reasoning_budget_tokens,
                     );
@@ -374,6 +399,7 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                         self.json_schema,
+                        tools,
                     );
                     Box::new(ollama)
                 }
@@ -476,6 +502,7 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                         self.json_schema,
+                        tools,
                     );
                     Box::new(google)
                 }
@@ -517,6 +544,22 @@ impl LLMBuilder {
             )))
         } else {
             Ok(provider)
+        }
+    }
+
+    // Validate that tool configuration is consistent and valid
+    fn validate_tool_config(&self) -> Result<(Option<Vec<Tool>>, Option<ToolChoice>), LLMError> {
+        match self.tool_choice {
+            Some(ToolChoice::Tool(ref name)) => {
+                match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
+                    Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
+                    _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+                }
+            }
+            Some(_) if self.tools.is_none() => Err(LLMError::ToolConfigError(
+                "Tool choice cannot be set without tools configured".to_string(),
+            )),
+            _ => Ok((self.tools.clone(), self.tool_choice.clone())),
         }
     }
 }

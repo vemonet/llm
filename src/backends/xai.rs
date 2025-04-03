@@ -278,8 +278,6 @@ impl ChatProvider for XAI {
             response_format,
         };
 
-        let body_text = serde_json::to_string(&body).unwrap();
-        dbg!(body_text);
 
         let mut request = self
             .client
@@ -309,10 +307,11 @@ impl ChatProvider for XAI {
     /// The provider's response text or an error
     async fn chat_with_tools(
         &self,
-        _messages: &[ChatMessage],
+        messages: &[ChatMessage],
         _tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        todo!()
+        // XAI doesn't support tools yet, fall back to regular chat
+        self.chat(messages).await
     }
 }
 

@@ -318,6 +318,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "either"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -885,7 +894,7 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
 name = "llm"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -893,6 +902,7 @@ dependencies = [
  "clap",
  "colored",
  "dirs",
+ "either",
  "futures",
  "reqwest",
  "rustyline",

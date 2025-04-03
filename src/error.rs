@@ -11,8 +11,12 @@ pub enum LLMError {
     InvalidRequest(String),
     /// Errors returned by the LLM provider
     ProviderError(String),
+    /// API response parsing or format error
+    ResponseFormatError { message: String, raw_response: String },
     /// JSON serialization/deserialization errors
     JsonError(String),
+    /// Tool configuration error
+    ToolConfigError(String),
 }
 
 impl fmt::Display for LLMError {
@@ -22,7 +26,11 @@ impl fmt::Display for LLMError {
             LLMError::AuthError(e) => write!(f, "Auth Error: {}", e),
             LLMError::InvalidRequest(e) => write!(f, "Invalid Request: {}", e),
             LLMError::ProviderError(e) => write!(f, "Provider Error: {}", e),
+            LLMError::ResponseFormatError { message, raw_response } => {
+                write!(f, "Response Format Error: {}. Raw response: {}", message, raw_response)
+            },
             LLMError::JsonError(e) => write!(f, "JSON Parse Error: {}", e),
+            LLMError::ToolConfigError(e) => write!(f, "Tool Configuration Error: {}", e),
         }
     }
 }
@@ -33,5 +41,14 @@ impl std::error::Error for LLMError {}
 impl From<reqwest::Error> for LLMError {
     fn from(err: reqwest::Error) -> Self {
         LLMError::HttpError(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for LLMError {
+    fn from(err: serde_json::Error) -> Self {
+        LLMError::JsonError(format!("{} at line {} column {}", 
+            err, 
+            err.line(), 
+            err.column()))
     }
 }

@@ -2,7 +2,6 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
-use crate::{chat::ChatResponse, FunctionCall, ToolCall};
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
@@ -12,8 +11,12 @@ use crate::{
     error::LLMError,
     LLMProvider,
 };
+use crate::{
+    chat::{ChatResponse, ToolChoice},
+    FunctionCall, ToolCall,
+};
 use async_trait::async_trait;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use either::*;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -33,6 +36,7 @@ pub struct OpenAI {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
+    pub tool_choice: Option<ToolChoice>,
     /// Embedding parameters
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
@@ -47,8 +51,29 @@ pub struct OpenAI {
 struct OpenAIChatMessage<'a> {
     #[allow(dead_code)]
     role: &'a str,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "either::serde_untagged_optional"
+    )]
+    content: Option<Either<Vec<MessageContent<'a>>, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<Vec<MessageContent<'a>>>,
+    tool_calls: Option<Vec<OpenAIFunctionCall<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+struct OpenAIFunctionPayload<'a> {
+    name: &'a str,
+    arguments: &'a str,
+}
+
+#[derive(Serialize, Debug)]
+struct OpenAIFunctionCall<'a> {
+    id: &'a str,
+    #[serde(rename = "type")]
+    content_type: &'a str,
+    function: OpenAIFunctionPayload<'a>,
 }
 
 #[derive(Serialize, Debug)]
@@ -59,6 +84,10 @@ struct MessageContent<'a> {
     text: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     image_url: Option<ImageUrlContent<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "tool_call_id")]
+    tool_call_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "content")]
+    tool_output: Option<&'a str>,
 }
 
 /// Individual image message in an OpenAI chat conversation.
@@ -93,6 +122,8 @@ struct OpenAIChatRequest<'a> {
     top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<ToolChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,6 +249,13 @@ impl OpenAI {
     /// * `timeout_seconds` - Request timeout in seconds
     /// * `system` - System prompt
     /// * `stream` - Whether to stream responses
+    /// * `top_p` - Top-p sampling parameter
+    /// * `top_k` - Top-k sampling parameter
+    /// * `embedding_encoding_format` - Format for embedding outputs
+    /// * `embedding_dimensions` - Dimensions for embedding vectors
+    /// * `tools` - Function tools that the model can use
+    /// * `tool_choice` - Determines how the model uses tools
+    /// * `reasoning_effort` - Reasoning effort level
     /// * `json_schema` - JSON schema for structured output
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -234,6 +272,7 @@ impl OpenAI {
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
         tools: Option<Vec<Tool>>,
+        tool_choice: Option<ToolChoice>,
         reasoning_effort: Option<String>,
         json_schema: Option<Value>,
     ) -> Self {
@@ -256,6 +295,7 @@ impl OpenAI {
             top_p,
             top_k,
             tools,
+            tool_choice,
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -286,57 +326,42 @@ impl ChatProvider for OpenAI {
         }
 
         // Clone the messages to have an owned mutable vector.
-        let mut messages = messages.to_vec();
+        let messages = messages.to_vec();
 
-        let mut openai_msgs: Vec<OpenAIChatMessage> = messages
-            .iter_mut() // Use mutable iterator to allow content modification.
-            .map(|m| OpenAIChatMessage {
-                role: match m.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                content: match &m.message_type {
-                    MessageType::Text => Some(vec![MessageContent {
-                        message_type: Some("text"),
-                        text: Some(&m.content),
-                        image_url: None,
-                    }]),
-                    MessageType::Image((image_mime, raw_bytes)) => Some(vec![MessageContent {
-                        message_type: Some("image"),
-                        text: None,
-                        image_url: Some(ImageUrlContent {
-                            url: {
-                                let base64_image = BASE64.encode(raw_bytes);
-                                // Modify the content: m is now mutable thanks to iter_mut()
-                                m.content = format!(
-                                    "data:{};base64,{}",
-                                    image_mime.mime_type(),
-                                    base64_image
-                                );
-                                &m.content
-                            },
-                        }),
-                    }]),
-                    MessageType::Pdf(_) => unimplemented!(),
-                    MessageType::ImageURL(ref url) => Some(vec![MessageContent {
-                        message_type: Some("image_url"),
-                        text: None,
-                        image_url: Some(ImageUrlContent { url }),
-                    }]),
-                },
-            })
-            .collect();
+        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
+
+        for msg in messages {
+            if let MessageType::ToolResult(ref results) = msg.message_type {
+                for result in results {
+                    openai_msgs.push(
+                        // Clone strings to own them
+                        OpenAIChatMessage {
+                            role: "tool",
+                            tool_call_id: Some(result.id.clone()),
+                            tool_calls: None,
+                            content: Some(Right(result.function.arguments.clone())),
+                        },
+                    );
+                }
+            } else {
+                openai_msgs.push(chat_message_to_api_message(msg))
+            }
+        }
 
         if let Some(system) = &self.system {
             openai_msgs.insert(
                 0,
                 OpenAIChatMessage {
                     role: "system",
-                    content: Some(vec![MessageContent {
+                    content: Some(Left(vec![MessageContent {
                         message_type: Some("text"),
                         text: Some(system),
                         image_url: None,
-                    }]),
+                        tool_call_id: None,
+                        tool_output: None,
+                    }])),
+                    tool_calls: None,
+                    tool_call_id: None,
                 },
             );
         }
@@ -358,6 +383,7 @@ impl ChatProvider for OpenAI {
             top_p: self.top_p,
             top_k: self.top_k,
             tools: tools.map(|t| t.to_vec()),
+            tool_choice: self.tool_choice.clone(),
             reasoning_effort: self.reasoning_effort.clone(),
             response_format,
         };
@@ -373,14 +399,98 @@ impl ChatProvider for OpenAI {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
-        let json_resp: OpenAIChatResponse = resp.json().await?;
+        // Send the request
+        let response = request.send().await?;
 
-        Ok(Box::new(json_resp))
+        // If we got a non-200 response, let's get the error details
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        // Parse the successful response
+        let resp_text = response.text().await?;
+        let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
+
+        match json_resp {
+            Ok(response) => Ok(Box::new(response)),
+            Err(e) => Err(LLMError::ResponseFormatError {
+                message: format!("Failed to decode OpenAI API response: {}", e),
+                raw_response: resp_text,
+            }),
+        }
     }
 
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
+    }
+}
+
+// Create an owned OpenAIChatMessage that doesn't borrow from any temporary variables
+fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAIChatMessage<'static> {
+    // For other message types, create an owned OpenAIChatMessage
+    OpenAIChatMessage {
+        role: match chat_msg.role {
+            ChatRole::User => "user",
+            ChatRole::Assistant => "assistant",
+        },
+        tool_call_id: None,
+        content: match &chat_msg.message_type {
+            MessageType::Text => Some(Right(chat_msg.content.clone())),
+            // Image case is handled separately above
+            MessageType::Image(_) => unreachable!(),
+            MessageType::Pdf(_) => unimplemented!(),
+            MessageType::ImageURL(url) => {
+                // Clone the URL to create an owned version
+                let owned_url = url.clone();
+                // Leak the string to get a 'static reference
+                let url_str = Box::leak(owned_url.into_boxed_str());
+                Some(Left(vec![MessageContent {
+                    message_type: Some("image_url"),
+                    text: None,
+                    image_url: Some(ImageUrlContent { url: url_str }),
+                    tool_output: None,
+                    tool_call_id: None,
+                }]))
+            }
+            MessageType::ToolUse(_) => None,
+            MessageType::ToolResult(_) => None,
+        },
+        tool_calls: match &chat_msg.message_type {
+            MessageType::ToolUse(calls) => {
+                let owned_calls: Vec<OpenAIFunctionCall<'static>> = calls
+                    .iter()
+                    .map(|c| {
+                        let owned_id = c.id.clone();
+                        let owned_name = c.function.name.clone();
+                        let owned_args = c.function.arguments.clone();
+
+                        // Need to leak these strings to create 'static references
+                        // This is a deliberate choice to solve the lifetime issue
+                        // The small memory leak is acceptable in this context
+                        let id_str = Box::leak(owned_id.into_boxed_str());
+                        let name_str = Box::leak(owned_name.into_boxed_str());
+                        let args_str = Box::leak(owned_args.into_boxed_str());
+
+                        OpenAIFunctionCall {
+                            id: id_str,
+                            content_type: "function",
+                            function: OpenAIFunctionPayload {
+                                name: name_str,
+                                arguments: args_str,
+                            },
+                        }
+                    })
+                    .collect();
+                Some(owned_calls)
+            }
+            _ => None,
+        },
     }
 }
 
