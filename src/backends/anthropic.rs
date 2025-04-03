@@ -414,9 +414,7 @@ impl ChatProvider for Anthropic {
             tool_choice,
             thinking,
         };
-        let json_debugstr = serde_json::to_string_pretty(&req_body)
-            .unwrap_or_else(|_| "Failed to serialize request".to_string());
-        println!("Anthropic API request: {}", json_debugstr);
+
         let mut request = self
             .client
             .post("https://api.anthropic.com/v1/messages")
@@ -431,7 +429,7 @@ impl ChatProvider for Anthropic {
 
         let resp = request.send().await?.error_for_status()?;
         let json_resp: AnthropicCompleteResponse = resp.json().await?;
-        println!("Anthropic API response: {:?}", json_resp);
+
         Ok(Box::new(json_resp))
     }
 

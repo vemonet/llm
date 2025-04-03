@@ -228,15 +228,17 @@ impl ChatResponse for GoogleChatResponse {
                         })
                         .collect(),
                 )
-            } else { 
-                c.content.function_call.as_ref().map(|f| vec![ToolCall {
-                    id: format!("call_{}", f.name),
-                    call_type: "function".to_string(),
-                    function: FunctionCall {
-                        name: f.name.clone(),
-                        arguments: serde_json::to_string(&f.args).unwrap_or_default(),
-                    },
-                }]) 
+            } else {
+                c.content.function_call.as_ref().map(|f| {
+                    vec![ToolCall {
+                        id: format!("call_{}", f.name),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: f.name.clone(),
+                            arguments: serde_json::to_string(&f.args).unwrap_or_default(),
+                        },
+                    }]
+                })
             }
         })
     }
@@ -326,10 +328,10 @@ struct GoogleFunctionCall {
 }
 
 /// Google function response wrapper for function results
-/// 
+///
 /// Format follows Google's Gemini API specification for function calling results:
 /// https://ai.google.dev/docs/function_calling
-/// 
+///
 /// The expected format is:
 /// {
 ///   "role": "function",
@@ -473,7 +475,7 @@ impl ChatProvider for Google {
                     ChatRole::Assistant => "model",
                 },
             };
-            
+
             chat_contents.push(GoogleChatContent {
                 role,
                 parts: match &msg.message_type {
@@ -504,9 +506,10 @@ impl ChatProvider for Google {
                     MessageType::ToolResult(result) => result
                         .iter()
                         .map(|result| {
-                            let parsed_args = serde_json::from_str::<Value>(&result.function.arguments)
-                                .unwrap_or(serde_json::Value::Null);
-                            
+                            let parsed_args =
+                                serde_json::from_str::<Value>(&result.function.arguments)
+                                    .unwrap_or(serde_json::Value::Null);
+
                             GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
                                 name: result.function.name.clone(),
                                 response: GoogleFunctionResponseContent {
@@ -624,7 +627,7 @@ impl ChatProvider for Google {
                     ChatRole::Assistant => "model",
                 },
             };
-            
+
             chat_contents.push(GoogleChatContent {
                 role,
                 parts: match &msg.message_type {
@@ -655,9 +658,10 @@ impl ChatProvider for Google {
                     MessageType::ToolResult(result) => result
                         .iter()
                         .map(|result| {
-                            let parsed_args = serde_json::from_str::<Value>(&result.function.arguments)
-                                .unwrap_or(serde_json::Value::Null);
-                            
+                            let parsed_args =
+                                serde_json::from_str::<Value>(&result.function.arguments)
+                                    .unwrap_or(serde_json::Value::Null);
+
                             GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
                                 name: result.function.name.clone(),
                                 response: GoogleFunctionResponseContent {
@@ -710,9 +714,6 @@ impl ChatProvider for Google {
 
         );
 
-        // Debug: print request body as JSON
-        let request_json = serde_json::to_string_pretty(&req_body).unwrap_or_default();
-        println!("Sending request to Google API:\n{}", request_json);
         let mut request = self.client.post(&url).json(&req_body);
 
         if let Some(timeout) = self.timeout_seconds {
@@ -723,9 +724,6 @@ impl ChatProvider for Google {
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
-
-        // Print the raw response for debugging
-        println!("Raw Google API response:\n{}", resp_text);
 
         // Try to parse the response
         let json_resp: Result<GoogleChatResponse, serde_json::Error> =
