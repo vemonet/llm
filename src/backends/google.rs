@@ -228,18 +228,15 @@ impl ChatResponse for GoogleChatResponse {
                         })
                         .collect(),
                 )
-            } else if let Some(f) = &c.content.function_call {
-                // Process single function call
-                Some(vec![ToolCall {
+            } else { 
+                c.content.function_call.as_ref().map(|f| vec![ToolCall {
                     id: format!("call_{}", f.name),
                     call_type: "function".to_string(),
                     function: FunctionCall {
                         name: f.name.clone(),
                         arguments: serde_json::to_string(&f.args).unwrap_or_default(),
                     },
-                }])
-            } else {
-                None
+                }]) 
             }
         })
     }

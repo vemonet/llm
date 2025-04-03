@@ -47,7 +47,7 @@ impl From<reqwest::Error> for LLMError {
 impl From<serde_json::Error> for LLMError {
     fn from(err: serde_json::Error) -> Self {
         LLMError::JsonError(format!("{} at line {} column {}", 
-            err.to_string(), 
+            err, 
             err.line(), 
             err.column()))
     }

@@ -16,7 +16,6 @@ use crate::{
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use either::*;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
@@ -400,10 +399,6 @@ impl ChatProvider for OpenAI {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        // Print the request body for debugging
-        let request_json = serde_json::to_string_pretty(&body).unwrap_or_default();
-        println!("OpenAI API request:\n{}", request_json);
-
         // Send the request
         let response = request.send().await?;
 
@@ -419,8 +414,6 @@ impl ChatProvider for OpenAI {
 
         // Parse the successful response
         let resp_text = response.text().await?;
-        println!("OpenAI API response:\n{}", resp_text);
-
         let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
             serde_json::from_str(&resp_text);
 
