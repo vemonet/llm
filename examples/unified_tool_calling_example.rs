@@ -12,13 +12,12 @@
 
 use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
-    chat::{ChatMessage, ChatProvider, ChatResponse, ToolChoice},
+    chat::{ChatMessage, ToolChoice},
     FunctionCall, LLMProvider, ToolCall,
 };
 use serde_json::{json, Value};
 use std::env;
 use std::error::Error;
-use std::str::FromStr;
 
 /// Main entry point
 #[tokio::main]
