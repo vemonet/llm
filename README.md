@@ -75,13 +75,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`google_image`](examples/google_image.rs) | Google Gemini chat with PDF attachment |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
-| [`openai_tool_calling_example`](examples/openai_tool_calling_example.rs) | Advanced OpenAI tool calling with multiple tools for travel planning |
-| [`google_tool_calling_example`](examples/google_tool_calling_example.rs) | Basic tool calling example with Google Gemini (experimental) |
-| [`google_tool_calling_simplified`](examples/google_tool_calling_simplified.rs) | Alternative approach using JSON schema with Google Gemini |
-| [`ollama_tool_calling_example`](examples/ollama_tool_calling_example.rs) | Basic tool calling example with Ollama |
-| [`anthropic_tool_calling_example`](examples/anthropic_tool_calling_example.rs) | Basic tool calling example with Anthropic Claude |
-| [`advanced_tool_calling_example`](examples/advanced_tool_calling_example.rs) | Advanced example showing multi-turn tool calling with response handling |
-| [`tool_choice_example`](examples/tool_choice_example.rs) | Example demonstrating various tool choice modes |
+| [`unified_tool_calling_example`](examples/unified_tool_calling_example.rs) | Unified tool calling with selectable provider - demonstrates multi-turn tool use and tool choice |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
 | [`api_deepclaude_example`](examples/api_deepclaude_example.rs) | Basic API (openai standard format) example with DeepSeek and Claude |
