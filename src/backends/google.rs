@@ -1,3 +1,5 @@
+// This file will be completely replaced to fix the syntax errors
+
 //! Google Gemini API client implementation for chat and completion functionality.
 //!
 //! This module provides integration with Google's Gemini models through their API.
@@ -107,13 +109,15 @@ struct GoogleChatContent<'a> {
 
 /// Text content within a chat message
 #[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 enum GoogleContentPart<'a> {
     /// The actual text content
+    #[serde(rename = "text")]
     Text(&'a str),
     InlineData(GoogleInlineData),
     FunctionCall(GoogleFunctionCall),
-    FunctionResult(GoogleFunctionResult),
+    #[serde(rename = "functionResponse")]
+    FunctionResponse(GoogleFunctionResponse),
 }
 
 #[derive(Serialize)]
@@ -324,14 +328,38 @@ struct GoogleFunctionCall {
     args: Value,
 }
 
-/// Google function result object in response
+/// Google function response wrapper for function results
+/// 
+/// Format follows Google's Gemini API specification for function calling results:
+/// https://ai.google.dev/docs/function_calling
+/// 
+/// The expected format is:
+/// {
+///   "role": "function",
+///   "parts": [{
+///     "functionResponse": {
+///       "name": "function_name",
+///       "response": {
+///         "name": "function_name",
+///         "content": { ... } // JSON content returned by the function
+///       }
+///     }
+///   }]
+/// }
 #[derive(Deserialize, Debug, Serialize)]
-struct GoogleFunctionResult {
-    /// Name of the function to call
+struct GoogleFunctionResponse {
+    /// Name of the function that was called
     name: String,
-    /// Output of the function call as a string
-    #[serde(default)]
-    response: String,
+    /// Response from the function as structured JSON
+    response: GoogleFunctionResponseContent,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct GoogleFunctionResponseContent {
+    /// Name of the function that was called
+    name: String,
+    /// Content of the function response
+    content: Value,
 }
 
 /// Request body for embedding content
@@ -440,11 +468,17 @@ impl ChatProvider for Google {
 
         // Add conversation messages in pairs to maintain context
         for msg in messages {
-            chat_contents.push(GoogleChatContent {
-                role: match msg.role {
+            // For tool results, we need to use "function" role
+            let role = match &msg.message_type {
+                MessageType::ToolResult(_) => "function",
+                _ => match msg.role {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "model",
                 },
+            };
+            
+            chat_contents.push(GoogleChatContent {
+                role,
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
                     MessageType::Image((image_mime, raw_bytes)) => {
@@ -473,9 +507,15 @@ impl ChatProvider for Google {
                     MessageType::ToolResult(result) => result
                         .iter()
                         .map(|result| {
-                            GoogleContentPart::FunctionResult(GoogleFunctionResult {
+                            let parsed_args = serde_json::from_str::<Value>(&result.function.arguments)
+                                .unwrap_or(serde_json::Value::Null);
+                            
+                            GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
                                 name: result.function.name.clone(),
-                                response: result.function.arguments.clone(),
+                                response: GoogleFunctionResponseContent {
+                                    name: result.function.name.clone(),
+                                    content: parsed_args,
+                                },
                             })
                         })
                         .collect(),
@@ -579,11 +619,17 @@ impl ChatProvider for Google {
 
         // Add conversation messages in pairs to maintain context
         for msg in messages {
-            chat_contents.push(GoogleChatContent {
-                role: match msg.role {
+            // For tool results, we need to use "function" role
+            let role = match &msg.message_type {
+                MessageType::ToolResult(_) => "function",
+                _ => match msg.role {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "model",
                 },
+            };
+            
+            chat_contents.push(GoogleChatContent {
+                role,
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
                     MessageType::Image((image_mime, raw_bytes)) => {
@@ -612,12 +658,18 @@ impl ChatProvider for Google {
                     MessageType::ToolResult(result) => result
                         .iter()
                         .map(|result| {
-                            GoogleContentPart::FunctionResult(GoogleFunctionResult {
+                            let parsed_args = serde_json::from_str::<Value>(&result.function.arguments)
+                                .unwrap_or(serde_json::Value::Null);
+                            
+                            GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
                                 name: result.function.name.clone(),
-                                response: result.function.arguments.clone(),
+                                response: GoogleFunctionResponseContent {
+                                    name: result.function.name.clone(),
+                                    content: parsed_args,
+                                },
                             })
                         })
-                        .collect()
+                        .collect(),
                 },
             });
         }
