@@ -369,6 +369,7 @@ impl LLMBuilder {
                         self.top_p,
                         self.top_k,
                         tools,
+                        self.tool_choice,
                         self.reasoning,
                         self.reasoning_budget_tokens,
                     );
