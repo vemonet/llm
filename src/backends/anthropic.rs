@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use crate::{
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, ParametersSchema, Tool,
+        ToolChoice,
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -34,6 +35,7 @@ pub struct Anthropic {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
+    pub tool_choice: Option<ToolChoice>,
     pub reasoning: bool,
     pub thinking_budget_tokens: Option<u32>,
     client: Client,
@@ -138,7 +140,7 @@ struct AnthropicContent {
     content_type: Option<String>,
     thinking: Option<String>,
     name: Option<String>,
-    input: Option<HashMap<String, String>>,
+    input: Option<serde_json::Value>,
     id: Option<String>,
 }
 
@@ -148,9 +150,13 @@ impl std::fmt::Display for AnthropicCompleteResponse {
             match content.content_type {
                 Some(ref t) if t == "tool_use" => write!(
                     f,
-                    "{{\n \"name\": {}, \"input\": {:?}\n}}",
+                    "{{\n \"name\": {}, \"input\": {}\n}}",
                     content.name.clone().unwrap_or_default(),
-                    content.input.clone().unwrap_or_default()
+                    content
+                        .input
+                        .clone()
+                        .unwrap_or(serde_json::Value::Null)
+                        .to_string()
                 )?,
                 Some(ref t) if t == "thinking" => {
                     write!(f, "{}", content.thinking.clone().unwrap_or_default())?
@@ -205,8 +211,10 @@ impl ChatResponse for AnthropicCompleteResponse {
                         call_type: "function".to_string(),
                         function: FunctionCall {
                             name: c.name.clone().unwrap_or_default(),
-                            arguments: serde_json::to_string(&c.input.clone().unwrap_or_default())
-                                .unwrap_or_default(),
+                            arguments: serde_json::to_string(
+                                &c.input.clone().unwrap_or(serde_json::Value::Null),
+                            )
+                            .unwrap_or_default(),
                         },
                     })
                 } else {
@@ -235,7 +243,6 @@ impl Anthropic {
     /// * `stream` - Whether to stream responses (defaults to false)
     /// *
     /// * `thinking_budget_tokens` - Budget tokens for thinking (optional)
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         api_key: impl Into<String>,
         model: Option<String>,
@@ -247,6 +254,7 @@ impl Anthropic {
         top_p: Option<f32>,
         top_k: Option<u32>,
         tools: Option<Vec<Tool>>,
+        tool_choice: Option<ToolChoice>,
         reasoning: Option<bool>,
         thinking_budget_tokens: Option<u32>,
     ) -> Self {
@@ -265,6 +273,7 @@ impl Anthropic {
             top_p,
             top_k,
             tools,
+            tool_choice,
             reasoning: reasoning.unwrap_or(false),
             thinking_budget_tokens,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -386,10 +395,19 @@ impl ChatProvider for Anthropic {
                 .collect::<Vec<_>>()
         });
 
-        let tool_choice = if self.tools.is_some() {
-            Some(HashMap::from([("type".to_string(), "auto".to_string())]))
-        } else {
-            None
+        let tool_choice = match self.tool_choice {
+            Some(ToolChoice::Auto) => {
+                Some(HashMap::from([("type".to_string(), "auto".to_string())]))
+            }
+            Some(ToolChoice::Any) => Some(HashMap::from([("type".to_string(), "any".to_string())])),
+            Some(ToolChoice::Tool(ref tool_name)) => Some(HashMap::from([
+                ("type".to_string(), "tool".to_string()),
+                ("name".to_string(), tool_name.clone()),
+            ])),
+            Some(ToolChoice::None) => {
+                Some(HashMap::from([("type".to_string(), "none".to_string())]))
+            }
+            None => None,
         };
 
         let thinking = if self.reasoning {
@@ -428,7 +446,10 @@ impl ChatProvider for Anthropic {
         }
 
         let resp = request.send().await?.error_for_status()?;
-        let json_resp: AnthropicCompleteResponse = resp.json().await?;
+
+        let body = resp.text().await?;
+        let json_resp: AnthropicCompleteResponse = serde_json::from_str(&body)
+            .map_err(|e| LLMError::HttpError(format!("Failed to parse JSON: {}", e)))?;
 
         Ok(Box::new(json_resp))
     }
