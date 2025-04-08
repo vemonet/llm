@@ -5,7 +5,7 @@
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
-    chat::{ChatMessage, ChatProvider, ChatRole, MessageType},
+    chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -19,7 +19,6 @@ use async_trait::async_trait;
 use either::*;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -42,7 +41,7 @@ pub struct OpenAI {
     pub embedding_dimensions: Option<u32>,
     pub reasoning_effort: Option<String>,
     /// JSON schema for structured output
-    pub json_schema: Option<Value>,
+    pub json_schema: Option<StructuredOutputFormat>,
     client: Client,
 }
 
@@ -198,7 +197,41 @@ struct OpenAIResponseFormat {
     #[serde(rename = "type")]
     response_type: OpenAIResponseType,
     #[serde(skip_serializing_if = "Option::is_none")]
-    json_schema: Option<Value>,
+    json_schema: Option<StructuredOutputFormat>,
+}
+
+impl From<StructuredOutputFormat> for OpenAIResponseFormat {
+    /// Modify the schema to ensure that it meets OpenAI's requirements.
+    fn from(structured_response_format: StructuredOutputFormat) -> Self {
+        // It's possible to pass a StructuredOutputJsonSchema without an actual schema.
+        // In this case, just pass the StructuredOutputJsonSchema object without modifying it.
+        match structured_response_format.schema {
+            None => OpenAIResponseFormat {
+                response_type: OpenAIResponseType::JsonSchema,
+                json_schema: Some(structured_response_format),
+            },
+            Some(mut schema) => {
+                // Although [OpenAI's specifications](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat#additionalproperties-false-must-always-be-set-in-objects) say that the "additionalProperties" field is required, my testing shows that it is not.
+                // Just to be safe, add it to the schema if it is missing.
+                schema = if schema.get("additionalProperties").is_none() {
+                    schema["additionalProperties"] = serde_json::json!(false);
+                    schema
+                } else {
+                    schema
+                };
+
+                OpenAIResponseFormat {
+                    response_type: OpenAIResponseType::JsonSchema,
+                    json_schema: Some(StructuredOutputFormat {
+                        name: structured_response_format.name,
+                        description: structured_response_format.description,
+                        schema: Some(schema),
+                        strict: structured_response_format.strict,
+                    }),
+                }
+            }
+        }
+    }
 }
 
 impl ChatResponse for OpenAIChatResponse {
@@ -274,7 +307,7 @@ impl OpenAI {
         tools: Option<Vec<Tool>>,
         tool_choice: Option<ToolChoice>,
         reasoning_effort: Option<String>,
-        json_schema: Option<Value>,
+        json_schema: Option<StructuredOutputFormat>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -366,13 +399,9 @@ impl ChatProvider for OpenAI {
             );
         }
 
-        // OpenAI's structured output has some [odd requirements](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat&lang=curl#supported-schemas).
-        // There's currently no check for these, so we'll leave it up to the user to provide a valid schema.
+        // Build the response format object
         let response_format: Option<OpenAIResponseFormat> =
-            self.json_schema.as_ref().map(|s| OpenAIResponseFormat {
-                response_type: OpenAIResponseType::JsonSchema,
-                json_schema: Some(s.clone()),
-            });
+            self.json_schema.clone().map(|s| s.into());
 
         let body = OpenAIChatRequest {
             model: &self.model,

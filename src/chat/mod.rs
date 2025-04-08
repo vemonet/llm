@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::fmt;
 
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{error::LLMError, ToolCall};
 
@@ -118,6 +119,55 @@ pub struct FunctionTool {
     pub parameters: ParametersSchema,
 }
 
+/// Defines rules for structured output responses based on [OpenAI's structured output requirements](https://platform.openai.com/docs/api-reference/chat/create#chat-create-response_format).
+/// Individual providers may have additional requirements or restrictions, but these should be handled by each provider's backend implementation.
+///
+/// If you plan on deserializing into this struct, make sure the source text has a `"name"` field, since that's technically the only thing required by OpenAI.
+///
+/// ## Example
+///
+/// ```
+/// use llm::chat::StructuredOutputFormat;
+/// use serde_json::json;
+///
+/// let response_format = r#"
+///     {
+///         "name": "Student",
+///         "description": "A student object",
+///         "schema": {
+///             "type": "object",
+///             "properties": {
+///                 "name": {
+///                     "type": "string"
+///                 },
+///                 "age": {
+///                     "type": "integer"
+///                 },
+///                 "is_student": {
+///                     "type": "boolean"
+///                 }
+///             },
+///             "required": ["name", "age", "is_student"]
+///         }
+///     }
+/// "#;
+/// let structured_output: StructuredOutputFormat = serde_json::from_str(response_format).unwrap();
+/// assert_eq!(structured_output.name, "Student");
+/// assert_eq!(structured_output.description, Some("A student object".to_string()));
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+
+pub struct StructuredOutputFormat {
+    /// Name of the schema
+    pub name: String,
+    /// The description of the schema
+    pub description: Option<String>,
+    /// The JSON schema for the structured output
+    pub schema: Option<Value>,
+    /// Whether to enable strict schema adherence
+    pub strict: Option<bool>,
+}
+
 /// Represents a tool that can be used in chat
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
@@ -135,17 +185,17 @@ pub enum ToolChoice {
     /// Model can use any tool, but it must use at least one.
     /// This is useful when you want to force the model to use tools.
     Any,
-    
+
     /// Model can use any tool, and may elect to use none.
     /// This is the default behavior and gives the model flexibility.
     #[default]
     Auto,
-    
+
     /// Model must use the specified tool and only the specified tool.
     /// The string parameter is the name of the required tool.
     /// This is useful when you want the model to call a specific function.
     Tool(String),
-    
+
     /// Explicitly disables the use of tools.
     /// The model will not use any tools even if they are provided.
     None,
@@ -162,15 +212,15 @@ impl Serialize for ToolChoice {
             ToolChoice::None => serializer.serialize_str("none"),
             ToolChoice::Tool(name) => {
                 use serde::ser::SerializeMap;
-                
+
                 // For tool_choice: {"type": "function", "function": {"name": "function_name"}}
                 let mut map = serializer.serialize_map(Some(2))?;
                 map.serialize_entry("type", "function")?;
-                
+
                 // Inner function object
                 let mut function_obj = std::collections::HashMap::new();
                 function_obj.insert("name", name.as_str());
-                
+
                 map.serialize_entry("function", &function_obj)?;
                 map.end()
             }
@@ -282,13 +332,13 @@ impl ChatMessageBuilder {
         self.message_type = MessageType::ImageURL(url.into());
         self
     }
-    
+
     /// Set the message type as ToolUse
     pub fn tool_use(mut self, tools: Vec<ToolCall>) -> Self {
         self.message_type = MessageType::ToolUse(tools);
         self
     }
-    
+
     /// Set the message type as ToolResult
     pub fn tool_result(mut self, tools: Vec<ToolCall>) -> Self {
         self.message_type = MessageType::ToolResult(tools);

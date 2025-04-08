@@ -1,9 +1,8 @@
 // Import required modules from the LLM library
 use llm::{
     builder::{LLMBackend, LLMBuilder},
-    chat::ChatMessage,
+    chat::{ChatMessage, StructuredOutputFormat},
 };
-use serde_json::Value;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -13,22 +12,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define a simple JSON schema for structured output
     let schema = r#"
         {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
+            "name": "student",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "age": {
+                        "type": "integer"
+                    },
+                    "is_student": {
+                        "type": "boolean"
+                    }
                 },
-                "age": {
-                    "type": "integer"
-                },
-                "is_student": {
-                    "type": "boolean"
-                }
-            },
-            "required": ["name", "age", "is_student"]
+                "required": ["name", "age", "is_student"]
+            }
         }
     "#;
-    let schema: Value = serde_json::from_str(schema)?;
+    let schema: StructuredOutputFormat = serde_json::from_str(schema)?;
 
     // Initialize and configure the LLM client
     let llm = LLMBuilder::new()
