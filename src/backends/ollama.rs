@@ -3,7 +3,7 @@
 //! This module provides integration with Ollama's local LLM server through its API.
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -29,7 +29,7 @@ pub struct Ollama {
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     /// JSON schema for structured output
-    pub json_schema: Option<Value>,
+    pub json_schema: Option<StructuredOutputFormat>,
     /// Available tools for function calling
     pub tools: Option<Vec<Tool>>,
     client: Client,
@@ -78,17 +78,19 @@ impl std::fmt::Display for OllamaResponse {
             .or(self.response.as_ref())
             .or(self.message.as_ref().map(|m| &m.content))
             .unwrap_or(&empty);
-        
+
         // Write tool calls if present
         if let Some(tool_calls) = &self.tool_calls {
             for tc in tool_calls {
-                writeln!(f, "{{\"name\": \"{}\", \"arguments\": {}}}", 
-                    tc.name, 
+                writeln!(
+                    f,
+                    "{{\"name\": \"{}\", \"arguments\": {}}}",
+                    tc.name,
                     serde_json::to_string_pretty(&tc.arguments).unwrap_or_default()
                 )?;
             }
         }
-        
+
         write!(f, "{}", text)
     }
 }
@@ -173,7 +175,7 @@ impl From<&crate::chat::Tool> for OllamaTool {
     fn from(tool: &crate::chat::Tool) -> Self {
         let properties_value = serde_json::to_value(&tool.function.parameters.properties)
             .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
-        
+
         OllamaTool {
             name: tool.function.name.clone(),
             description: tool.function.description.clone(),
@@ -234,7 +236,7 @@ impl Ollama {
         stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
-        json_schema: Option<Value>,
+        json_schema: Option<StructuredOutputFormat>,
         tools: Option<Vec<Tool>>,
     ) -> Self {
         let mut builder = Client::builder();
@@ -296,14 +298,14 @@ impl ChatProvider for Ollama {
             );
         }
 
-        // Set the format to structured output if a JSON schema is provided
-        // See the [Ollama Structured Output instructions](https://ollama.com/blog/structured-outputs)
-        let format: Option<OllamaResponseFormat> =
-            self.json_schema
-                .as_ref()
-                .map(|schema| OllamaResponseFormat {
-                    format: OllamaResponseType::StructuredOutput(schema.clone()),
-                });
+        // Ollama doesn't require the "name" field in the schema, so we just use the schema itself
+        let format = if let Some(schema) = &self.json_schema {
+            schema.schema.as_ref().map(|schema| OllamaResponseFormat {
+                format: OllamaResponseType::StructuredOutput(schema.clone()),
+            })
+        } else {
+            None
+        };
 
         let req_body = OllamaChatRequest {
             model: self.model.clone(),
@@ -361,19 +363,16 @@ impl ChatProvider for Ollama {
         }
 
         // Convert tools to Ollama format if provided
-        let ollama_tools = tools.map(|t| {
-            t.iter()
-                .map(OllamaTool::from)
-                .collect()
-        });
+        let ollama_tools = tools.map(|t| t.iter().map(OllamaTool::from).collect());
 
-        // Set the format to structured output if a JSON schema is provided
-        let format: Option<OllamaResponseFormat> =
-            self.json_schema
-                .as_ref()
-                .map(|schema| OllamaResponseFormat {
-                    format: OllamaResponseType::StructuredOutput(schema.clone()),
-                });
+        // Ollama doesn't require the "name" field in the schema, so we just use the schema itself
+        let format = if let Some(schema) = &self.json_schema {
+            schema.schema.as_ref().map(|schema| OllamaResponseFormat {
+                format: OllamaResponseType::StructuredOutput(schema.clone()),
+            })
+        } else {
+            None
+        };
 
         let req_body = OllamaChatRequest {
             model: self.model.clone(),

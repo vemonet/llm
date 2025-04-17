@@ -1,9 +1,8 @@
 // Import required modules from the LLM library for xAI integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::ChatMessage,                 // Chat-related structures
+    chat::{ChatMessage, StructuredOutputFormat}, // Chat-related structures
 };
-use serde_json::Value;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,32 +10,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key = std::env::var("XAI_API_KEY").unwrap_or("sk-TESTKEY".into());
 
     // Define a simple JSON schema for structured output
-    // For XAI, the schema must be provided in the property "schema"
     let schema = r#"
-{
-    "name": "Student",
-    "schema": {
-        "properties": {
-            "age": {
-                "type": "integer"
-            },
-            "is_student": {
-                "type": "boolean"
-            },
-            "name": {
-                "type": "string"
+        {
+            "name": "student",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "age": {
+                        "type": "integer"
+                    },
+                    "is_student": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["name", "age", "is_student"]
             }
-        },
-        "required": [
-            "name",
-            "age",
-            "is_student"
-        ],
-        "type": "object"
-    }
-}
+        }
     "#;
-    let schema: Value = serde_json::from_str(schema)?;
+    let schema: StructuredOutputFormat = serde_json::from_str(schema)?;
 
     // Initialize and configure the LLM client
     let llm = LLMBuilder::new()

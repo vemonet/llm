@@ -1,40 +1,36 @@
 // Import required modules from the LLM library for OpenAI integration
 use llm::{
     builder::{LLMBackend, LLMBuilder}, // Builder pattern components
-    chat::ChatMessage,                 // Chat-related structures
+    chat::{ChatMessage, StructuredOutputFormat}, // Chat-related structures
 };
-use serde_json::Value;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get OpenAI API key from environment variable or use test key as fallback
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into());
 
-    // Define a simple JSON schema for structured output.
-    // Note that the schema has some [odd requirements](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat&lang=curl#supported-schemas) for OpenAI. Make sure the provided schema is compatible with OpenAI's requirements.
+    // Define a simple JSON schema for structured output
     let schema = r#"
         {
-            "name": "Student",
+            "name": "student",
             "schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "age": {
+                        "type": "integer"
+                    },
+                    "is_student": {
+                        "type": "boolean"
+                    }
                 },
-                "age": {
-                    "type": "integer"
-                },
-                "is_student": {
-                    "type": "boolean"
-                }
-            },
-            "required": ["name", "age", "is_student"],
-            "additionalProperties": false
-}
+                "required": ["name", "age", "is_student"]
+            }
         }
     "#;
-
-    let schema: Value = serde_json::from_str(schema)?;
+    let schema: StructuredOutputFormat = serde_json::from_str(schema)?;
 
     // Initialize and configure the LLM client
     let llm = LLMBuilder::new()
