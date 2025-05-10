@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
 
     // Default to OpenAI if no provider specified
-    let provider = if args.len() > 1 { &args[1] } else { "openai" };
+    let provider = if args.len() > 1 { &args[1] } else { "ollama" };
 
     // Default to simple scenario if not specified
     let scenario = if args.len() > 2 { &args[2] } else { "simple" };
@@ -64,6 +64,7 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         "openai" => LLMBackend::OpenAI,
         "anthropic" => LLMBackend::Anthropic,
         "google" => LLMBackend::Google,
+        "ollama" => LLMBackend::Ollama,
         _ => {
             return Err(format!(
                 "Unsupported provider: {}. Use 'openai', 'anthropic', or 'google'",
@@ -84,6 +85,7 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         LLMBackend::Google => {
             env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY environment variable not set")
         }
+        LLMBackend::Ollama => env::var("OLLAMA_API_KEY").unwrap_or("ollama".into()),
         _ => unreachable!(),
     };
 
@@ -92,6 +94,7 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         LLMBackend::OpenAI => "gpt-4o-mini",
         LLMBackend::Anthropic => "claude-3-5-haiku-latest",
         LLMBackend::Google => "gemini-1.5-flash",
+        LLMBackend::Ollama => "llama3.1:latest",
         _ => unreachable!(),
     };
 
