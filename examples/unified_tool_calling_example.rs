@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
 
     // Default to OpenAI if no provider specified
-    let provider = if args.len() > 1 { &args[1] } else { "ollama" };
+    let provider = if args.len() > 1 { &args[1] } else { "openai" };
 
     // Default to simple scenario if not specified
     let scenario = if args.len() > 2 { &args[2] } else { "simple" };
