@@ -1,17 +1,21 @@
 use clap::Parser;
+use colored::*;
 use llm::builder::{LLMBackend, LLMBuilder};
 use llm::chat::{ChatMessage, ImageMime};
 use llm::secret_store::SecretStore;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::str::FromStr;
-use std::io::{self, Write, Read, IsTerminal};
-use colored::*;
 use spinners::{Spinner, Spinners};
+use std::io::{self, IsTerminal, Read, Write};
+use std::str::FromStr;
 
 /// Command line arguments for the LLM CLI
 #[derive(Parser)]
-#[clap(name = "llm", about = "Interactive CLI interface for chatting with LLM providers", allow_hyphen_values = true)]
+#[clap(
+    name = "llm",
+    about = "Interactive CLI interface for chatting with LLM providers",
+    allow_hyphen_values = true
+)]
 struct CliArgs {
     /// Command to execute (chat, set, get, delete, default)
     #[arg(index = 1)]
@@ -55,13 +59,13 @@ struct CliArgs {
 }
 
 /// Detects the MIME type of an image from its binary data
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data` - The binary data of the image
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Some(ImageMime)` - The detected MIME type if recognized
 /// * `None` - If the image format is not recognized
 fn detect_image_mime(data: &[u8]) -> Option<ImageMime> {
@@ -77,63 +81,78 @@ fn detect_image_mime(data: &[u8]) -> Option<ImageMime> {
 }
 
 /// Retrieves provider and model information from various sources
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `args` - Command line arguments
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Some((provider_name, model_name))` - Provider name and optional model name
 /// * `None` - If no provider information could be found
 fn get_provider_info(args: &CliArgs) -> Option<(String, Option<String>)> {
-    if let Some(default_provider) = SecretStore::new().ok().and_then(|store| store.get_default_provider().cloned()) {
+    if let Some(default_provider) = SecretStore::new()
+        .ok()
+        .and_then(|store| store.get_default_provider().cloned())
+    {
         let parts: Vec<&str> = default_provider.split(':').collect();
         println!("Default provider: {}", default_provider);
         return Some((parts[0].to_string(), parts.get(1).map(|s| s.to_string())));
     }
-    
+
     if let Some(provider_string) = args.provider_or_key.clone() {
         let parts: Vec<&str> = provider_string.split(':').collect();
         return Some((parts[0].to_string(), parts.get(1).map(|s| s.to_string())));
     }
-    
-    args.provider.clone().map(|provider| (provider, args.model.clone()))
+
+    args.provider
+        .clone()
+        .map(|provider| (provider, args.model.clone()))
 }
 
 /// Retrieves the appropriate API key for the specified backend
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `backend` - The LLM backend to get the API key for
 /// * `args` - Command line arguments that may contain an API key
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Some(String)` - The API key if found
 /// * `None` - If no API key could be found
 fn get_api_key(backend: &LLMBackend, args: &CliArgs) -> Option<String> {
     args.api_key.clone().or_else(|| {
         let store = SecretStore::new().ok()?;
         match backend {
-            LLMBackend::OpenAI => store.get("OPENAI_API_KEY")
+            LLMBackend::OpenAI => store
+                .get("OPENAI_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("OPENAI_API_KEY").ok()),
-            LLMBackend::Anthropic => store.get("ANTHROPIC_API_KEY")
+            LLMBackend::Anthropic => store
+                .get("ANTHROPIC_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok()),
-            LLMBackend::DeepSeek => store.get("DEEPSEEK_API_KEY")
+            LLMBackend::DeepSeek => store
+                .get("DEEPSEEK_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok()),
-            LLMBackend::XAI => store.get("XAI_API_KEY")
+            LLMBackend::XAI => store
+                .get("XAI_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("XAI_API_KEY").ok()),
-            LLMBackend::Google => store.get("GOOGLE_API_KEY")
+            LLMBackend::Google => store
+                .get("GOOGLE_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("GOOGLE_API_KEY").ok()),
-            LLMBackend::Groq => store.get("GROQ_API_KEY")
+            LLMBackend::Groq => store
+                .get("GROQ_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("GROQ_API_KEY").ok()),
+            LLMBackend::AzureOpenAI => store
+                .get("AZURE_OPENAI_API_KEY")
+                .cloned()
+                .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok()),
             LLMBackend::Ollama => None,
             LLMBackend::Phind => None,
         }
@@ -141,36 +160,38 @@ fn get_api_key(backend: &LLMBackend, args: &CliArgs) -> Option<String> {
 }
 
 /// Processes input data and creates appropriate chat messages
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `input` - Binary input data that might contain an image
 /// * `prompt` - Text prompt to include in the message
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Vec<ChatMessage>` - Vector of chat messages ready to be sent to the LLM
 fn process_input(input: &[u8], prompt: String) -> Vec<ChatMessage> {
     let mut messages = Vec::new();
-    
+
     if !input.is_empty() && detect_image_mime(input).is_some() {
         let mime = detect_image_mime(input).unwrap();
         messages.push(ChatMessage::user().content(prompt).build());
         messages.push(ChatMessage::user().image(mime, input.to_vec()).build());
     } else if !input.is_empty() {
         let input_str = String::from_utf8_lossy(input);
-        messages.push(ChatMessage::user()
-            .content(format!("{}\n\n{}", prompt, input_str))
-            .build());
+        messages.push(
+            ChatMessage::user()
+                .content(format!("{}\n\n{}", prompt, input_str))
+                .build(),
+        );
     } else {
         messages.push(ChatMessage::user().content(prompt).build());
     }
-    
+
     messages
 }
 
 /// Main entry point for the LLM CLI application
-/// 
+///
 /// Handles command parsing, provider configuration, and interactive chat functionality.
 /// Supports various commands for managing secrets and default providers.
 #[tokio::main]
@@ -180,7 +201,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(cmd) = args.command.as_deref() {
         match cmd {
             "set" => {
-                if let (Some(key), Some(value)) = (args.provider_or_key.as_deref(), args.prompt_or_value.as_deref()) {
+                if let (Some(key), Some(value)) = (
+                    args.provider_or_key.as_deref(),
+                    args.prompt_or_value.as_deref(),
+                ) {
                     let mut store = SecretStore::new()?;
                     store.set(key, value)?;
                     println!("{} Secret '{}' has been set.", "✓".bright_green(), key);
@@ -225,7 +249,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     return Ok(());
                 }
-                eprintln!("{} Usage: llm default <provider:model>", "Error:".bright_red());
+                eprintln!(
+                    "{} Usage: llm default <provider:model>",
+                    "Error:".bright_red()
+                );
                 return Ok(());
             }
             _ => {}
@@ -235,8 +262,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (provider_name, model_name) = get_provider_info(&args)
         .ok_or_else(|| "No provider specified. Use --provider, provider:model argument, or set a default provider with 'llm default <provider:model>'")?;
 
-    let backend = LLMBackend::from_str(&provider_name)
-        .map_err(|e| format!("Invalid provider: {}", e))?;
+    let backend =
+        LLMBackend::from_str(&provider_name).map_err(|e| format!("Invalid provider: {}", e))?;
 
     let mut builder = LLMBuilder::new().backend(backend.clone());
 
@@ -264,15 +291,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         builder = builder.max_tokens(mt);
     }
 
-    let provider = builder.build()
+    let provider = builder
+        .build()
         .map_err(|e| format!("Failed to build provider: {}", e))?;
 
     let is_pipe = !io::stdin().is_terminal();
-    
+
     if is_pipe || args.prompt_or_value.is_some() {
         let mut input = Vec::new();
         io::stdin().read_to_end(&mut input)?;
-        
+
         let prompt = if let Some(p) = args.prompt_or_value {
             p
         } else {
@@ -317,7 +345,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let user_message = ChatMessage::user().content(trimmed.to_string()).build();
                 messages.push(user_message);
 
-                let mut sp = Spinner::new(Spinners::Dots12, "Thinking...".bright_magenta().to_string());
+                let mut sp =
+                    Spinner::new(Spinners::Dots12, "Thinking...".bright_magenta().to_string());
 
                 match provider.chat(&messages).await {
                     Ok(response) => {
@@ -325,8 +354,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         print!("\r\x1B[K");
                         if let Some(text) = response.text() {
                             println!("{} {}", "> Assistant:".bright_green(), text);
-                            let assistant_message =
-                                ChatMessage::assistant().content(text).build();
+                            let assistant_message = ChatMessage::assistant().content(text).build();
                             messages.push(assistant_message);
                         } else {
                             println!("{}", "> Assistant: (no response)".bright_red());
