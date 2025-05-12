@@ -36,6 +36,8 @@ pub enum LLMBackend {
     Google,
     /// Groq API provider
     Groq,
+    /// Azure OpenAI API provider
+    AzureOpenAI,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -77,6 +79,7 @@ impl std::str::FromStr for LLMBackend {
             "phind" => Ok(LLMBackend::Phind),
             "google" => Ok(LLMBackend::Google),
             "groq" => Ok(LLMBackend::Groq),
+            "azure-openai" => Ok(LLMBackend::AzureOpenAI),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {s}"
             ))),
@@ -134,6 +137,10 @@ pub struct LLMBuilder {
     reasoning_budget_tokens: Option<u32>,
     /// JSON schema for structured output
     json_schema: Option<StructuredOutputFormat>,
+    /// API Version
+    api_version: Option<String>,
+    /// Deployment Id
+    deployment_id: Option<String>,
 }
 
 impl LLMBuilder {
@@ -297,6 +304,18 @@ impl LLMBuilder {
     /// Explicitly disable the use of tools, even if they are provided.
     pub fn disable_tools(mut self) -> Self {
         self.tool_choice = Some(ToolChoice::None);
+        self
+    }
+
+    /// Set the API version.
+    pub fn api_version(mut self, api_version: impl Into<String>) -> Self {
+        self.api_version = Some(api_version.into());
+        self
+    }
+
+    /// Set the deployment id. Used in Azure OpenAI.
+    pub fn deployment_id(mut self, deployment_id: impl Into<String>) -> Self {
+        self.deployment_id = Some(deployment_id.into());
         self
     }
 
@@ -533,6 +552,56 @@ impl LLMBuilder {
                         self.top_k,
                     );
                     Box::new(groq)
+                }
+            }
+            LLMBackend::AzureOpenAI => {
+                #[cfg(not(feature = "azure_openai"))]
+                return Err(LLMError::InvalidRequest(
+                    "OpenAI feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "openai")]
+                {
+                    let endpoint = self.base_url.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
+                    })?;
+
+                    let key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for Azure OpenAI".to_string())
+                    })?;
+
+                    let api_version = self.api_version.ok_or_else(|| {
+                        LLMError::InvalidRequest(
+                            "No API version provided for Azure OpenAI".to_string(),
+                        )
+                    })?;
+
+                    let deployment = self.deployment_id.ok_or_else(|| {
+                        LLMError::InvalidRequest(
+                            "No deployment ID provided for Azure OpenAI".into(),
+                        )
+                    })?;
+
+                    Box::new(crate::backends::azure_openai::AzureOpenAI::new(
+                        key,
+                        api_version,
+                        deployment,
+                        endpoint,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.stream,
+                        self.top_p,
+                        self.top_k,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
+                        tools,
+                        tool_choice,
+                        self.reasoning_effort,
+                        self.json_schema,
+                    ))
                 }
             }
         };
