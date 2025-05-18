@@ -8,6 +8,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -365,6 +366,15 @@ impl EmbeddingProvider for XAI {
 
         let embeddings = json_resp.data.into_iter().map(|d| d.embedding).collect();
         Ok(embeddings)
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for XAI {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "XAI does not implement speech to text endpoint yet.".into(),
+        ))
     }
 }
 
