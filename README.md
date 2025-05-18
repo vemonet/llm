@@ -22,6 +22,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Vision**: Add vision to your requests to use images in your LLMs.
 - **Reasoning**: Add reasoning to your requests to use reasoning in your LLMs.
 - **Structured Output**: Request structured output from certain LLM providers based on a provided JSON schema.
+- **Speech to text**: Transcribe audio to text
 
 ## Use any LLM backend on your project
 
@@ -29,7 +30,7 @@ Simply add **LLM** to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-llm = { version = "1.0.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq"] }
+llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "Elevenlabs"] }
 ```
 
 ## Use any LLM on cli
@@ -50,7 +51,7 @@ LLM includes a command-line tool for easily interacting with different LLM model
 
 ```shell
 [dependencies]
-llm = { version = "1.2.3", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api"] }
+llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api", "elevenlabs"] }
 ```
 
 More details in the [`api_example`](examples/api_example.rs)
@@ -84,6 +85,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`openai_vision_example`](examples/openai_vision_example.rs) | Basic openai vision example with OpenAI |
 | [`openai_reasoning_example`](examples/openai_reasoning_example.rs) | Basic openai reasoning example with OpenAI |
 | [`anthropic_thinking_example`](examples/anthropic_thinking_example.rs) | Anthropic reasoning example |
+| [`elevenlabs_stt_example`](examples/elevenlabs_stt_example.rs) | Basic speech-to-text transcription example using ElevenLabs |
 
 ## Usage
-Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind), embedding capabilities, and more advanced use cases.
+Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind, Elevenlabs), embedding capabilities, and more advanced use cases.

@@ -8,6 +8,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -200,6 +201,15 @@ impl EmbeddingProvider for DeepSeek {
     async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for DeepSeek {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "DeepSeek does not implement speech to text endpoint yet.".into(),
         ))
     }
 }

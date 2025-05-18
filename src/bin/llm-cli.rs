@@ -155,6 +155,7 @@ fn get_api_key(backend: &LLMBackend, args: &CliArgs) -> Option<String> {
                 .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok()),
             LLMBackend::Ollama => None,
             LLMBackend::Phind => None,
+            LLMBackend::ElevenLabs => None,
         }
     })
 }
@@ -260,7 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (provider_name, model_name) = get_provider_info(&args)
-        .ok_or_else(|| "No provider specified. Use --provider, provider:model argument, or set a default provider with 'llm default <provider:model>'")?;
+        .ok_or("No provider specified. Use --provider, provider:model argument, or set a default provider with 'llm default <provider:model>'")?;
 
     let backend =
         LLMBackend::from_str(&provider_name).map_err(|e| format!("Invalid provider: {}", e))?;

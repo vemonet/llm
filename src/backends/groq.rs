@@ -6,6 +6,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider, ToolCall,
 };
@@ -196,6 +197,15 @@ impl EmbeddingProvider for Groq {
     async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for Groq {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Groq does not implement speech to text endpoint yet.".into(),
         ))
     }
 }

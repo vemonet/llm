@@ -49,6 +49,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    stt::SpeechToTextProvider,
     FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
@@ -830,6 +831,15 @@ impl EmbeddingProvider for Google {
         }
 
         Ok(embeddings)
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for Google {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Google does not implement speech to text endpoint yet.".into(),
+        ))
     }
 }
 
