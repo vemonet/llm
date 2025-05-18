@@ -77,6 +77,7 @@ type ResponseTransform = Box<dyn Fn(String) -> String + Send + Sync>;
 pub enum MultiChainStepMode {
     Chat,
     Completion,
+    SpeechToText,
 }
 
 /// Multi-backend chain step
@@ -239,6 +240,12 @@ impl<'a> MultiPromptChain<'a> {
                     req.max_tokens = step.max_tokens;
                     let c = llm.complete(&req).await?;
                     c.text.to_string()
+                }
+                MultiChainStepMode::SpeechToText => {
+                    let audio = std::fs::read(prompt_text).map_err(|e| {
+                        LLMError::InvalidRequest(format!("Failed to read audio file: {}", e))
+                    })?;
+                    llm.transcribe(audio).await?
                 }
             };
 
