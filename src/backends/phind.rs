@@ -5,6 +5,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -276,6 +277,15 @@ impl EmbeddingProvider for Phind {
     async fn embed(&self, _input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Phind does not implement embeddings endpoint yet.".into(),
+        ))
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for Phind {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Phind does not implement speech to text endpoint yet.".into(),
         ))
     }
 }
