@@ -8,6 +8,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -79,7 +80,7 @@ impl<'a> From<&'a ChatMessage> for AzureOpenAIChatMessage<'a> {
                     // Clone the URL to create an owned version
 
                     Some(Left(vec![AzureMessageContent {
-                        message_type: Some("image_url".into()),
+                        message_type: Some("image_url"),
                         text: None,
                         image_url: Some(ImageUrlContent { url }),
                         tool_output: None,
@@ -412,7 +413,7 @@ impl ChatProvider for AzureOpenAI {
                     openai_msgs.push(
                         // Clone strings to own them
                         AzureOpenAIChatMessage {
-                            role: "tool".into(),
+                            role: "tool",
                             tool_call_id: Some(result.id.clone()),
                             tool_calls: None,
                             content: Some(Right(result.function.arguments.clone())),
@@ -428,9 +429,9 @@ impl ChatProvider for AzureOpenAI {
             openai_msgs.insert(
                 0,
                 AzureOpenAIChatMessage {
-                    role: "system".into(),
+                    role: "system",
                     content: Some(Left(vec![AzureMessageContent {
-                        message_type: Some("text".into()),
+                        message_type: Some("text"),
                         text: Some(system),
                         image_url: None,
                         tool_call_id: None,
@@ -569,5 +570,14 @@ impl EmbeddingProvider for AzureOpenAI {
 impl LLMProvider for AzureOpenAI {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for AzureOpenAI {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Azure OpenAI does not implement speech to text endpoint yet.".into(),
+        ))
     }
 }
