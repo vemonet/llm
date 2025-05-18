@@ -8,6 +8,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -532,6 +533,15 @@ impl CompletionProvider for OpenAI {
         Ok(CompletionResponse {
             text: "OpenAI completion not implemented.".into(),
         })
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for OpenAI {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "OpenAI does not implement speech to text endpoint yet.".into(),
+        ))
     }
 }
 
