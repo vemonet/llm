@@ -6,6 +6,7 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    stt::SpeechToTextProvider,
     error::LLMError,
     FunctionCall, ToolCall,
 };
@@ -108,7 +109,7 @@ impl ChatResponse for OllamaResponse {
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
         self.message
             .as_ref()
-            .map(|msg| {
+            .and_then(|msg| {
                 msg.tool_calls.as_ref().map(|tcs| {
                     tcs.iter()
                         .map(|tc| ToolCall {
@@ -123,7 +124,6 @@ impl ChatResponse for OllamaResponse {
                         .collect()
                 })
             })
-            .flatten()
     }
 }
 
@@ -491,6 +491,15 @@ impl EmbeddingProvider for Ollama {
 
         let json_resp: OllamaEmbeddingResponse = resp.json().await?;
         Ok(json_resp.embeddings)
+    }
+}
+
+#[async_trait]
+impl SpeechToTextProvider for Ollama {
+    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Ollama does not implement speech to text endpoint yet.".into(),
+        ))
     }
 }
 
