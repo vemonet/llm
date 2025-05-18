@@ -38,6 +38,8 @@ pub enum LLMBackend {
     Groq,
     /// Azure OpenAI API provider
     AzureOpenAI,
+    /// ElevenLabs API provider
+    ElevenLabs,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -80,6 +82,7 @@ impl std::str::FromStr for LLMBackend {
             "google" => Ok(LLMBackend::Google),
             "groq" => Ok(LLMBackend::Groq),
             "azure-openai" => Ok(LLMBackend::AzureOpenAI),
+            "elevenlabs" => Ok(LLMBackend::ElevenLabs),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {s}"
             ))),
@@ -364,6 +367,27 @@ impl LLMBuilder {
                         self.reasoning_effort,
                         self.json_schema,
                     ))
+                }
+            }
+            LLMBackend::ElevenLabs => {
+                #[cfg(not(feature = "elevenlabs"))]
+                return Err(LLMError::InvalidRequest(
+                    "ElevenLabs feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "elevenlabs")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for ElevenLabs".to_string())
+                    })?;
+
+                    let elevenlabs = crate::backends::elevenlabs::ElevenLabs::new(
+                        api_key,
+                        self.model.unwrap_or("eleven_multilingual_v2".to_string()),
+                        "https://api.elevenlabs.io/v1".to_string(),
+                        self.timeout_seconds,
+                    );
+                    Box::new(elevenlabs)
                 }
             }
             LLMBackend::Anthropic => {
