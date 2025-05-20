@@ -242,10 +242,7 @@ impl<'a> MultiPromptChain<'a> {
                     c.text.to_string()
                 }
                 MultiChainStepMode::SpeechToText => {
-                    let audio = std::fs::read(prompt_text).map_err(|e| {
-                        LLMError::InvalidRequest(format!("Failed to read audio file: {}", e))
-                    })?;
-                    llm.transcribe(audio).await?
+                    llm.transcribe_file(&prompt_text).await?
                 }
             };
 
