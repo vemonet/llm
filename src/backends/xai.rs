@@ -9,6 +9,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -377,5 +378,8 @@ impl SpeechToTextProvider for XAI {
         ))
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for XAI {}
 
 impl LLMProvider for XAI {}
