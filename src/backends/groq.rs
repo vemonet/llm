@@ -7,6 +7,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider, ToolCall,
 };
@@ -209,5 +210,8 @@ impl SpeechToTextProvider for Groq {
         ))
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for Groq {}
 
 impl LLMProvider for Groq {}
