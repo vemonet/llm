@@ -395,6 +395,7 @@ impl LLMBuilder {
                         self.model.unwrap_or("eleven_multilingual_v2".to_string()),
                         "https://api.elevenlabs.io/v1".to_string(),
                         self.timeout_seconds,
+                        self.voice,
                     );
                     Box::new(elevenlabs)
                 }
