@@ -7,6 +7,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     FunctionCall, ToolCall,
 };
@@ -508,3 +509,6 @@ impl crate::LLMProvider for Ollama {
         self.tools.as_deref()
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for Ollama {}
