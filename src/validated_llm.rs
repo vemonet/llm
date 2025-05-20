@@ -29,6 +29,7 @@ use crate::chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::stt::SpeechToTextProvider;
+use crate::tts::TextToSpeechProvider;
 use crate::error::LLMError;
 use crate::{builder::ValidatorFn, LLMProvider};
 
@@ -200,5 +201,12 @@ impl SpeechToTextProvider for ValidatedLLM {
         Err(LLMError::ProviderError(
             "Speech to text not supported".to_string(),
         ))
+    }
+}
+
+#[async_trait]
+impl TextToSpeechProvider for ValidatedLLM {
+    async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
+        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
     }
 }
