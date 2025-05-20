@@ -50,6 +50,7 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
@@ -848,3 +849,6 @@ impl LLMProvider for Google {
         self.tools.as_deref()
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for Google {}
