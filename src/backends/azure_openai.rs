@@ -9,6 +9,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -579,5 +580,12 @@ impl SpeechToTextProvider for AzureOpenAI {
         Err(LLMError::ProviderError(
             "Azure OpenAI does not implement speech to text endpoint yet.".into(),
         ))
+    }
+}
+
+#[async_trait]
+impl TextToSpeechProvider for AzureOpenAI {
+    async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
+        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
     }
 }
