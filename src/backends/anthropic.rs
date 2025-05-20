@@ -12,6 +12,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     FunctionCall, ToolCall,
 };
@@ -496,6 +497,9 @@ impl SpeechToTextProvider for Anthropic {
         ))
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for Anthropic {}
 
 impl crate::LLMProvider for Anthropic {
     fn tools(&self) -> Option<&[Tool]> {
