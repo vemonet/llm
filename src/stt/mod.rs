@@ -18,4 +18,11 @@ pub trait SpeechToTextProvider: Send + Sync {
     /// * `Result<String, LLMError>` - On success, returns the transcribed text as a String.
     ///   On failure, returns an LLMError describing what went wrong.
     async fn transcribe(&self, audio: Vec<u8>) -> Result<String, LLMError>;
+
+    #[allow(unused)]
+    async fn transcribe_file(&self, file_path: &str) -> Result<String, LLMError> {
+        Err(LLMError::ProviderError(
+            "Phind does not implement speech to text endpoint yet.".into(),
+        ))
+    }
 }
