@@ -11,6 +11,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -45,6 +46,7 @@ pub struct OpenAI {
     pub reasoning_effort: Option<String>,
     /// JSON schema for structured output
     pub json_schema: Option<StructuredOutputFormat>,
+    pub voice: Option<String>,
     client: Client,
 }
 
@@ -311,6 +313,7 @@ impl OpenAI {
         tool_choice: Option<ToolChoice>,
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
+        voice: Option<String>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -337,6 +340,7 @@ impl OpenAI {
             client: builder.build().expect("Failed to build reqwest Client"),
             reasoning_effort,
             json_schema,
+            voice,
         }
     }
 }
@@ -665,5 +669,62 @@ impl EmbeddingProvider for OpenAI {
 impl LLMProvider for OpenAI {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
+    }
+}
+
+#[async_trait]
+impl TextToSpeechProvider for OpenAI {
+    /// Converts text to speech using OpenAI's TTS API
+    /// 
+    /// # Arguments
+    /// * `text` - The text to convert to speech
+    /// 
+    /// # Returns
+    /// * `Result<Vec<u8>, LLMError>` - Audio data as bytes or error
+    async fn speech(&self, text: &str) -> Result<Vec<u8>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing OpenAI API key".into()));
+        }
+
+        let url = self
+            .base_url
+            .join("audio/speech")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        #[derive(Serialize)]
+        struct SpeechRequest {
+            model: String,
+            input: String,
+            voice: String,
+        }
+
+        let body = SpeechRequest {
+            model: self.model.clone(),
+            input: text.to_string(),
+            voice: self.voice.clone().unwrap_or("alloy".to_string()),
+        };
+
+        let mut req = self
+            .client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .json(&body);
+
+        if let Some(t) = self.timeout_seconds {
+            req = req.timeout(Duration::from_secs(t));
+        }
+
+        let resp = req.send().await?;
+        
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let error_text = resp.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(resp.bytes().await?.to_vec())
     }
 }
