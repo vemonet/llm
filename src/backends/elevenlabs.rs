@@ -26,6 +26,8 @@ pub struct ElevenLabs {
     timeout_seconds: Option<u64>,
     /// HTTP client for making requests
     client: Client,
+    /// Voice ID to use for speech synthesis
+    voice: Option<String>,
 }
 
 /// Internal representation of a word from ElevenLabs API response
@@ -82,8 +84,8 @@ impl ElevenLabs {
     /// # Returns
     ///
     /// A new ElevenLabs instance
-    pub fn new(api_key: String, model_id: String, base_url: String, timeout_seconds: Option<u64>) -> Self {
-        Self { api_key, model_id, base_url, timeout_seconds, client: Client::new() }
+    pub fn new(api_key: String, model_id: String, base_url: String, timeout_seconds: Option<u64>, voice: Option<String>) -> Self {
+        Self { api_key, model_id, base_url, timeout_seconds, client: Client::new(), voice }
     }
 }
 
@@ -236,4 +238,40 @@ impl LLMProvider for ElevenLabs {
 }
 
 #[async_trait]
-impl TextToSpeechProvider for ElevenLabs {}
+impl TextToSpeechProvider for ElevenLabs {
+    /// Converts text to speech using ElevenLabs API
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - Text to convert to speech
+    /// * `voice_id` - Voice ID to use for speech synthesis
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<u8>)` - Audio data as bytes
+    /// * `Err(LLMError)` - Error if conversion fails
+    async fn speech(&self, text: &str) -> Result<Vec<u8>, LLMError> {
+        let url = format!("{}/text-to-speech/{}?output_format=mp3_44100_128", self.base_url, self.voice.clone().unwrap_or("JBFqnCBsd6RMkjVDRZzb".to_string()));
+        
+        let body = serde_json::json!({
+            "text": text,
+            "model_id": self.model_id
+        });
+
+        let mut req = self
+            .client
+            .post(url)
+            .header("xi-api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body);
+
+        if let Some(t) = self.timeout_seconds {
+            req = req.timeout(Duration::from_secs(t));
+        }
+
+        let resp = req.send().await?.error_for_status()?;
+        let audio_data = resp.bytes().await?;
+        
+        Ok(audio_data.to_vec())
+    }
+}
