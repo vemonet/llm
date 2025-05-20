@@ -9,6 +9,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -215,3 +216,10 @@ impl SpeechToTextProvider for DeepSeek {
 }
 
 impl LLMProvider for DeepSeek {}
+
+#[async_trait]
+impl TextToSpeechProvider for DeepSeek {
+    async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
+        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
+    }
+}
