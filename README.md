@@ -23,6 +23,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Reasoning**: Add reasoning to your requests to use reasoning in your LLMs.
 - **Structured Output**: Request structured output from certain LLM providers based on a provided JSON schema.
 - **Speech to text**: Transcribe audio to text
+- **Text to speech**: Transcribe text to audio
 
 ## Use any LLM backend on your project
 
