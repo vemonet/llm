@@ -6,6 +6,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
     error::LLMError,
     LLMProvider,
 };
@@ -291,4 +292,6 @@ impl SpeechToTextProvider for Phind {
 }
 
 /// Implementation of the LLMProvider trait for Phind.
+#[async_trait]
+impl TextToSpeechProvider for Phind {}
 impl LLMProvider for Phind {}
