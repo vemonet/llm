@@ -85,7 +85,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`openai_vision_example`](examples/openai_vision_example.rs) | Basic openai vision example with OpenAI |
 | [`openai_reasoning_example`](examples/openai_reasoning_example.rs) | Basic openai reasoning example with OpenAI |
 | [`anthropic_thinking_example`](examples/anthropic_thinking_example.rs) | Anthropic reasoning example |
-| [`elevenlabs_stt_example`](examples/elevenlabs_stt_example.rs) | Basic speech-to-text transcription example using ElevenLabs |
+| [`elevenlabs_stt_example`](examples/elevenlabs_stt_example.rs) | Speech-to-text transcription example using ElevenLabs |
+| [`openai_stt_example`](examples/openai_stt_example.rs) | Speech-to-text transcription example using OpenAI |
 | [`chain_audio_text_example`](examples/chain_audio_text_example.rs) | Example demonstrating a multi-step chain combining speech-to-text and text processing |
 
 

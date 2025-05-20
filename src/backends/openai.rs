@@ -2,6 +2,8 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
+use std::time::Duration;
+
 #[cfg(feature = "openai")]
 use crate::{
     chat::Tool,
@@ -538,10 +540,84 @@ impl CompletionProvider for OpenAI {
 
 #[async_trait]
 impl SpeechToTextProvider for OpenAI {
-    async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
-        Err(LLMError::ProviderError(
-            "OpenAI does not implement speech to text endpoint yet.".into(),
-        ))
+
+    /// Transcribes audio data to text using OpenAI API
+    ///
+    /// # Arguments
+    ///
+    /// * `audio` - Raw audio data as bytes
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transcribed text
+    /// * `Err(LLMError)` - Error if transcription fails
+    async fn transcribe(&self, audio: Vec<u8>) -> Result<String, LLMError> {
+        let url = self
+            .base_url
+            .join("audio/transcriptions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let part = reqwest::multipart::Part::bytes(audio).file_name("audio.m4a");
+        let form = reqwest::multipart::Form::new()
+            .text("model", self.model.clone())
+            .text("response_format", "text")
+            .part("file", part);
+        
+
+        let mut req = self
+            .client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .multipart(form);
+
+        if let Some(t) = self.timeout_seconds {
+            req = req.timeout(Duration::from_secs(t));
+        }
+
+        let resp = req.send().await?;
+        let text = resp.text().await?;
+        let raw = text.clone();
+        Ok(raw)
+    }
+
+    /// Transcribes audio file to text using OpenAI API
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - Path to the audio file
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transcribed text
+    /// * `Err(LLMError)` - Error if transcription fails
+    async fn transcribe_file(&self, file_path: &str) -> Result<String, LLMError> {
+        let url = self
+            .base_url
+            .join("audio/transcriptions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let form = reqwest::multipart::Form::new()
+            .text("model", self.model.clone())
+            .text("response_format", "text")
+            .file("file", file_path)
+            .await
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+        
+
+        let mut req = self
+            .client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .multipart(form);
+
+        if let Some(t) = self.timeout_seconds {
+            req = req.timeout(Duration::from_secs(t));
+        }
+
+        let resp = req.send().await?;
+        let text = resp.text().await?;
+        let raw = text.clone();
+        Ok(raw)
     }
 }
 

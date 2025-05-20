@@ -137,6 +137,57 @@ impl SpeechToTextProvider for ElevenLabs {
 
         Ok(words.unwrap_or_default().into_iter().map(|w| w.text).collect())
     }
+
+    /// Transcribes audio file to text using ElevenLabs API
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - Path to the audio file
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transcribed text
+    /// * `Err(LLMError)` - Error if transcription fails
+    async fn transcribe_file(&self, file_path: &str) -> Result<String, LLMError> {
+        let url = format!("{}/speech-to-text", self.base_url);
+        let form = reqwest::multipart::Form::new()
+            .text("model_id", self.model_id.clone())
+            .file("file", file_path)
+            .await
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let mut req = self
+            .client
+            .post(url)
+            .header("xi-api-key", &self.api_key)
+            .multipart(form);
+
+        if let Some(t) = self.timeout_seconds {
+            req = req.timeout(Duration::from_secs(t));
+        }
+
+        let resp = req.send().await?.error_for_status()?;
+        let text = resp.text().await?;
+        let raw = text.clone();
+        let parsed: ElevenLabsResponse = serde_json::from_str(&text).map_err(|e| {
+            LLMError::ResponseFormatError {
+                message: e.to_string(),
+                raw_response: raw,
+            }
+        })?;
+
+        let words : Option<Vec<Word>> = parsed.words.map(|ws| {
+            ws.into_iter()
+                .map(|w| Word {
+                    text: w.text,
+                    start: w.start,
+                    end: w.end,
+                })
+                .collect()
+        });
+
+        Ok(words.unwrap_or_default().into_iter().map(|w| w.text).collect())
+    }
 }
 
 #[async_trait]
