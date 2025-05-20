@@ -144,6 +144,8 @@ pub struct LLMBuilder {
     api_version: Option<String>,
     /// Deployment Id
     deployment_id: Option<String>,
+    /// Voice
+    voice: Option<String>,
 }
 
 impl LLMBuilder {
@@ -322,6 +324,12 @@ impl LLMBuilder {
         self
     }
 
+    /// Set the voice.
+    pub fn voice(mut self, voice: impl Into<String>) -> Self {
+        self.voice = Some(voice.into());
+        self
+    }
+
     /// Builds and returns a configured LLM provider instance.
     ///
     /// # Errors
@@ -366,6 +374,7 @@ impl LLMBuilder {
                         tool_choice,
                         self.reasoning_effort,
                         self.json_schema,
+                        self.voice,
                     ))
                 }
             }
