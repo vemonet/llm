@@ -1,6 +1,7 @@
 #[cfg(feature = "elevenlabs")]
 use crate::error::LLMError;
 use crate::stt::SpeechToTextProvider;
+use crate::tts::TextToSpeechProvider;
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
 use crate::chat::{ChatMessage, ChatProvider, ChatResponse, Tool};
@@ -233,3 +234,6 @@ impl LLMProvider for ElevenLabs {
         None
     }
 }
+
+#[async_trait]
+impl TextToSpeechProvider for ElevenLabs {}
