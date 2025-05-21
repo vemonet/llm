@@ -90,6 +90,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`elevenlabs_tts_example`](examples/elevenlabs_tts_example.rs) | Text-to-speech example using ElevenLabs |
 | [`openai_stt_example`](examples/openai_stt_example.rs) | Speech-to-text transcription example using OpenAI |
 | [`openai_tts_example`](examples/openai_tts_example.rs) | Text-to-speech example using OpenAI |
+| [`tts_rodio_example`](examples/tts_rodio_example.rs) | Text-to-speech with rodio example using OpenAI |
 | [`chain_audio_text_example`](examples/chain_audio_text_example.rs) | Example demonstrating a multi-step chain combining speech-to-text and text processing |
 
 
