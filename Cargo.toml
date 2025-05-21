@@ -1,6 +1,6 @@
 [package]
 name = "llm"
-version = "1.2.7"
+version = "1.2.8"
 edition = "2021"
 description = "A Rust library unifying multiple LLM backends."
 license = "MIT"
@@ -40,6 +40,7 @@ azure_openai = []
 cli = ["full", "dep:clap", "dep:rustyline", "dep:colored", "dep:spinners"]
 api = ["dep:axum", "dep:tower-http", "dep:uuid"]
 elevenlabs = []
+rodio = ["dep:rodio"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -59,6 +60,7 @@ spinners = { version = "4.1", optional = true }
 serde_yaml = "0.9"
 dirs = "6.0.0"
 either = { version = "1.15.0", features = ["serde"] }
+rodio = { version = "0.20.0", features = ["mp3", "wav"], optional = true }
 
 [[bin]]
 name = "llm"
@@ -67,3 +69,5 @@ required-features = ["cli"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+rodio = { version = "0.20.1", default-features = false, features = ["symphonia-all"]}
+
