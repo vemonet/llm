@@ -1,0 +1,51 @@
+//! Example demonstrating text-to-speech synthesis using OpenAI
+//!
+//! This example shows how to:
+//! 1. Initialize the OpenAI text-to-speech provider
+//! 2. Generate speech from text
+//! 3. Save the audio output to a file
+
+use std::{fs::File, io::BufReader};
+
+use llm::{
+    builder::{LLMBackend, LLMBuilder},
+};
+use rodio::{Decoder, OutputStream, Sink};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Get API key from environment variable or use test key
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("test_key".into());
+
+    // Initialize OpenAI text-to-speech provider
+    let tts = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .api_key(api_key)
+        .model("tts-1")
+        .voice("ash")
+        .build()?;
+
+    // Text to convert to speech
+    let text = "Hello! This is an example of text-to-speech synthesis using OpenAI with LLM crates and rodio in Rust.";
+    
+    // Generate speech
+    let audio_data = tts.speech(text).await?;
+
+    // Save the audio to a file
+    std::fs::write("output-speech.mp3", audio_data)?;
+
+    // Play the audio
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
+
+    let file = File::open("output-speech.mp3").unwrap();
+    let source = Decoder::new(BufReader::new(file)).unwrap();
+
+    // Play audio
+    sink.append(source);
+
+    // Block until the sound has finished
+    sink.sleep_until_end();
+
+    Ok(())
+}
