@@ -92,7 +92,9 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`openai_tts_example`](examples/openai_tts_example.rs) | Text-to-speech example using OpenAI |
 | [`tts_rodio_example`](examples/tts_rodio_example.rs) | Text-to-speech with rodio example using OpenAI |
 | [`chain_audio_text_example`](examples/chain_audio_text_example.rs) | Example demonstrating a multi-step chain combining speech-to-text and text processing |
-| [`xai_search_chain_tts_example`](examples/xai_search_chain_tts_example.rs) | XAI search -> OpenAI summary -> ElevenLabs TTS -> Rodio playback chain example |
+| [`xai_search_chain_tts_example`](examples/xai_search_chain_tts_example.rs) | Example demonstrating a multi-step chain combining XAI search, OpenAI summarization, and ElevenLabs text-to-speech with Rodio playback |
+| [`xai_search_example`](examples/xai_search_example.rs) | Example demonstrating X.AI search functionality with search modes, date ranges, and source filtering |
+
 
 
 ## Usage
