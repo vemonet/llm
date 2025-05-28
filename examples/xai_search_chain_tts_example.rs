@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::ElevenLabs)
         .api_key(std::env::var("ELEVENLABS_API_KEY").unwrap_or("elevenlabs-key".into()))
         .model("eleven_multilingual_v2")
-        .voice("nova") // Clear, professional voice
+        .voice("JBFqnCBsd6RMkjVDRZzb")
         .build()?;
 
     // Create registry to manage multiple backends
