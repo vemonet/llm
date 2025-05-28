@@ -5,6 +5,7 @@
 
 #[cfg(feature = "xai")]
 use crate::{
+    builder::SearchParameters,
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -50,6 +51,8 @@ pub struct XAI {
     pub embedding_dimensions: Option<u32>,
     /// JSON schema for structured output
     pub json_schema: Option<StructuredOutputFormat>,
+    /// Search parameters for search functionality
+    pub search_parameters: Option<SearchParameters>,
     /// HTTP client for making API requests
     client: Client,
 }
@@ -86,6 +89,9 @@ struct XAIChatRequest<'a> {
     top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     response_format: Option<XAIResponseFormat>,
+    /// Search parameters for search functionality
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_parameters: Option<&'a SearchParameters>,
 }
 
 /// Response from X.AI's chat API endpoint.
@@ -181,6 +187,7 @@ impl XAI {
     /// * `top_p` - Top-p sampling parameter
     /// * `top_k` - Top-k sampling parameter
     /// * `json_schema` - JSON schema for structured output
+    /// * `search_parameters` - Search parameters for search functionality
     ///
     /// # Returns
     ///
@@ -199,6 +206,7 @@ impl XAI {
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
         json_schema: Option<StructuredOutputFormat>,
+        search_parameters: Option<SearchParameters>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -217,6 +225,7 @@ impl XAI {
             embedding_encoding_format,
             embedding_dimensions,
             json_schema,
+            search_parameters,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -277,6 +286,7 @@ impl ChatProvider for XAI {
             top_p: self.top_p,
             top_k: self.top_k,
             response_format,
+            search_parameters: self.search_parameters.as_ref(),
         };
 
         let mut request = self

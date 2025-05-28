@@ -13,6 +13,31 @@ use crate::{
 };
 use std::collections::HashMap;
 
+/// Search source configuration for search parameters
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SearchSource {
+    /// Type of source: "web" or "news"
+    #[serde(rename = "type")]
+    pub source_type: String,
+    /// List of websites to exclude from this source
+    pub excluded_websites: Option<Vec<String>>,
+}
+
+/// Search parameters for LLM providers that support search functionality
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct SearchParameters {
+    /// Search mode (e.g., "auto")
+    pub mode: Option<String>,
+    /// List of search sources with exclusions
+    pub sources: Option<Vec<SearchSource>>,
+    /// Maximum number of search results to return
+    pub max_search_results: Option<u32>,
+    /// Start date for search results (format: "YYYY-MM-DD")
+    pub from_date: Option<String>,
+    /// End date for search results (format: "YYYY-MM-DD")
+    pub to_date: Option<String>,
+}
+
 /// A function type for validating LLM provider outputs.
 /// Takes a response string and returns Ok(()) if valid, or Err with an error message if invalid.
 pub type ValidatorFn = dyn Fn(&str) -> Result<(), String> + Send + Sync + 'static;
@@ -146,6 +171,8 @@ pub struct LLMBuilder {
     deployment_id: Option<String>,
     /// Voice
     voice: Option<String>,
+    /// Search parameters for providers that support search functionality
+    search_parameters: Option<SearchParameters>,
 }
 
 impl LLMBuilder {
@@ -330,6 +357,81 @@ impl LLMBuilder {
         self
     }
 
+    /// Sets the search mode for search-enabled providers.
+    pub fn search_mode(mut self, mode: impl Into<String>) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            params.mode = Some(mode.into());
+        }
+        self
+    }
+
+    /// Adds a search source with optional excluded websites.
+    pub fn search_source(mut self, source_type: impl Into<String>, excluded_websites: Option<Vec<String>>) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            if params.sources.is_none() {
+                params.sources = Some(Vec::new());
+            }
+            if let Some(ref mut sources) = params.sources {
+                sources.push(SearchSource {
+                    source_type: source_type.into(),
+                    excluded_websites,
+                });
+            }
+        }
+        self
+    }
+
+    /// Sets the maximum number of search results.
+    pub fn max_search_results(mut self, max: u32) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            params.max_search_results = Some(max);
+        }
+        self
+    }
+
+    /// Sets the date range for search results.
+    pub fn search_date_range(mut self, from: impl Into<String>, to: impl Into<String>) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            params.from_date = Some(from.into());
+            params.to_date = Some(to.into());
+        }
+        self
+    }
+
+    /// Sets the start date for search results (format: "YYYY-MM-DD").
+    pub fn search_from_date(mut self, date: impl Into<String>) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            params.from_date = Some(date.into());
+        }
+        self
+    }
+
+    /// Sets the end date for search results (format: "YYYY-MM-DD").
+    pub fn search_to_date(mut self, date: impl Into<String>) -> Self {
+        if self.search_parameters.is_none() {
+            self.search_parameters = Some(SearchParameters::default());
+        }
+        if let Some(ref mut params) = self.search_parameters {
+            params.to_date = Some(date.into());
+        }
+        self
+    }
+
     /// Builds and returns a configured LLM provider instance.
     ///
     /// # Errors
@@ -509,6 +611,7 @@ impl LLMBuilder {
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                         self.json_schema,
+                        self.search_parameters,
                     );
                     Box::new(xai)
                 }
