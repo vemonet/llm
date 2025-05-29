@@ -9,9 +9,12 @@ use crate::{
         Tool, ToolChoice,
     },
     error::LLMError,
+    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory},
     LLMProvider,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Search source configuration for search parameters
 #[derive(Debug, Clone, serde::Serialize)]
@@ -173,6 +176,10 @@ pub struct LLMBuilder {
     voice: Option<String>,
     /// Search parameters for providers that support search functionality
     search_parameters: Option<SearchParameters>,
+    /// Memory provider for conversation history (optional)
+    memory: Option<Box<dyn MemoryProvider>>,
+    /// Role name for multi-agent scenarios (optional, adds [role] prefix to memory)
+    role: Option<String>,
 }
 
 impl LLMBuilder {
@@ -369,7 +376,11 @@ impl LLMBuilder {
     }
 
     /// Adds a search source with optional excluded websites.
-    pub fn search_source(mut self, source_type: impl Into<String>, excluded_websites: Option<Vec<String>>) -> Self {
+    pub fn search_source(
+        mut self,
+        source_type: impl Into<String>,
+        excluded_websites: Option<Vec<String>>,
+    ) -> Self {
         if self.search_parameters.is_none() {
             self.search_parameters = Some(SearchParameters::default());
         }
@@ -429,6 +440,105 @@ impl LLMBuilder {
         if let Some(ref mut params) = self.search_parameters {
             params.to_date = Some(date.into());
         }
+        self
+    }
+
+    /// Sets a custom memory provider for storing conversation history.
+    ///
+    /// # Arguments
+    ///
+    /// * `memory` - A boxed memory provider implementing the MemoryProvider trait
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llm::builder::{LLMBuilder, LLMBackend};
+    /// use llm::memory::SlidingWindowMemory;
+    ///
+    /// let memory = Box::new(SlidingWindowMemory::new(10));
+    /// let builder = LLMBuilder::new()
+    ///     .backend(LLMBackend::OpenAI)
+    ///     .memory(memory);
+    /// ```
+    pub fn memory(mut self, memory: impl MemoryProvider + 'static) -> Self {
+        self.memory = Some(Box::new(memory));
+        self
+    }
+
+    /// Sets a sliding window memory instance directly (convenience method).
+    ///
+    /// # Arguments
+    ///
+    /// * `memory` - A SlidingWindowMemory instance
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llm::builder::{LLMBuilder, LLMBackend};
+    /// use llm::memory::SlidingWindowMemory;
+    ///
+    /// let memory = SlidingWindowMemory::new(10);
+    /// let builder = LLMBuilder::new()
+    ///     .backend(LLMBackend::OpenAI)
+    ///     .sliding_memory(memory);
+    /// ```
+    pub fn sliding_memory(mut self, memory: SlidingWindowMemory) -> Self {
+        self.memory = Some(Box::new(memory));
+        self
+    }
+
+    /// Sets up a sliding window memory with the specified window size.
+    ///
+    /// This is a convenience method for creating a SlidingWindowMemory instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `window_size` - Maximum number of messages to keep in memory
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llm::builder::{LLMBuilder, LLMBackend};
+    ///
+    /// let builder = LLMBuilder::new()
+    ///     .backend(LLMBackend::OpenAI)
+    ///     .sliding_window_memory(5); // Keep last 5 messages
+    /// ```
+    pub fn sliding_window_memory(mut self, window_size: usize) -> Self {
+        self.memory = Some(Box::new(SlidingWindowMemory::new(window_size)));
+        self
+    }
+
+    /// Sets the role name for multi-agent scenarios.
+    ///
+    /// When set, all messages stored in memory will be prefixed with [role]
+    /// to identify which agent contributed each message. This is useful for
+    /// collaborative multi-agent workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `role` - The role name (e.g., "researcher", "writer", "critic")
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llm::builder::{LLMBuilder, LLMBackend};
+    /// use llm::memory::SlidingWindowMemory;
+    ///
+    /// let shared_memory = Box::new(SlidingWindowMemory::new(20));
+    ///
+    /// let researcher = LLMBuilder::new()
+    ///     .backend(LLMBackend::OpenAI)
+    ///     .role("researcher")
+    ///     .memory(shared_memory.clone());
+    ///
+    /// let writer = LLMBuilder::new()
+    ///     .backend(LLMBackend::Anthropic)
+    ///     .role("writer")
+    ///     .memory(shared_memory);
+    /// ```
+    pub fn role(mut self, role: impl Into<String>) -> Self {
+        self.role = Some(role.into());
         self
     }
 
@@ -744,15 +854,23 @@ impl LLMBuilder {
         };
 
         #[allow(unreachable_code)]
-        if let Some(validator) = self.validator {
-            Ok(Box::new(crate::validated_llm::ValidatedLLM::new(
+        let mut final_provider: Box<dyn LLMProvider> = if let Some(validator) = self.validator {
+            Box::new(crate::validated_llm::ValidatedLLM::new(
                 provider,
                 validator,
                 self.validator_attempts,
-            )))
+            ))
         } else {
-            Ok(provider)
+            provider
+        };
+
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(Mutex::new(memory));
+            final_provider = Box::new(ChatWithMemory::new(final_provider, memory_arc, self.role));
         }
+
+        Ok(final_provider)
     }
 
     // Validate that tool configuration is consistent and valid
