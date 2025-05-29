@@ -9,9 +9,9 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     LLMProvider,
 };
 use crate::{
