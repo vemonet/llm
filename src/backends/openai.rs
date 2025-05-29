@@ -10,9 +10,9 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     LLMProvider,
 };
 use crate::{
@@ -544,7 +544,6 @@ impl CompletionProvider for OpenAI {
 
 #[async_trait]
 impl SpeechToTextProvider for OpenAI {
-
     /// Transcribes audio data to text using OpenAI API
     ///
     /// # Arguments
@@ -566,7 +565,6 @@ impl SpeechToTextProvider for OpenAI {
             .text("model", self.model.clone())
             .text("response_format", "text")
             .part("file", part);
-        
 
         let mut req = self
             .client
@@ -606,7 +604,6 @@ impl SpeechToTextProvider for OpenAI {
             .file("file", file_path)
             .await
             .map_err(|e| LLMError::HttpError(e.to_string()))?;
-        
 
         let mut req = self
             .client
@@ -675,10 +672,10 @@ impl LLMProvider for OpenAI {
 #[async_trait]
 impl TextToSpeechProvider for OpenAI {
     /// Converts text to speech using OpenAI's TTS API
-    /// 
+    ///
     /// # Arguments
     /// * `text` - The text to convert to speech
-    /// 
+    ///
     /// # Returns
     /// * `Result<Vec<u8>, LLMError>` - Audio data as bytes or error
     async fn speech(&self, text: &str) -> Result<Vec<u8>, LLMError> {
@@ -704,18 +701,14 @@ impl TextToSpeechProvider for OpenAI {
             voice: self.voice.clone().unwrap_or("alloy".to_string()),
         };
 
-        let mut req = self
-            .client
-            .post(url)
-            .bearer_auth(&self.api_key)
-            .json(&body);
+        let mut req = self.client.post(url).bearer_auth(&self.api_key).json(&body);
 
         if let Some(t) = self.timeout_seconds {
             req = req.timeout(Duration::from_secs(t));
         }
 
         let resp = req.send().await?;
-        
+
         if !resp.status().is_success() {
             let status = resp.status();
             let error_text = resp.text().await?;
