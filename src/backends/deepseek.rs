@@ -8,9 +8,9 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     LLMProvider,
 };
 use async_trait::async_trait;
@@ -220,6 +220,8 @@ impl LLMProvider for DeepSeek {}
 #[async_trait]
 impl TextToSpeechProvider for DeepSeek {
     async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
-        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
+        Err(LLMError::ProviderError(
+            "Text to speech not supported".to_string(),
+        ))
     }
 }

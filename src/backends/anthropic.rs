@@ -11,9 +11,9 @@ use crate::{
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
@@ -154,10 +154,7 @@ impl std::fmt::Display for AnthropicCompleteResponse {
                     f,
                     "{{\n \"name\": {}, \"input\": {}\n}}",
                     content.name.clone().unwrap_or_default(),
-                    content
-                        .input
-                        .clone()
-                        .unwrap_or(serde_json::Value::Null)
+                    content.input.clone().unwrap_or(serde_json::Value::Null)
                 )?,
                 Some(ref t) if t == "thinking" => {
                     write!(f, "{}", content.thinking.clone().unwrap_or_default())?

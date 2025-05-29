@@ -5,9 +5,7 @@
 //! 2. Generate speech from text
 //! 3. Save the audio output to a file
 
-use llm::{
-    builder::{LLMBackend, LLMBuilder},
-};
+use llm::builder::{LLMBackend, LLMBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Text to convert to speech
     let text = "Hello! This is an example of text-to-speech synthesis using OpenAI.";
-    
+
     // Generate speech
     let audio_data = tts.speech(text).await?;
 

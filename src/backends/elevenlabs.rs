@@ -1,10 +1,10 @@
+use crate::chat::{ChatMessage, ChatProvider, ChatResponse, Tool};
+use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
+use crate::embedding::EmbeddingProvider;
 #[cfg(feature = "elevenlabs")]
 use crate::error::LLMError;
 use crate::stt::SpeechToTextProvider;
 use crate::tts::TextToSpeechProvider;
-use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
-use crate::embedding::EmbeddingProvider;
-use crate::chat::{ChatMessage, ChatProvider, ChatResponse, Tool};
 use crate::LLMProvider;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -84,8 +84,21 @@ impl ElevenLabs {
     /// # Returns
     ///
     /// A new ElevenLabs instance
-    pub fn new(api_key: String, model_id: String, base_url: String, timeout_seconds: Option<u64>, voice: Option<String>) -> Self {
-        Self { api_key, model_id, base_url, timeout_seconds, client: Client::new(), voice }
+    pub fn new(
+        api_key: String,
+        model_id: String,
+        base_url: String,
+        timeout_seconds: Option<u64>,
+        voice: Option<String>,
+    ) -> Self {
+        Self {
+            api_key,
+            model_id,
+            base_url,
+            timeout_seconds,
+            client: Client::new(),
+            voice,
+        }
     }
 }
 
@@ -121,14 +134,13 @@ impl SpeechToTextProvider for ElevenLabs {
         let resp = req.send().await?.error_for_status()?;
         let text = resp.text().await?;
         let raw = text.clone();
-        let parsed: ElevenLabsResponse = serde_json::from_str(&text).map_err(|e| {
-            LLMError::ResponseFormatError {
+        let parsed: ElevenLabsResponse =
+            serde_json::from_str(&text).map_err(|e| LLMError::ResponseFormatError {
                 message: e.to_string(),
                 raw_response: raw,
-            }
-        })?;
+            })?;
 
-        let words : Option<Vec<Word>> = parsed.words.map(|ws| {
+        let words: Option<Vec<Word>> = parsed.words.map(|ws| {
             ws.into_iter()
                 .map(|w| Word {
                     text: w.text,
@@ -138,7 +150,11 @@ impl SpeechToTextProvider for ElevenLabs {
                 .collect()
         });
 
-        Ok(words.unwrap_or_default().into_iter().map(|w| w.text).collect())
+        Ok(words
+            .unwrap_or_default()
+            .into_iter()
+            .map(|w| w.text)
+            .collect())
     }
 
     /// Transcribes audio file to text using ElevenLabs API
@@ -172,14 +188,13 @@ impl SpeechToTextProvider for ElevenLabs {
         let resp = req.send().await?.error_for_status()?;
         let text = resp.text().await?;
         let raw = text.clone();
-        let parsed: ElevenLabsResponse = serde_json::from_str(&text).map_err(|e| {
-            LLMError::ResponseFormatError {
+        let parsed: ElevenLabsResponse =
+            serde_json::from_str(&text).map_err(|e| LLMError::ResponseFormatError {
                 message: e.to_string(),
                 raw_response: raw,
-            }
-        })?;
+            })?;
 
-        let words : Option<Vec<Word>> = parsed.words.map(|ws| {
+        let words: Option<Vec<Word>> = parsed.words.map(|ws| {
             ws.into_iter()
                 .map(|w| Word {
                     text: w.text,
@@ -189,7 +204,11 @@ impl SpeechToTextProvider for ElevenLabs {
                 .collect()
         });
 
-        Ok(words.unwrap_or_default().into_iter().map(|w| w.text).collect())
+        Ok(words
+            .unwrap_or_default()
+            .into_iter()
+            .map(|w| w.text)
+            .collect())
     }
 }
 
@@ -217,13 +236,15 @@ impl EmbeddingProvider for ElevenLabs {
 impl ChatProvider for ElevenLabs {
     /// Returns an error indicating chat is not supported
     async fn chat(&self, _messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
-        Err(LLMError::ProviderError(
-            "Chat not supported".to_string(),
-        ))
+        Err(LLMError::ProviderError("Chat not supported".to_string()))
     }
 
     /// Returns an error indicating chat with tools is not supported
-    async fn chat_with_tools(&self, _messages: &[ChatMessage], _tools: Option<&[Tool]>) -> Result<Box<dyn ChatResponse>, LLMError> {
+    async fn chat_with_tools(
+        &self,
+        _messages: &[ChatMessage],
+        _tools: Option<&[Tool]>,
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
         Err(LLMError::ProviderError(
             "Chat with tools not supported".to_string(),
         ))
@@ -251,8 +272,14 @@ impl TextToSpeechProvider for ElevenLabs {
     /// * `Ok(Vec<u8>)` - Audio data as bytes
     /// * `Err(LLMError)` - Error if conversion fails
     async fn speech(&self, text: &str) -> Result<Vec<u8>, LLMError> {
-        let url = format!("{}/text-to-speech/{}?output_format=mp3_44100_128", self.base_url, self.voice.clone().unwrap_or("JBFqnCBsd6RMkjVDRZzb".to_string()));
-        
+        let url = format!(
+            "{}/text-to-speech/{}?output_format=mp3_44100_128",
+            self.base_url,
+            self.voice
+                .clone()
+                .unwrap_or("JBFqnCBsd6RMkjVDRZzb".to_string())
+        );
+
         let body = serde_json::json!({
             "text": text,
             "model_id": self.model_id
@@ -271,7 +298,7 @@ impl TextToSpeechProvider for ElevenLabs {
 
         let resp = req.send().await?.error_for_status()?;
         let audio_data = resp.bytes().await?;
-        
+
         Ok(audio_data.to_vec())
     }
 }

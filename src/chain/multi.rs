@@ -241,9 +241,7 @@ impl<'a> MultiPromptChain<'a> {
                     let c = llm.complete(&req).await?;
                     c.text.to_string()
                 }
-                MultiChainStepMode::SpeechToText => {
-                    llm.transcribe_file(&prompt_text).await?
-                }
+                MultiChainStepMode::SpeechToText => llm.transcribe_file(&prompt_text).await?,
             };
 
             if let Some(transform) = &step.response_transform {

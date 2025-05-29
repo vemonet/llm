@@ -267,6 +267,36 @@ pub trait ChatProvider: Sync + Send {
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError>;
+
+    /// Get current memory contents if provider supports memory
+    async fn memory_contents(&self) -> Option<Vec<ChatMessage>> {
+        None
+    }
+
+    
+    /// Summarizes a conversation history into a concise 2-3 sentence summary
+    /// 
+    /// # Arguments
+    /// * `msgs` - The conversation messages to summarize
+    ///
+    /// # Returns
+    /// A string containing the summary or an error if summarization fails
+    async fn summarize_history(
+        &self,
+        msgs: &[ChatMessage],
+    ) -> Result<String, LLMError> {
+        let prompt = format!(
+            "Summarize in 2-3 sentences:\n{}",
+            msgs.iter()
+                .map(|m| format!("{:?}: {}", m.role, m.content))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        let req = [ChatMessage::user().content(prompt).build()];
+        self.chat(&req).await?
+            .text()
+            .ok_or(LLMError::Generic("no text in summary response".into()))
+    }
 }
 
 impl fmt::Display for ReasoningEffort {

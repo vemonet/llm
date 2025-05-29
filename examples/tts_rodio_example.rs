@@ -7,9 +7,7 @@
 
 use std::{fs::File, io::BufReader};
 
-use llm::{
-    builder::{LLMBackend, LLMBuilder},
-};
+use llm::builder::{LLMBackend, LLMBuilder};
 use rodio::{Decoder, OutputStream, Sink};
 
 #[tokio::main]
@@ -27,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Text to convert to speech
     let text = "Hello! This is an example of text-to-speech synthesis using OpenAI with LLM crates and rodio in Rust.";
-    
+
     // Generate speech
     let audio_data = tts.speech(text).await?;
 

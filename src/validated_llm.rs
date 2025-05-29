@@ -28,9 +28,9 @@ use async_trait::async_trait;
 use crate::chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool};
 use crate::completion::{CompletionProvider, CompletionRequest, CompletionResponse};
 use crate::embedding::EmbeddingProvider;
+use crate::error::LLMError;
 use crate::stt::SpeechToTextProvider;
 use crate::tts::TextToSpeechProvider;
-use crate::error::LLMError;
 use crate::{builder::ValidatorFn, LLMProvider};
 
 /// A wrapper around an LLM provider that validates responses before returning them.
@@ -207,6 +207,8 @@ impl SpeechToTextProvider for ValidatedLLM {
 #[async_trait]
 impl TextToSpeechProvider for ValidatedLLM {
     async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
-        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
+        Err(LLMError::ProviderError(
+            "Text to speech not supported".to_string(),
+        ))
     }
 }
