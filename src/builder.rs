@@ -9,12 +9,12 @@ use crate::{
         Tool, ToolChoice,
     },
     error::LLMError,
-    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory},
+    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory, TrimStrategy},
     LLMProvider,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// Search source configuration for search parameters
 #[derive(Debug, Clone, serde::Serialize)]
@@ -509,6 +509,28 @@ impl LLMBuilder {
         self
     }
 
+    /// Sets up a sliding window memory with specified trim strategy.
+    ///
+    /// # Arguments
+    ///
+    /// * `window_size` - Maximum number of messages to keep in memory
+    /// * `strategy` - How to handle overflow when window is full
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llm::builder::{LLMBuilder, LLMBackend};
+    /// use llm::memory::TrimStrategy;
+    ///
+    /// let builder = LLMBuilder::new()
+    ///     .backend(LLMBackend::OpenAI)
+    ///     .sliding_window_with_strategy(5, TrimStrategy::Summarize);
+    /// ```
+    pub fn sliding_window_with_strategy(mut self, window_size: usize, strategy: TrimStrategy) -> Self {
+        self.memory = Some(Box::new(SlidingWindowMemory::with_strategy(window_size, strategy)));
+        self
+    }
+
     /// Sets the role name for multi-agent scenarios.
     ///
     /// When set, all messages stored in memory will be prefixed with [role]
@@ -866,7 +888,7 @@ impl LLMBuilder {
 
         // Wrap with memory capabilities if memory is configured
         if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(Mutex::new(memory));
+            let memory_arc = Arc::new(RwLock::new(memory));
             final_provider = Box::new(ChatWithMemory::new(final_provider, memory_arc, self.role));
         }
 
