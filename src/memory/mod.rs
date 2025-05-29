@@ -16,7 +16,7 @@ pub mod sliding_window;
 
 pub use chat_wrapper::ChatWithMemory;
 pub use shared_memory::SharedMemory;
-pub use sliding_window::SlidingWindowMemory;
+pub use sliding_window::{SlidingWindowMemory, TrimStrategy};
 
 /// Types of memory implementations available
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,4 +89,15 @@ pub trait MemoryProvider: Send + Sync {
     fn is_empty(&self) -> bool {
         self.size() == 0
     }
+
+    /// Check if memory needs summarization
+    fn needs_summary(&self) -> bool {
+        false
+    }
+
+    /// Mark memory as needing summarization
+    fn mark_for_summary(&mut self) {}
+
+    /// Replace all messages with a summary
+    fn replace_with_summary(&mut self, _summary: String) {}
 }
