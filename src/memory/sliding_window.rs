@@ -11,6 +11,15 @@ use crate::{chat::ChatMessage, error::LLMError};
 
 use super::{MemoryProvider, MemoryType};
 
+/// Strategy for handling memory when window size limit is reached
+#[derive(Debug, Clone)]
+pub enum TrimStrategy {
+    /// Drop oldest messages (FIFO behavior)
+    Drop,
+    /// Summarize all messages into one before adding new ones
+    Summarize,
+}
+
 /// Simple sliding window memory that keeps the N most recent messages.
 ///
 /// This implementation uses a FIFO strategy where old messages are automatically
@@ -40,6 +49,8 @@ use super::{MemoryProvider, MemoryType};
 pub struct SlidingWindowMemory {
     messages: VecDeque<ChatMessage>,
     window_size: usize,
+    trim_strategy: TrimStrategy,
+    needs_summary: bool,
 }
 
 impl SlidingWindowMemory {
@@ -63,6 +74,16 @@ impl SlidingWindowMemory {
     /// assert!(memory.is_empty());
     /// ```
     pub fn new(window_size: usize) -> Self {
+        Self::with_strategy(window_size, TrimStrategy::Drop)
+    }
+
+    /// Create a new sliding window memory with specified trim strategy
+    ///
+    /// # Arguments
+    ///
+    /// * `window_size` - Maximum number of messages to keep in memory
+    /// * `strategy` - How to handle overflow when window is full
+    pub fn with_strategy(window_size: usize, strategy: TrimStrategy) -> Self {
         if window_size == 0 {
             panic!("Window size must be greater than 0");
         }
@@ -70,6 +91,8 @@ impl SlidingWindowMemory {
         Self {
             messages: VecDeque::with_capacity(window_size),
             window_size,
+            trim_strategy: strategy,
+            needs_summary: false,
         }
     }
 
@@ -105,13 +128,41 @@ impl SlidingWindowMemory {
         let start = len.saturating_sub(limit);
         self.messages.range(start..).cloned().collect()
     }
+
+    /// Check if memory needs summarization
+    pub fn needs_summary(&self) -> bool {
+        self.needs_summary
+    }
+
+    /// Mark memory as needing summarization
+    pub fn mark_for_summary(&mut self) {
+        self.needs_summary = true;
+    }
+
+    /// Replace all messages with a summary
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - The summary text to replace all messages with
+    pub fn replace_with_summary(&mut self, summary: String) {
+        self.messages.clear();
+        self.messages.push_back(crate::chat::ChatMessage::assistant().content(summary).build());
+        self.needs_summary = false;
+    }
 }
 
 #[async_trait]
 impl MemoryProvider for SlidingWindowMemory {
     async fn remember(&mut self, message: &ChatMessage) -> Result<(), LLMError> {
         if self.messages.len() >= self.window_size {
-            self.messages.pop_front();
+            match self.trim_strategy {
+                TrimStrategy::Drop => {
+                    self.messages.pop_front();
+                }
+                TrimStrategy::Summarize => {
+                    self.mark_for_summary();
+                }
+            }
         }
         self.messages.push_back(message.clone());
         Ok(())
@@ -137,5 +188,19 @@ impl MemoryProvider for SlidingWindowMemory {
 
     fn size(&self) -> usize {
         self.messages.len()
+    }
+
+    fn needs_summary(&self) -> bool {
+        self.needs_summary
+    }
+
+    fn mark_for_summary(&mut self) {
+        self.needs_summary = true;
+    }
+
+    fn replace_with_summary(&mut self, summary: String) {
+        self.messages.clear();
+        self.messages.push_back(crate::chat::ChatMessage::assistant().content(summary).build());
+        self.needs_summary = false;
     }
 }
