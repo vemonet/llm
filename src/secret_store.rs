@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 /// Key used to store the default provider in the secret store
 const DEFAULT_PROVIDER_KEY: &str = "default";
@@ -127,7 +127,8 @@ impl SecretStore {
     ///
     /// * `io::Result<()>` - Success or an IO error
     pub fn set_default_provider(&mut self, provider: &str) -> io::Result<()> {
-        self.secrets.insert(DEFAULT_PROVIDER_KEY.to_string(), provider.to_string());
+        self.secrets
+            .insert(DEFAULT_PROVIDER_KEY.to_string(), provider.to_string());
         self.save()
     }
 
@@ -149,4 +150,4 @@ impl SecretStore {
         self.secrets.remove(DEFAULT_PROVIDER_KEY);
         self.save()
     }
-} 
+}
