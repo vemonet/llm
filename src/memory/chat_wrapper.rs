@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatResponse, Tool},
@@ -21,7 +21,7 @@ use crate::{
 /// management to chat conversations without requiring backend modifications.
 pub struct ChatWithMemory {
     provider: Box<dyn LLMProvider>,
-    memory: Arc<Mutex<Box<dyn MemoryProvider>>>,
+    memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
     role: Option<String>,
 }
 
@@ -35,7 +35,7 @@ impl ChatWithMemory {
     /// * `role` - Optional role name for multi-agent scenarios
     pub fn new(
         provider: Box<dyn LLMProvider>,
-        memory: Arc<Mutex<Box<dyn MemoryProvider>>>,
+        memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
         role: Option<String>,
     ) -> Self {
         Self {
@@ -49,6 +49,12 @@ impl ChatWithMemory {
     pub fn inner(&self) -> &dyn LLMProvider {
         self.provider.as_ref()
     }
+
+    /// Get current memory contents for debugging
+    pub async fn memory_contents(&self) -> Vec<crate::chat::ChatMessage> {
+        let memory_guard = self.memory.read().await;
+        memory_guard.recall("", None).await.unwrap_or_default()
+    }
 }
 
 #[async_trait]
@@ -58,46 +64,49 @@ impl ChatProvider for ChatWithMemory {
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        let previous_messages = {
-            let memory_guard = self.memory.lock().await;
-            memory_guard.recall("", None).await.unwrap_or_default()
-        };
-
-        {
-            let mut memory_guard = self.memory.lock().await;
-            for msg in messages {
-                let mut memory_msg = msg.clone();
-                if let Some(role) = &self.role {
-                    memory_msg.content = format!("[{}] User: {}", role, msg.content);
-                }
-                let _ = memory_guard.remember(&memory_msg).await;
+        let mut write = self.memory.write().await;
+    
+        for m in messages {
+            let mut tagged = m.clone();
+            if let Some(role) = &self.role {
+                tagged.content = format!("[{role}] User: {}", m.content);
             }
+            write.remember(&tagged).await?;
         }
-
-        let mut all_messages = previous_messages;
-        all_messages.extend_from_slice(messages);
-
-        let response = self.provider.chat_with_tools(&all_messages, tools).await?;
-
-        let memory_clone = self.memory.clone();
-        let role_clone = self.role.clone();
-        let response_text = response.text();
-
-        tokio::spawn(async move {
-            if let Some(text) = response_text {
-                let mut memory_guard = memory_clone.lock().await;
-                let assistant_content = match &role_clone {
-                    Some(role) => format!("[{}] Assistant: {}", role, text),
-                    None => text,
+    
+        let mut context = write.recall("", None).await?;
+        let needs_summary = write.needs_summary();
+        drop(write);
+    
+        if needs_summary {
+            let summary = self.provider.summarize_history(&context).await?;
+            let mut write = self.memory.write().await;
+            write.replace_with_summary(summary);
+            context = write.recall("", None).await?;
+        }
+    
+        context.extend_from_slice(messages);
+        let response = self.provider.chat_with_tools(&context, tools).await?;
+    
+        if let Some(text) = response.text() {
+            let memory = self.memory.clone();
+            let tag    = self.role.clone();
+            tokio::spawn(async move {
+                let mut mem = memory.write().await;
+                let text = match tag {
+                    Some(r) => format!("[{r}] Assistant: {text}"),
+                    None    => text,
                 };
-
-                let assistant_msg = ChatMessage::assistant().content(assistant_content).build();
-
-                let _ = memory_guard.remember(&assistant_msg).await;
-            }
-        });
-
+                mem.remember(&ChatMessage::assistant().content(text).build()).await.ok();
+            });
+        }
+    
         Ok(response)
+    }
+
+    async fn memory_contents(&self) -> Option<Vec<crate::chat::ChatMessage>> {
+        let memory_guard = self.memory.read().await;
+        Some(memory_guard.recall("", None).await.unwrap_or_default())
     }
 }
 
