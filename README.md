@@ -24,6 +24,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Structured Output**: Request structured output from certain LLM providers based on a provided JSON schema.
 - **Speech to text**: Transcribe audio to text
 - **Text to speech**: Transcribe text to audio
+- **Memory**: Store and retrieve conversation history with sliding window (soon others) and shared memory support
 
 ## Use any LLM backend on your project
 
@@ -94,6 +95,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`chain_audio_text_example`](examples/chain_audio_text_example.rs) | Example demonstrating a multi-step chain combining speech-to-text and text processing |
 | [`xai_search_chain_tts_example`](examples/xai_search_chain_tts_example.rs) | Example demonstrating a multi-step chain combining XAI search, OpenAI summarization, and ElevenLabs text-to-speech with Rodio playback |
 | [`xai_search_example`](examples/xai_search_example.rs) | Example demonstrating X.AI search functionality with search modes, date ranges, and source filtering |
+| [`memory_example`](examples/memory_example.rs) | Automatic memory integration - LLM remembers conversation context across calls |
+| [`memory_share_example`](examples/memory_share_example.rs) | Example demonstrating shared memory between multiple LLM providers |
 
 
 
