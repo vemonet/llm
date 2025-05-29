@@ -8,9 +8,9 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     LLMProvider,
 };
 use crate::{
@@ -586,6 +586,8 @@ impl SpeechToTextProvider for AzureOpenAI {
 #[async_trait]
 impl TextToSpeechProvider for AzureOpenAI {
     async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
-        Err(LLMError::ProviderError("Text to speech not supported".to_string()))
+        Err(LLMError::ProviderError(
+            "Text to speech not supported".to_string(),
+        ))
     }
 }
