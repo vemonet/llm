@@ -55,13 +55,20 @@ pub mod tts;
 /// Secret store for storing API keys and other sensitive information
 pub mod secret_store;
 
+/// Memory providers for storing and retrieving conversation history
+pub mod memory;
+
 #[cfg(feature = "api")]
 pub mod api;
 
 /// Core trait that all LLM providers must implement, combining chat, completion
 /// and embedding capabilities into a unified interface
 pub trait LLMProvider:
-    chat::ChatProvider + completion::CompletionProvider + embedding::EmbeddingProvider + stt::SpeechToTextProvider + tts::TextToSpeechProvider
+    chat::ChatProvider
+    + completion::CompletionProvider
+    + embedding::EmbeddingProvider
+    + stt::SpeechToTextProvider
+    + tts::TextToSpeechProvider
 {
     fn tools(&self) -> Option<&[Tool]> {
         None
