@@ -97,6 +97,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`xai_search_example`](examples/xai_search_example.rs) | Example demonstrating X.AI search functionality with search modes, date ranges, and source filtering |
 | [`memory_example`](examples/memory_example.rs) | Automatic memory integration - LLM remembers conversation context across calls |
 | [`memory_share_example`](examples/memory_share_example.rs) | Example demonstrating shared memory between multiple LLM providers |
+| [`trim_strategy_example`](examples/trim_strategy_example.rs) | Example demonstrating memory trimming strategies with automatic summarization |
+
 
 
 
