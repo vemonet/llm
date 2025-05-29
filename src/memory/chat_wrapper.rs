@@ -9,7 +9,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    memory::MemoryProvider,
+    memory::{MemoryProvider, MessageCondition},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -20,9 +20,10 @@ use crate::{
 /// This wrapper implements all LLM provider traits and adds automatic memory
 /// management to chat conversations without requiring backend modifications.
 pub struct ChatWithMemory {
-    provider: Box<dyn LLMProvider>,
+    provider: Arc<dyn LLMProvider>,
     memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
     role: Option<String>,
+    role_triggers: Vec<(String, MessageCondition)>,
 }
 
 impl ChatWithMemory {
@@ -33,15 +34,70 @@ impl ChatWithMemory {
     /// * `provider` - The underlying LLM provider
     /// * `memory` - Memory provider for conversation history
     /// * `role` - Optional role name for multi-agent scenarios
+    /// * `role_triggers` - Role and condition pairs for reactive messaging
     pub fn new(
-        provider: Box<dyn LLMProvider>,
+        provider: Arc<dyn LLMProvider>,
         memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
         role: Option<String>,
+        role_triggers: Vec<(String, MessageCondition)>,
     ) -> Self {
-        Self {
+        let wrapper = Self {
             provider,
-            memory,
+            memory: memory.clone(),
             role,
+            role_triggers: role_triggers.clone(),
+        };
+
+        if !role_triggers.is_empty() {
+            wrapper.spawn_reactive_listener();
+        }
+
+        wrapper
+    }
+
+    /// Spawn a task to listen for reactive messages
+    fn spawn_reactive_listener(&self) {
+        if let Ok(memory_guard) = self.memory.try_read() {
+            if let Some(mut receiver) = memory_guard.get_event_receiver() {
+                let role_triggers = self.role_triggers.clone();
+                let provider = self.provider.clone();
+                let memory = self.memory.clone();
+                let my_role = self.role.clone();
+
+                tokio::spawn(async move {
+                    while let Ok(event) = receiver.recv().await {
+                        let should_trigger = role_triggers.iter().any(|(role, condition)| {
+                            role == &event.role && condition.matches(&event)
+                        });
+
+                        if should_trigger {
+                            let context = {
+                                let memory_guard = memory.read().await;
+                                memory_guard.recall("", None).await.unwrap_or_default()
+                            };
+
+                            let response_text = match provider.chat(&context).await {
+                                Ok(response) => response.text().map(|s| s.to_string()),
+                                Err(e) => {
+                                    eprintln!("Reactive chat error: {}", e);
+                                    None
+                                }
+                            };
+
+                            if let (Some(text), Some(role)) = (response_text, &my_role) {
+                                let formatted_text = format!("[{}] {}", role, text);
+                                let msg = ChatMessage::assistant().content(formatted_text).build();
+                                let mut memory_guard = memory.write().await;
+                                if let Err(e) =
+                                    memory_guard.remember_with_role(&msg, role.clone()).await
+                                {
+                                    eprintln!("Memory save error: {}", e);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -65,42 +121,54 @@ impl ChatProvider for ChatWithMemory {
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
         let mut write = self.memory.write().await;
-    
+
         for m in messages {
             let mut tagged = m.clone();
             if let Some(role) = &self.role {
-                tagged.content = format!("[{role}] User: {}", m.content);
+                tagged.content = format!("[{}] User: {}", role, m.content);
+                write.remember_with_role(&tagged, role.clone()).await?;
+            } else {
+                write.remember(&tagged).await?;
             }
-            write.remember(&tagged).await?;
         }
-    
+
         let mut context = write.recall("", None).await?;
         let needs_summary = write.needs_summary();
         drop(write);
-    
+
         if needs_summary {
             let summary = self.provider.summarize_history(&context).await?;
             let mut write = self.memory.write().await;
             write.replace_with_summary(summary);
             context = write.recall("", None).await?;
         }
-    
+
         context.extend_from_slice(messages);
         let response = self.provider.chat_with_tools(&context, tools).await?;
-    
+
         if let Some(text) = response.text() {
             let memory = self.memory.clone();
-            let tag    = self.role.clone();
+            let tag = self.role.clone();
             tokio::spawn(async move {
                 let mut mem = memory.write().await;
-                let text = match tag {
-                    Some(r) => format!("[{r}] Assistant: {text}"),
-                    None    => text,
+                let formatted_text = match &tag {
+                    Some(r) => format!("[{}] {}", r, text),
+                    None => text.clone(),
                 };
-                mem.remember(&ChatMessage::assistant().content(text).build()).await.ok();
+                let msg = ChatMessage::assistant().content(formatted_text).build();
+
+                let result = if let Some(role) = tag {
+                    mem.remember_with_role(&msg, role).await
+                } else {
+                    mem.remember(&msg).await
+                };
+
+                if let Err(e) = result {
+                    eprintln!("Memory save error: {}", e);
+                }
             });
         }
-    
+
         Ok(response)
     }
 
