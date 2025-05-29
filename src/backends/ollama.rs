@@ -6,9 +6,9 @@ use crate::{
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
+    error::LLMError,
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    error::LLMError,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
@@ -108,23 +108,21 @@ impl ChatResponse for OllamaResponse {
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        self.message
-            .as_ref()
-            .and_then(|msg| {
-                msg.tool_calls.as_ref().map(|tcs| {
-                    tcs.iter()
-                        .map(|tc| ToolCall {
-                            id: format!("call_{}", tc.function.name),
-                            call_type: "function".to_string(),
-                            function: FunctionCall {
-                                name: tc.function.name.clone(),
-                                arguments: serde_json::to_string(&tc.function.arguments)
-                                    .unwrap_or_default(),
-                            },
-                        })
-                        .collect()
-                })
+        self.message.as_ref().and_then(|msg| {
+            msg.tool_calls.as_ref().map(|tcs| {
+                tcs.iter()
+                    .map(|tc| ToolCall {
+                        id: format!("call_{}", tc.function.name),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: tc.function.name.clone(),
+                            arguments: serde_json::to_string(&tc.function.arguments)
+                                .unwrap_or_default(),
+                        },
+                    })
+                    .collect()
             })
+        })
     }
 }
 
