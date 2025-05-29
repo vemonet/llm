@@ -16,6 +16,8 @@ pub enum LLMError {
         message: String,
         raw_response: String,
     },
+    /// Generic error
+    Generic(String),
     /// JSON serialization/deserialization errors
     JsonError(String),
     /// Tool configuration error
@@ -29,6 +31,7 @@ impl fmt::Display for LLMError {
             LLMError::AuthError(e) => write!(f, "Auth Error: {}", e),
             LLMError::InvalidRequest(e) => write!(f, "Invalid Request: {}", e),
             LLMError::ProviderError(e) => write!(f, "Provider Error: {}", e),
+            LLMError::Generic(e) => write!(f, "Generic Error : {}", e),
             LLMError::ResponseFormatError {
                 message,
                 raw_response,
