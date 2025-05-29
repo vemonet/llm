@@ -9,7 +9,7 @@ use crate::{
         Tool, ToolChoice,
     },
     error::LLMError,
-    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory, TrimStrategy},
+    memory::{ChatWithMemory, MemoryProvider, MessageCondition, SlidingWindowMemory, TrimStrategy},
     LLMProvider,
 };
 use std::collections::HashMap;
@@ -180,12 +180,17 @@ pub struct LLMBuilder {
     memory: Option<Box<dyn MemoryProvider>>,
     /// Role name for multi-agent scenarios (optional, adds [role] prefix to memory)
     role: Option<String>,
+    /// Role and condition pairs for reactive messaging
+    role_triggers: Vec<(String, MessageCondition)>,
 }
 
 impl LLMBuilder {
     /// Creates a new empty builder instance with default values.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            role_triggers: Vec::new(),
+            ..Default::default()
+        }
     }
 
     /// Sets the backend provider to use.
@@ -526,8 +531,15 @@ impl LLMBuilder {
     ///     .backend(LLMBackend::OpenAI)
     ///     .sliding_window_with_strategy(5, TrimStrategy::Summarize);
     /// ```
-    pub fn sliding_window_with_strategy(mut self, window_size: usize, strategy: TrimStrategy) -> Self {
-        self.memory = Some(Box::new(SlidingWindowMemory::with_strategy(window_size, strategy)));
+    pub fn sliding_window_with_strategy(
+        mut self,
+        window_size: usize,
+        strategy: TrimStrategy,
+    ) -> Self {
+        self.memory = Some(Box::new(SlidingWindowMemory::with_strategy(
+            window_size,
+            strategy,
+        )));
         self
     }
 
@@ -561,6 +573,31 @@ impl LLMBuilder {
     /// ```
     pub fn role(mut self, role: impl Into<String>) -> Self {
         self.role = Some(role.into());
+        self
+    }
+
+    /// Add a role to listen to for reactive messaging with Any condition
+    pub fn on_message_from(mut self, role: impl Into<String>) -> Self {
+        self.role_triggers
+            .push((role.into(), MessageCondition::Any));
+        self
+    }
+
+    /// Add a role with specific trigger condition for reactive messaging
+    pub fn on_message_from_with_trigger(
+        mut self,
+        role: impl Into<String>,
+        condition: MessageCondition,
+    ) -> Self {
+        self.role_triggers.push((role.into(), condition));
+        self
+    }
+
+    /// Add a condition for triggering reactive handlers to all existing roles
+    pub fn trigger_if(mut self, condition: MessageCondition) -> Self {
+        for (_, existing_condition) in &mut self.role_triggers {
+            *existing_condition = condition.clone();
+        }
         self
     }
 
@@ -889,7 +926,13 @@ impl LLMBuilder {
         // Wrap with memory capabilities if memory is configured
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
-            final_provider = Box::new(ChatWithMemory::new(final_provider, memory_arc, self.role));
+            let provider_arc = Arc::from(final_provider);
+            final_provider = Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                self.role,
+                self.role_triggers,
+            ));
         }
 
         Ok(final_provider)
