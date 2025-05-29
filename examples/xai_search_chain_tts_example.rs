@@ -76,11 +76,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run().await?;
 
     println!("✅ Step 2: Summary created successfully!");
-    
+
     // Get the summary from chain results
-    let summary = chain_result.get("summary")
+    let summary = chain_result
+        .get("summary")
         .ok_or("No summary found in chain results")?;
-    
+
     println!("📄 Summary to be spoken:");
     println!("{}", summary);
     println!();
@@ -88,20 +89,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔊 Step 3: Converting summary to speech with ElevenLabs...");
 
     // Step 3: Use ElevenLabs TTS to convert summary to speech
-    let elevenlabs_provider = registry.get("elevenlabs")
+    let elevenlabs_provider = registry
+        .get("elevenlabs")
         .ok_or("ElevenLabs provider not found")?;
-    
+
     let audio_data = elevenlabs_provider.speech(summary).await?;
-    
+
     // Save audio to file
     let output_file = "rust_news_summary.mp3";
     std::fs::write(output_file, audio_data)?;
-    
+
     println!("✅ Audio saved to: {}", output_file);
 
     // Step 4: Play the audio using rodio
     println!("🎵 Playing audio with rodio...");
-    
+
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
 
