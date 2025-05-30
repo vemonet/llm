@@ -3,6 +3,7 @@
 //! 2. Cycle-limit protection with `max_cycles` to avoid infinite loops.
 
 use llm::{
+    agent::AgentBuilder,
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
     memory::{MessageCondition, SharedMemory, SlidingWindowMemory},
@@ -15,25 +16,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         SharedMemory::new_reactive_with_capacity(SlidingWindowMemory::new(20), 50);
 
     // Proposer agent – limited to 4 reactive turns between user prompts
-    let proposer = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
-        .model("gpt-3.5-turbo")
+    let proposer = AgentBuilder::new()
         .role("assistant")
         .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
-        .system("You are a proposer agent. Answer user questions. When the reviewer says REJECT, correct your answer.")
         .max_cycles(4)
+        .llm(
+            LLMBuilder::new()
+                .backend(LLMBackend::OpenAI)
+                .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
+                .model("gpt-3.5-turbo")
+                .system("You are a proposer agent. Answer user questions. When the reviewer says REJECT, correct your answer.")
+        )
         .memory(shared_memory.clone())
         .build()?;
 
     // Reviewer agent – replies ACCEPT / REJECT
-    let _ = LLMBuilder::new()
-        .backend(LLMBackend::Anthropic)
-        .api_key(std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into()))
-        .model("claude-sonnet-4-20250514")
+    let _ = AgentBuilder::new()
         .role("reviewer")
-        .system("You are a reviewer. Reply only ACCEPT or REJECT.")
         .on_message_from("assistant")
+        .llm(
+            LLMBuilder::new()
+                .backend(LLMBackend::Anthropic)
+                .api_key(std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into()))
+                .model("claude-sonnet-4-20250514")
+                .system("You are a reviewer. Reply only ACCEPT or REJECT.")
+        )
         .memory(shared_memory.clone())
         .build()?;
 
