@@ -1,5 +1,6 @@
 // Memory sharing example
 use llm::{
+    agent::AgentBuilder,
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
     memory::{MessageCondition, SharedMemory, SlidingWindowMemory},
@@ -9,36 +10,44 @@ use llm::{
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared_memory = SharedMemory::new_reactive(SlidingWindowMemory::new(10));
 
-    let proposer = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
-        .model("gpt-3.5-turbo")
+    let proposer = AgentBuilder::new()
         .role("assistant")
         .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
-        .system("You are a proposer agent. Answer user questions accurately and concisely. When you receive REJECT from a reviewer, correct your previous response.")
+        .llm(
+            LLMBuilder::new()
+                .backend(LLMBackend::OpenAI)
+                .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
+                .model("gpt-3.5-turbo")
+                .system("You are a proposer agent. Answer user questions accurately and concisely. When you receive REJECT from a reviewer, correct your previous response.")
+        )
         .memory(shared_memory.clone())
         .build()?;
 
-    let _ = LLMBuilder::new()
-        .backend(LLMBackend::Anthropic)
-        .api_key(std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into()))
-        .model("claude-sonnet-4-20250514")
+    let _ = AgentBuilder::new()
         .role("reviewer")
-        .system("You are a reviewer. Your ONLY job is to check if the assistant's answer is correct. Do NOT solve the problem yourself. Just evaluate the assistant's response and reply with ONLY the word ACCEPT (if correct) or REJECT (if wrong). Nothing else.")
         .on_message_from("assistant")
-        .max_tokens(512)
-        .temperature(0.7)
+        .llm(
+            LLMBuilder::new()
+                .backend(LLMBackend::Anthropic)
+                .api_key(std::env::var("ANTHROPIC_API_KEY").unwrap_or("anthro-key".into()))
+                .model("claude-sonnet-4-20250514")
+                .system("You are a reviewer. Your ONLY job is to check if the assistant's answer is correct. Do NOT solve the problem yourself. Just evaluate the assistant's response and reply with ONLY the word ACCEPT (if correct) or REJECT (if wrong). Nothing else.")
+                .max_tokens(512)
+                .temperature(0.7)
+        )
         .memory(shared_memory.clone())
         .build()?;
 
-    let _ = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
-        .model("gpt-4o")
+    let _ = AgentBuilder::new()
         .role("resumer")
-        .on_message_from_with_trigger("reviewer", MessageCondition::NotContains("REJECT".to_string()))
-        .on_message_from_with_trigger("reviewer", MessageCondition::Eq("ACCEPT".to_string()))
-        .system("You are a resumer agent. Summarize the conversation between the proposer and the reviewer.")
+        .on_message_from_with_trigger("reviewer", MessageCondition::Contains("ACCEPT".to_string()))
+        .llm(
+            LLMBuilder::new()
+                .backend(LLMBackend::OpenAI)
+                .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
+                .model("gpt-4o")
+                .system("You are a resumer agent. Summarize the conversation between the proposer and the reviewer.")
+        )
         .memory(shared_memory.clone())
         .build()?;
 
