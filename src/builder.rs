@@ -573,6 +573,15 @@ impl LLMBuilder {
     /// - Required backend feature is not enabled
     /// - Required configuration like API keys are missing
     pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
+        log::debug!(
+            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?}",
+            self.backend,
+            self.model,
+            self.tools.as_ref().map(|v| v.len()).unwrap_or(0),
+            self.tool_choice,
+            self.stream,
+            self.temperature,
+        );
         let (tools, tool_choice) = self.validate_tool_config()?;
         let backend = self
             .backend
