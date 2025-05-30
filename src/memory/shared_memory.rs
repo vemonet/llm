@@ -19,13 +19,21 @@ impl<T: MemoryProvider> SharedMemory<T> {
         }
     }
 
-    /// Create a new reactive shared memory that can emit events when messages are added
-    pub fn new_reactive(provider: T) -> Self {
-        let (sender, _) = broadcast::channel(1000);
+    /// Create a new reactive shared memory with the given broadcast channel capacity.
+    ///
+    /// The capacity determines how many message events can be queued before older
+    /// ones get dropped for slow subscribers.
+    pub fn new_reactive_with_capacity(provider: T, capacity: usize) -> Self {
+        let (sender, _) = broadcast::channel(capacity);
         Self {
             inner: Arc::new(RwLock::new(provider)),
             event_sender: Some(sender),
         }
+    }
+
+    /// Create a new reactive shared memory using the default capacity of **1000**.
+    pub fn new_reactive(provider: T) -> Self {
+        Self::new_reactive_with_capacity(provider, 1000)
     }
 
     /// Subscribe to message events (only available for reactive memory)
