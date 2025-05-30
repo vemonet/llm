@@ -21,6 +21,9 @@ pub struct ChatWithMemory {
     memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
     role: Option<String>,
     role_triggers: Vec<(String, MessageCondition)>,
+
+    max_cycles: Option<u32>,
+    cycle_counter: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl ChatWithMemory {
@@ -35,12 +38,17 @@ impl ChatWithMemory {
         memory: Arc<RwLock<Box<dyn MemoryProvider>>>,
         role: Option<String>,
         role_triggers: Vec<(String, MessageCondition)>,
+        max_cycles: Option<u32>,
     ) -> Self {
+        use std::sync::atomic::AtomicU32;
+
         let wrapper = Self {
             provider,
             memory: memory.clone(),
             role,
             role_triggers: role_triggers.clone(),
+            max_cycles,
+            cycle_counter: std::sync::Arc::new(AtomicU32::new(0)),
         };
 
         if !wrapper.role_triggers.is_empty() {
@@ -56,6 +64,8 @@ impl ChatWithMemory {
         let provider = self.provider.clone();
         let role_triggers = self.role_triggers.clone();
         let my_role = self.role.clone();
+        let max_cycles = self.max_cycles;
+        let cycle_counter = self.cycle_counter.clone();
 
         tokio::spawn(async move {
             let mut receiver = {
@@ -72,6 +82,13 @@ impl ChatWithMemory {
                     .any(|(role, cond)| role == &event.role && cond.matches(&event))
                 {
                     continue;
+                }
+
+                // max_cycles guard
+                if let Some(max) = max_cycles {
+                    if cycle_counter.load(std::sync::atomic::Ordering::Relaxed) >= max {
+                        continue;
+                    }
                 }
 
                 let context = {
@@ -94,6 +111,9 @@ impl ChatWithMemory {
                     if let Err(e) = guard.remember_with_role(&msg, role.clone()).await {
                         eprintln!("Memory save error: {e}");
                     }
+
+                    // increment cycle counter after successful post
+                    cycle_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             }
         });
@@ -118,6 +138,11 @@ impl ChatProvider for ChatWithMemory {
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
+        // Reset cycle counter when receiving a user-originated message
+        if messages.iter().any(|m| matches!(m.role, crate::chat::ChatRole::User)) {
+            self.cycle_counter
+                .store(0, std::sync::atomic::Ordering::Relaxed);
+        }
         {
             // record incoming user messages once
             let mut mem = self.memory.write().await;
