@@ -217,6 +217,10 @@ impl ChatProvider for Phind {
                 .unwrap_or_default(),
         });
 
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("Phind request payload: {}", payload);
+        }
+
         let headers = Self::create_headers()?;
         let mut request = self
             .client
@@ -229,6 +233,8 @@ impl ChatProvider for Phind {
         }
 
         let response = request.send().await?;
+
+        log::debug!("Phind HTTP status: {}", response.status());
 
         self.interpret_response(response).await
     }
