@@ -9,7 +9,7 @@ use crate::{
         Tool, ToolChoice,
     },
     error::LLMError,
-    memory::{ChatWithMemory, MemoryProvider, MessageCondition, SlidingWindowMemory, TrimStrategy},
+    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory, TrimStrategy},
     LLMProvider,
 };
 use std::collections::HashMap;
@@ -178,21 +178,12 @@ pub struct LLMBuilder {
     search_parameters: Option<SearchParameters>,
     /// Memory provider for conversation history (optional)
     memory: Option<Box<dyn MemoryProvider>>,
-    /// Role name for multi-agent scenarios (optional, adds [role] prefix to memory)
-    role: Option<String>,
-    /// Role and condition pairs for reactive messaging
-    role_triggers: Vec<(String, MessageCondition)>,
-
-    /// Maximum number of reactive cycles for this agent
-    max_cycles: Option<u32>,
 }
 
 impl LLMBuilder {
     /// Creates a new empty builder instance with default values.
     pub fn new() -> Self {
         Self {
-            role_triggers: Vec::new(),
-            max_cycles: None,
             ..Default::default()
         }
     }
@@ -547,73 +538,6 @@ impl LLMBuilder {
         self
     }
 
-    /// Sets the role name for multi-agent scenarios.
-    ///
-    /// When set, all messages stored in memory will be prefixed with [role]
-    /// to identify which agent contributed each message. This is useful for
-    /// collaborative multi-agent workflows.
-    ///
-    /// # Arguments
-    ///
-    /// * `role` - The role name (e.g., "researcher", "writer", "critic")
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use llm::builder::{LLMBuilder, LLMBackend};
-    /// use llm::memory::SlidingWindowMemory;
-    ///
-    /// let shared_memory = Box::new(SlidingWindowMemory::new(20));
-    ///
-    /// let researcher = LLMBuilder::new()
-    ///     .backend(LLMBackend::OpenAI)
-    ///     .role("researcher")
-    ///     .memory(shared_memory.clone());
-    ///
-    /// let writer = LLMBuilder::new()
-    ///     .backend(LLMBackend::Anthropic)
-    ///     .role("writer")
-    ///     .memory(shared_memory);
-    /// ```
-    pub fn role(mut self, role: impl Into<String>) -> Self {
-        self.role = Some(role.into());
-        self
-    }
-
-    /// Add a role to listen to for reactive messaging with Any condition
-    pub fn on_message_from(mut self, role: impl Into<String>) -> Self {
-        self.role_triggers
-            .push((role.into(), MessageCondition::Any));
-        self
-    }
-
-    /// Add a role with specific trigger condition for reactive messaging
-    pub fn on_message_from_with_trigger(
-        mut self,
-        role: impl Into<String>,
-        condition: MessageCondition,
-    ) -> Self {
-        self.role_triggers.push((role.into(), condition));
-        self
-    }
-
-    /// Add a condition for triggering reactive handlers to all existing roles
-    pub fn trigger_if(mut self, condition: MessageCondition) -> Self {
-        for (_, existing_condition) in &mut self.role_triggers {
-            *existing_condition = condition.clone();
-        }
-        self
-    }
-
-    /// Limits the number of automatic reactive messages the agent can emit
-    /// between two user interactions.
-    ///
-    /// When the limit is reached, further matched triggers are ignored until
-    /// a new user message resets the counter.
-    pub fn max_cycles(mut self, max: u32) -> Self {
-        self.max_cycles = Some(max);
-        self
-    }
 
     /// Builds and returns a configured LLM provider instance.
     ///
@@ -944,9 +868,9 @@ impl LLMBuilder {
             final_provider = Box::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
-                self.role,
-                self.role_triggers,
-                self.max_cycles,
+                None,
+                Vec::new(),
+                None,
             ));
         }
 
