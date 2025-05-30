@@ -117,6 +117,18 @@ impl ChatProvider for ValidatedLLM {
                         )));
                     }
 
+                    log::debug!(
+                        "Completion validation failed (attempts remaining: {}). Reason: {}",
+                        remaining_attempts,
+                        err
+                    );
+
+                    log::debug!(
+                        "Validation failed (attempt remaining: {}). Reason: {}",
+                        remaining_attempts,
+                        err
+                    );
+
                     local_messages.push(ChatMessage {
                         role: ChatRole::User,
                         message_type: MessageType::Text,
