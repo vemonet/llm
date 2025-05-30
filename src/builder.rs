@@ -182,6 +182,9 @@ pub struct LLMBuilder {
     role: Option<String>,
     /// Role and condition pairs for reactive messaging
     role_triggers: Vec<(String, MessageCondition)>,
+
+    /// Maximum number of reactive cycles for this agent
+    max_cycles: Option<u32>,
 }
 
 impl LLMBuilder {
@@ -189,6 +192,7 @@ impl LLMBuilder {
     pub fn new() -> Self {
         Self {
             role_triggers: Vec::new(),
+            max_cycles: None,
             ..Default::default()
         }
     }
@@ -601,6 +605,16 @@ impl LLMBuilder {
         self
     }
 
+    /// Limits the number of automatic reactive messages the agent can emit
+    /// between two user interactions.
+    ///
+    /// When the limit is reached, further matched triggers are ignored until
+    /// a new user message resets the counter.
+    pub fn max_cycles(mut self, max: u32) -> Self {
+        self.max_cycles = Some(max);
+        self
+    }
+
     /// Builds and returns a configured LLM provider instance.
     ///
     /// # Errors
@@ -932,6 +946,7 @@ impl LLMBuilder {
                 memory_arc,
                 self.role,
                 self.role_triggers,
+                self.max_cycles,
             ));
         }
 
