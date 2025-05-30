@@ -1,9 +1,9 @@
-//! Portage de `reactive_agent_example.rs` vers le nouveau `AgentBuilder`.
+//! Port of `reactive_agent_example.rs` to the new `AgentBuilder`.
 //!
-//! Trois agents coopèrent via une mémoire partagée réactive :
-//! 1. proposer (assistant) – répond aux questions de l’utilisateur.
-//! 2. reviewer – juge la réponse (ACCEPT / REJECT).
-//! 3. resumer  – résume la discussion quand la réponse est acceptée.
+//! Three agents cooperate via a shared reactive memory:
+//! 1. proposer (assistant) - answers user questions.
+//! 2. reviewer - judges the answer (ACCEPT / REJECT).
+//! 3. resumer - summarizes the discussion when the answer is accepted.
 
 use llm::{
     agent::AgentBuilder,
@@ -14,10 +14,8 @@ use llm::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Mémoire partagée (réactive).
     let shared_memory = SharedMemory::new_reactive(SlidingWindowMemory::new(10));
 
-    // Proposer – corrige sa réponse quand le reviewer dit REJECT.
     let proposer = AgentBuilder::new()
         .role("assistant")
         .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
@@ -44,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .memory(shared_memory.clone())
         .build()?;
 
-    // Reviewer – répond uniquement ACCEPT / REJECT.
     let _reviewer = AgentBuilder::new()
         .role("reviewer")
         .on_message_from("assistant")
@@ -59,10 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .memory(shared_memory.clone())
         .build()?;
 
-    // Resumer – résume la conversation quand ACCEPT et pas REJECT.
     let _resumer = AgentBuilder::new()
         .role("resumer")
-        // Le résumé se déclenche quand le reviewer envoie ACCEPT.
         .on_message_from_with_trigger("reviewer", MessageCondition::Contains("ACCEPT".to_string()))
         .llm(
             LLMBuilder::new()
@@ -74,13 +69,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .memory(shared_memory.clone())
         .build()?;
 
-    // L'utilisateur pose sa question.
     let task = ChatMessage::user()
         .content("how much R in the word strawberry ?")
         .build();
     _ = proposer.chat(&[task]).await;
 
-    // Observer la conversation.
     let mut receiver = shared_memory.subscribe();
     while let Ok(evt) = receiver.recv().await {
         println!("{} said: {}", evt.role, evt.msg.content);
