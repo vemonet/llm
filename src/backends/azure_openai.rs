@@ -462,6 +462,12 @@ impl ChatProvider for AzureOpenAI {
             response_format,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("Azure OpenAI request payload: {}", json);
+            }
+        }
+
         let mut url = self
             .base_url
             .join("chat/completions")
@@ -482,6 +488,8 @@ impl ChatProvider for AzureOpenAI {
 
         // Send the request
         let response = request.send().await?;
+
+        log::debug!("Azure OpenAI HTTP status: {}", response.status());
 
         // If we got a non-200 response, let's get the error details
         if !response.status().is_success() {

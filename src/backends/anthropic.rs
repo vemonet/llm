@@ -444,7 +444,19 @@ impl ChatProvider for Anthropic {
             request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Anthropic request payload: {}", json);
+            }
+        }
+
+        log::debug!("Anthropic request: POST /v1/messages");
+
+        let resp = request.send().await?;
+
+        log::debug!("Anthropic HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         let body = resp.text().await?;
         let json_resp: AnthropicCompleteResponse = serde_json::from_str(&body)

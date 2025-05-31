@@ -9,6 +9,9 @@ use spinners::{Spinner, Spinners};
 use std::io::{self, IsTerminal, Read, Write};
 use std::str::FromStr;
 
+#[cfg(feature = "logging")]
+use env_logger;
+
 /// Command line arguments for the LLM CLI
 #[derive(Parser)]
 #[clap(
@@ -197,6 +200,10 @@ fn process_input(input: &[u8], prompt: String) -> Vec<ChatMessage> {
 /// Supports various commands for managing secrets and default providers.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "logging")]
+    {
+        let _ = env_logger::try_init();
+    }
     let args = CliArgs::parse();
 
     if let Some(cmd) = args.command.as_deref() {

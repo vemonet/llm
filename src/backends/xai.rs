@@ -289,6 +289,12 @@ impl ChatProvider for XAI {
             search_parameters: self.search_parameters.as_ref(),
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("XAI request payload: {}", json);
+            }
+        }
+
         let mut request = self
             .client
             .post("https://api.x.ai/v1/chat/completions")
@@ -299,7 +305,11 @@ impl ChatProvider for XAI {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("XAI HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         let json_resp: XAIChatResponse = resp.json().await?;
         Ok(Box::new(json_resp))

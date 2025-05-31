@@ -573,6 +573,12 @@ impl ChatProvider for Google {
             tools: None,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Google Gemini request payload: {}", json);
+            }
+        }
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             model = self.model,
@@ -585,7 +591,11 @@ impl ChatProvider for Google {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Google Gemini HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
@@ -738,6 +748,12 @@ impl ChatProvider for Google {
             tools: google_tools,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Google Gemini request payload (tool): {}", json);
+            }
+        }
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             model = self.model,
@@ -751,7 +767,11 @@ impl ChatProvider for Google {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Google Gemini HTTP status (tool): {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;

@@ -342,6 +342,12 @@ impl ChatProvider for Ollama {
             tools: None,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Ollama request payload: {}", json);
+            }
+        }
+
         let url = format!("{}/api/chat", self.base_url);
 
         let mut request = self.client.post(&url).json(&req_body);
@@ -350,7 +356,11 @@ impl ChatProvider for Ollama {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Ollama HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
         let json_resp: OllamaResponse = resp.json().await?;
         Ok(Box::new(json_resp))
     }
@@ -409,6 +419,12 @@ impl ChatProvider for Ollama {
             tools: ollama_tools,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Ollama request payload (tools): {}", json);
+            }
+        }
+
         let url = format!("{}/api/chat", self.base_url);
 
         let mut request = self.client.post(&url).json(&req_body);
@@ -417,7 +433,11 @@ impl ChatProvider for Ollama {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Ollama HTTP status (tools): {}", resp.status());
+
+        let resp = resp.error_for_status()?;
         let json_resp = resp.json::<OllamaResponse>().await?;
 
         Ok(Box::new(json_resp))

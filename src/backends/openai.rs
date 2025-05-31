@@ -431,14 +431,20 @@ impl ChatProvider for OpenAI {
 
         let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("OpenAI request payload: {}", json);
+            }
+        }
+
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        // Send the request
         let response = request.send().await?;
 
-        // If we got a non-200 response, let's get the error details
+        log::debug!("OpenAI HTTP status: {}", response.status());
+
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await?;
