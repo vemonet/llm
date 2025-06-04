@@ -14,7 +14,9 @@ homepage = "https://github.com/graniet/llm"
 default-run = "llm"
 
 [features]
-default = ["cli"]
+default = ["cli", "default-tls"]
+default-tls = ["reqwest/default-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
 full = [
     "openai",
     "anthropic",
@@ -45,7 +47,7 @@ logging = ["dep:env_logger"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-reqwest = { version = "0.12.12", features = ["json", "multipart", "stream"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["json", "multipart", "stream"] }
 serde_json = "1.0"
 async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
