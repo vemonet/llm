@@ -108,15 +108,23 @@ pub struct ParametersSchema {
     pub required: Vec<String>,
 }
 
-/// Represents a function definition for a tool
+/// Represents a function definition for a tool.
+///
+/// The `parameters` field stores the JSON Schema describing the function
+/// arguments.  It is kept as a raw `serde_json::Value` to allow arbitrary
+/// complexity (nested arrays/objects, `oneOf`, etc.) without requiring a
+/// bespoke Rust structure.
+///
+/// Builder helpers can still generate simple schemas automatically, but the
+/// user may also provide any valid schema directly.
 #[derive(Debug, Clone, Serialize)]
 pub struct FunctionTool {
-    /// The name of the function
+    /// Name of the function
     pub name: String,
-    /// Description of what the function does
+    /// Human-readable description
     pub description: String,
-    /// The parameters schema for the function
-    pub parameters: ParametersSchema,
+    /// JSON Schema describing the parameters
+    pub parameters: Value,
 }
 
 /// Defines rules for structured output responses based on [OpenAI's structured output requirements](https://platform.openai.com/docs/api-reference/chat/create#chat-create-response_format).

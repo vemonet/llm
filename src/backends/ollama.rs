@@ -188,8 +188,24 @@ struct OllamaFunctionTool {
 
 impl From<&crate::chat::Tool> for OllamaTool {
     fn from(tool: &crate::chat::Tool) -> Self {
-        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
-            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        let properties_value = tool
+            .function
+            .parameters
+            .get("properties")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+
+        let required_fields = tool
+            .function
+            .parameters
+            .get("required")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
 
         OllamaTool {
             tool_type: "function".to_owned(),
@@ -199,7 +215,7 @@ impl From<&crate::chat::Tool> for OllamaTool {
                 parameters: OllamaParameters {
                     schema_type: "object".to_string(),
                     properties: properties_value,
-                    required: tool.function.parameters.required.clone(),
+                    required: required_fields,
                 },
             },
         }

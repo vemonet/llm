@@ -163,7 +163,22 @@ struct GoogleChatResponse {
 
 impl std::fmt::Display for GoogleChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match (self.text(), self.tool_calls()) {
+            (Some(text), Some(tool_calls)) => {
+                for call in tool_calls {
+                    write!(f, "{}", call)?;
+                }
+                write!(f, "{}", text)
+            }
+            (Some(text), None) => write!(f, "{}", text),
+            (None, Some(tool_calls)) => {
+                for call in tool_calls {
+                    write!(f, "{}", call)?;
+                }
+                Ok(())
+            }
+            (None, None) => write!(f, ""),
+        }
     }
 }
 
@@ -295,8 +310,12 @@ struct GoogleFunctionDeclaration {
 
 impl From<&crate::chat::Tool> for GoogleFunctionDeclaration {
     fn from(tool: &crate::chat::Tool) -> Self {
-        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
-            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        let properties_value = tool
+            .function
+            .parameters
+            .get("properties")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
         GoogleFunctionDeclaration {
             name: tool.function.name.clone(),
@@ -304,7 +323,17 @@ impl From<&crate::chat::Tool> for GoogleFunctionDeclaration {
             parameters: GoogleFunctionParameters {
                 schema_type: "object".to_string(),
                 properties: properties_value,
-                required: tool.function.parameters.required.clone(),
+                required: tool
+                    .function
+                    .parameters
+                    .get("required")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default(),
             },
         }
     }
