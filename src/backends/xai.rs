@@ -19,6 +19,7 @@ use crate::{
     ToolCall,
 };
 use async_trait::async_trait;
+use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -145,6 +146,28 @@ struct XAIEmbeddingRequest<'a> {
 struct XAIEmbeddingData {
     embedding: Vec<f32>,
 }
+
+/// Response from X.AI's streaming chat API endpoint.
+#[derive(Deserialize, Debug)]
+struct XAIStreamResponse {
+    /// Array of generated responses
+    choices: Vec<XAIStreamChoice>,
+}
+
+/// Individual response choice from the streaming chat API.
+#[derive(Deserialize, Debug)]
+struct XAIStreamChoice {
+    /// Delta content
+    delta: XAIStreamDelta,
+}
+
+/// Delta content from a streaming chat response.
+#[derive(Deserialize, Debug)]
+struct XAIStreamDelta {
+    /// Generated text content
+    content: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct XAIEmbeddingResponse {
     data: Vec<XAIEmbeddingData>,
@@ -333,6 +356,80 @@ impl ChatProvider for XAI {
         // XAI doesn't support tools yet, fall back to regular chat
         self.chat(messages).await
     }
+
+    /// Sends a streaming chat request to X.AI's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
+        }
+
+        let mut xai_msgs: Vec<XAIChatMessage> = messages
+            .iter()
+            .map(|m| XAIChatMessage {
+                role: match m.role {
+                    ChatRole::User => "user",
+                    ChatRole::Assistant => "assistant",
+                },
+                content: &m.content,
+            })
+            .collect();
+
+        if let Some(system) = &self.system {
+            xai_msgs.insert(
+                0,
+                XAIChatMessage {
+                    role: "system",
+                    content: system,
+                },
+            );
+        }
+
+        let body = XAIChatRequest {
+            model: &self.model,
+            messages: xai_msgs,
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            stream: true,
+            top_p: self.top_p,
+            top_k: self.top_k,
+            response_format: None,
+            search_parameters: None,
+        };
+
+        let mut request = self
+            .client
+            .post("https://api.x.ai/v1/chat/completions")
+            .bearer_auth(&self.api_key)
+            .json(&body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("X.AI API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(crate::chat::create_sse_stream(response, parse_xai_sse_chunk))
+    }
 }
 
 #[async_trait]
@@ -403,3 +500,42 @@ impl SpeechToTextProvider for XAI {
 impl TextToSpeechProvider for XAI {}
 
 impl LLMProvider for XAI {}
+
+/// Parses a Server-Sent Events (SSE) chunk from X.AI's streaming API.
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_xai_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    for line in chunk.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+            
+            if data == "[DONE]" {
+                return Ok(None);
+            }
+            
+            match serde_json::from_str::<XAIStreamResponse>(data) {
+                Ok(response) => {
+                    if let Some(choice) = response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            return Ok(Some(content.clone()));
+                        }
+                    }
+                    return Ok(None);
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    Ok(None)
+}
