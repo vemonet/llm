@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::{
     chat::{
-        ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, ParametersSchema, Tool,
+        ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool,
         ToolChoice,
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -48,7 +48,8 @@ pub struct Anthropic {
 struct AnthropicTool<'a> {
     name: &'a str,
     description: &'a str,
-    input_schema: &'a ParametersSchema,
+    #[serde(rename = "input_schema")]
+    schema: &'a serde_json::Value,
 }
 
 /// Configuration for the thinking feature
@@ -384,12 +385,14 @@ impl ChatProvider for Anthropic {
             })
             .collect();
 
-        let anthropic_tools = tools.map(|t| {
-            t.iter()
+        let maybe_tool_slice: Option<&[Tool]> = tools.or(self.tools.as_deref());
+        let anthropic_tools = maybe_tool_slice.map(|slice| {
+            slice
+                .iter()
                 .map(|tool| AnthropicTool {
                     name: &tool.function.name,
                     description: &tool.function.description,
-                    input_schema: &tool.function.parameters,
+                    schema: &tool.function.parameters,
                 })
                 .collect::<Vec<_>>()
         });
@@ -407,6 +410,12 @@ impl ChatProvider for Anthropic {
                 Some(HashMap::from([("type".to_string(), "none".to_string())]))
             }
             None => None,
+        };
+
+        let final_tool_choice = if anthropic_tools.is_some() {
+            tool_choice.clone()
+        } else {
+            None
         };
 
         let thinking = if self.reasoning {
@@ -428,7 +437,7 @@ impl ChatProvider for Anthropic {
             top_p: self.top_p,
             top_k: self.top_k,
             tools: anthropic_tools,
-            tool_choice,
+            tool_choice: final_tool_choice,
             thinking,
         };
 

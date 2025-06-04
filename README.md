@@ -79,6 +79,9 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`google_image`](examples/google_image.rs) | Google Gemini chat with PDF attachment |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
+| [`google_tool_calling_example`](examples/google_tool_calling_example.rs) | Google Gemini function calling example with complex JSON schema for meeting scheduling |
+| [`json_schema_nested_example`](examples/json_schema_nested_example.rs) | Advanced example demonstrating deeply nested JSON schemas with arrays of objects and complex data structures |
+| [`tool_json_schema_cycle_example`](examples/tool_json_schema_cycle_example.rs) | Complete tool calling cycle with JSON schema validation and structured responses |
 | [`unified_tool_calling_example`](examples/unified_tool_calling_example.rs) | Unified tool calling with selectable provider - demonstrates multi-turn tool use and tool choice |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |
