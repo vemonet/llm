@@ -18,6 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -145,6 +146,23 @@ struct AnthropicContent {
     name: Option<String>,
     input: Option<serde_json::Value>,
     id: Option<String>,
+}
+
+/// Response from Anthropic's streaming messages API endpoint.
+#[derive(Deserialize, Debug)]
+struct AnthropicStreamResponse {
+    #[serde(rename = "type")]
+    response_type: String,
+    delta: Option<AnthropicDelta>,
+}
+
+/// Delta content within an Anthropic streaming response.
+#[derive(Deserialize, Debug)]
+struct AnthropicDelta {
+    #[allow(dead_code)]
+    #[serde(rename = "type")]
+    delta_type: Option<String>,
+    text: Option<String>,
 }
 
 impl std::fmt::Display for AnthropicCompleteResponse {
@@ -486,6 +504,115 @@ impl ChatProvider for Anthropic {
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
+
+    /// Sends a streaming chat request to Anthropic's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Anthropic API key".to_string()));
+        }
+
+        let anthropic_messages: Vec<AnthropicMessage> = messages
+            .iter()
+            .map(|m| AnthropicMessage {
+                role: match m.role {
+                    ChatRole::User => "user",
+                    ChatRole::Assistant => "assistant",
+                },
+                content: match &m.message_type {
+                    MessageType::Text => vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                        source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
+                    }],
+                    MessageType::Pdf(_) => unimplemented!(),
+                    MessageType::Image((image_mime, raw_bytes)) => {
+                        vec![MessageContent {
+                            message_type: Some("image"),
+                            text: None,
+                            image_url: None,
+                            source: Some(ImageSource {
+                                source_type: "base64",
+                                media_type: image_mime.mime_type(),
+                                data: BASE64.encode(raw_bytes),
+                            }),
+                            tool_use_id: None,
+                            tool_input: None,
+                            tool_name: None,
+                            tool_result_id: None,
+                            tool_output: None,
+                        }]
+                    }
+                    _ => vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                        source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
+                    }],
+                },
+            })
+            .collect();
+
+        let req_body = AnthropicCompleteRequest {
+            messages: anthropic_messages,
+            model: &self.model,
+            max_tokens: Some(self.max_tokens),
+            temperature: Some(self.temperature),
+            system: Some(&self.system),
+            stream: Some(true),
+            top_p: self.top_p,
+            top_k: self.top_k,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+        };
+
+        let mut request = self
+            .client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .header("anthropic-version", "2023-06-01")
+            .json(&req_body);
+
+        if self.timeout_seconds > 0 {
+            request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
+        }
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("Anthropic API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(crate::chat::create_sse_stream(response, parse_anthropic_sse_chunk))
+    }
 }
 
 #[async_trait]
@@ -523,4 +650,41 @@ impl crate::LLMProvider for Anthropic {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
     }
+}
+
+/// Parses a Server-Sent Events (SSE) chunk from Anthropic's streaming API.
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    for line in chunk.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+            
+            match serde_json::from_str::<AnthropicStreamResponse>(data) {
+                Ok(response) => {
+                    if response.response_type == "content_block_delta" {
+                        if let Some(delta) = response.delta {
+                            if let Some(text) = delta.text {
+                                return Ok(Some(text));
+                            }
+                        }
+                    }
+                    return Ok(None);
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    Ok(None)
 }

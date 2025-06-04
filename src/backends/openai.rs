@@ -21,6 +21,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use either::*;
+use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 
@@ -182,6 +183,24 @@ struct OpenAIEmbeddingData {
 #[derive(Deserialize, Debug)]
 struct OpenAIEmbeddingResponse {
     data: Vec<OpenAIEmbeddingData>,
+}
+
+/// Response from OpenAI's streaming chat API endpoint.
+#[derive(Deserialize, Debug)]
+struct OpenAIChatStreamResponse {
+    choices: Vec<OpenAIChatStreamChoice>,
+}
+
+/// Individual choice within an OpenAI streaming chat API response.
+#[derive(Deserialize, Debug)]
+struct OpenAIChatStreamChoice {
+    delta: OpenAIChatStreamDelta,
+}
+
+/// Delta content within an OpenAI streaming chat API response.
+#[derive(Deserialize, Debug)]
+struct OpenAIChatStreamDelta {
+    content: Option<String>,
 }
 
 /// An object specifying the format that the model must output.
@@ -478,6 +497,98 @@ impl ChatProvider for OpenAI {
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
+
+    /// Sends a streaming chat request to OpenAI's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
+        }
+
+        let messages = messages.to_vec();
+        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
+
+        for msg in messages {
+            if let MessageType::ToolResult(ref results) = msg.message_type {
+                for result in results {
+                    openai_msgs.push(OpenAIChatMessage {
+                        role: "tool",
+                        tool_call_id: Some(result.id.clone()),
+                        tool_calls: None,
+                        content: Some(Right(result.function.arguments.clone())),
+                    });
+                }
+            } else {
+                openai_msgs.push(chat_message_to_api_message(msg))
+            }
+        }
+
+        if let Some(system) = &self.system {
+            openai_msgs.insert(
+                0,
+                OpenAIChatMessage {
+                    role: "system",
+                    content: Some(Left(vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(system),
+                        image_url: None,
+                        tool_call_id: None,
+                        tool_output: None,
+                    }])),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            );
+        }
+
+        let body = OpenAIChatRequest {
+            model: &self.model,
+            messages: openai_msgs,
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            stream: true,
+            top_p: self.top_p,
+            top_k: self.top_k,
+            tools: self.tools.clone(),
+            tool_choice: self.tool_choice.clone(),
+            reasoning_effort: self.reasoning_effort.clone(),
+            response_format: None,
+        };
+
+        let url = self
+            .base_url
+            .join("chat/completions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(crate::chat::create_sse_stream(response, parse_sse_chunk))
+    }
 }
 
 // Create an owned OpenAIChatMessage that doesn't borrow from any temporary variables
@@ -733,4 +844,43 @@ impl TextToSpeechProvider for OpenAI {
 
         Ok(resp.bytes().await?.to_vec())
     }
+}
+
+/// Parses a Server-Sent Events (SSE) chunk from OpenAI's streaming API.
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    for line in chunk.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+            
+            if data == "[DONE]" {
+                return Ok(None);
+            }
+            
+            match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
+                Ok(response) => {
+                    if let Some(choice) = response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            return Ok(Some(content.clone()));
+                        }
+                    }
+                    return Ok(None);
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    Ok(None)
 }
