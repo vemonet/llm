@@ -18,6 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let proposer = AgentBuilder::new()
         .role("assistant")
+        .on_message_from("user")
         .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
         .llm(
             LLMBuilder::new()
