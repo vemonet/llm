@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatResponse, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -77,9 +77,15 @@ impl ChatWithMemory {
             };
 
             while let Ok(event) = receiver.recv().await {
+                let event_role = if event.msg.role == ChatRole::User {
+                    "user"
+                } else {
+                    &event.role
+                };
+
                 if !role_triggers
                     .iter()
-                    .any(|(role, cond)| role == &event.role && cond.matches(&event))
+                    .any(|(role, cond)| role == event_role && cond.matches(&event))
                 {
                     continue;
                 }
@@ -105,14 +111,12 @@ impl ChatWithMemory {
                 };
 
                 if let (Some(txt), Some(role)) = (response_text, &my_role) {
-                    let formatted = format!("[{role}] {txt}");
-                    let msg = ChatMessage::assistant().content(formatted).build();
+                    let msg = ChatMessage::assistant().content(format!("[{role}] {txt}")).build();
                     let mut guard = memory.write().await;
                     if let Err(e) = guard.remember_with_role(&msg, role.clone()).await {
                         eprintln!("Memory save error: {e}");
                     }
 
-                    // increment cycle counter after successful post
                     cycle_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             }
@@ -147,13 +151,7 @@ impl ChatProvider for ChatWithMemory {
             // record incoming user messages once
             let mut mem = self.memory.write().await;
             for m in messages {
-                let mut tagged = m.clone();
-                if let Some(role) = &self.role {
-                    tagged.content = format!("[{role}] User: {}", m.content);
-                    mem.remember_with_role(&tagged, role.clone()).await?;
-                } else {
-                    mem.remember(&tagged).await?;
-                }
+                mem.remember(&m).await?;
             }
         }
 
