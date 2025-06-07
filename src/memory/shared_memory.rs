@@ -43,26 +43,6 @@ impl<T: MemoryProvider> SharedMemory<T> {
             .expect("subscribe() called on non-reactive memory")
             .subscribe()
     }
-
-    /// Remember a message with a specific role and emit event if reactive
-    pub async fn remember_with_role(
-        &mut self,
-        message: &ChatMessage,
-        role: String,
-    ) -> Result<(), LLMError> {
-        let mut guard = self.inner.write().await;
-        guard.remember(message).await?;
-
-        if let Some(sender) = &self.event_sender {
-            let event = MessageEvent {
-                role,
-                msg: message.clone(),
-            };
-            let _ = sender.send(event);
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -134,9 +114,11 @@ impl<T: MemoryProvider> MemoryProvider for SharedMemory<T> {
         guard.remember(message).await?;
 
         if let Some(sender) = &self.event_sender {
+            let mut msg = message.clone();
+            msg.content = msg.content.replace(&format!("[{role}]"), "");
             let event = MessageEvent {
                 role,
-                msg: message.clone(),
+                msg,
             };
             let _ = sender.send(event);
         }
