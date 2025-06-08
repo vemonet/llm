@@ -25,6 +25,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Speech to text**: Transcribe audio to text
 - **Text to speech**: Transcribe text to audio
 - **Memory**: Store and retrieve conversation history with sliding window (soon others) and shared memory support
+- **Agentic**: Build reactive agents that can cooperate via shared memory, with configurable triggers, roles and validation.
 
 ## Use any LLM backend on your project
 
