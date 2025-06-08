@@ -22,9 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::XAI)
         .api_key(std::env::var("XAI_API_KEY").unwrap_or("xai-key".into()))
         .model("grok-3-latest")
-        .search_mode("auto")
-        .max_search_results(10)
-        .search_from_date("2024-01-01") // Recent news
+        .xai_search_mode("auto")
+        .xai_max_search_results(10)
+        .xai_search_from_date("2024-01-01") // Recent news
         .build()?;
 
     // Initialize OpenAI backend for summarization
