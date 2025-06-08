@@ -398,6 +398,11 @@ impl LLMBuilder {
     }
     
 
+    #[deprecated(note = "Renamed to `xai_search_mode`.")]
+    pub fn search_mode(self, mode: impl Into<String>) -> Self {
+        self.xai_search_mode(mode)
+    }
+
     /// Sets the search mode for search-enabled providers.
     pub fn xai_search_mode(mut self, mode: impl Into<String>) -> Self {
         self.xai_search_mode = Some(mode.into());
