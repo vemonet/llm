@@ -65,6 +65,17 @@ pub mod agent;
 #[cfg(feature = "api")]
 pub mod api;
 
+
+#[inline]
+/// Initialize logging using env_logger if the "logging" feature is enabled.
+/// This is a no-op if the feature is not enabled.
+pub fn init_logging() {
+    #[cfg(feature = "logging")]
+    {
+        let _ = env_logger::try_init();
+    }
+}
+
 /// Core trait that all LLM providers must implement, combining chat, completion
 /// and embedding capabilities into a unified interface
 pub trait LLMProvider:

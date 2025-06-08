@@ -448,6 +448,13 @@ impl ChatProvider for AzureOpenAI {
         let response_format: Option<OpenAIResponseFormat> =
             self.json_schema.clone().map(|s| s.into());
 
+        let request_tools = tools.map(|t| t.to_vec()).or_else(|| self.tools.clone());
+        let request_tool_choice = if request_tools.is_some() {
+            self.tool_choice.clone()
+        } else {
+            None
+        };
+
         let body = AzureOpenAIChatRequest {
             model: &self.model,
             messages: openai_msgs,
@@ -456,11 +463,17 @@ impl ChatProvider for AzureOpenAI {
             stream: self.stream.unwrap_or(false),
             top_p: self.top_p,
             top_k: self.top_k,
-            tools: tools.map(|t| t.to_vec()),
-            tool_choice: self.tool_choice.clone(),
+            tools: request_tools,
+            tool_choice: request_tool_choice,
             reasoning_effort: self.reasoning_effort.clone(),
             response_format,
         };
+
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("Azure OpenAI request payload: {}", json);
+            }
+        }
 
         let mut url = self
             .base_url
@@ -482,6 +495,8 @@ impl ChatProvider for AzureOpenAI {
 
         // Send the request
         let response = request.send().await?;
+
+        log::debug!("Azure OpenAI HTTP status: {}", response.status());
 
         // If we got a non-200 response, let's get the error details
         if !response.status().is_success() {

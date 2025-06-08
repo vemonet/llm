@@ -188,8 +188,24 @@ struct OllamaFunctionTool {
 
 impl From<&crate::chat::Tool> for OllamaTool {
     fn from(tool: &crate::chat::Tool) -> Self {
-        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
-            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        let properties_value = tool
+            .function
+            .parameters
+            .get("properties")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+
+        let required_fields = tool
+            .function
+            .parameters
+            .get("required")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
 
         OllamaTool {
             tool_type: "function".to_owned(),
@@ -199,7 +215,7 @@ impl From<&crate::chat::Tool> for OllamaTool {
                 parameters: OllamaParameters {
                     schema_type: "object".to_string(),
                     properties: properties_value,
-                    required: tool.function.parameters.required.clone(),
+                    required: required_fields,
                 },
             },
         }
@@ -342,6 +358,12 @@ impl ChatProvider for Ollama {
             tools: None,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Ollama request payload: {}", json);
+            }
+        }
+
         let url = format!("{}/api/chat", self.base_url);
 
         let mut request = self.client.post(&url).json(&req_body);
@@ -350,7 +372,11 @@ impl ChatProvider for Ollama {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Ollama HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
         let json_resp: OllamaResponse = resp.json().await?;
         Ok(Box::new(json_resp))
     }
@@ -409,6 +435,12 @@ impl ChatProvider for Ollama {
             tools: ollama_tools,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Ollama request payload (tools): {}", json);
+            }
+        }
+
         let url = format!("{}/api/chat", self.base_url);
 
         let mut request = self.client.post(&url).json(&req_body);
@@ -417,7 +449,11 @@ impl ChatProvider for Ollama {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Ollama HTTP status (tools): {}", resp.status());
+
+        let resp = resp.error_for_status()?;
         let json_resp = resp.json::<OllamaResponse>().await?;
 
         Ok(Box::new(json_resp))

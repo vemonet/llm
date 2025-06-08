@@ -55,6 +55,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -161,9 +162,31 @@ struct GoogleChatResponse {
     candidates: Vec<GoogleCandidate>,
 }
 
+/// Response from the streaming chat completion API
+#[derive(Deserialize, Debug)]
+struct GoogleStreamResponse {
+    /// Generated completion candidates
+    candidates: Option<Vec<GoogleCandidate>>,
+}
+
 impl std::fmt::Display for GoogleChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match (self.text(), self.tool_calls()) {
+            (Some(text), Some(tool_calls)) => {
+                for call in tool_calls {
+                    write!(f, "{}", call)?;
+                }
+                write!(f, "{}", text)
+            }
+            (Some(text), None) => write!(f, "{}", text),
+            (None, Some(tool_calls)) => {
+                for call in tool_calls {
+                    write!(f, "{}", call)?;
+                }
+                Ok(())
+            }
+            (None, None) => write!(f, ""),
+        }
     }
 }
 
@@ -295,8 +318,12 @@ struct GoogleFunctionDeclaration {
 
 impl From<&crate::chat::Tool> for GoogleFunctionDeclaration {
     fn from(tool: &crate::chat::Tool) -> Self {
-        let properties_value = serde_json::to_value(&tool.function.parameters.properties)
-            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+        let properties_value = tool
+            .function
+            .parameters
+            .get("properties")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
         GoogleFunctionDeclaration {
             name: tool.function.name.clone(),
@@ -304,7 +331,17 @@ impl From<&crate::chat::Tool> for GoogleFunctionDeclaration {
             parameters: GoogleFunctionParameters {
                 schema_type: "object".to_string(),
                 properties: properties_value,
-                required: tool.function.parameters.required.clone(),
+                required: tool
+                    .function
+                    .parameters
+                    .get("required")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default(),
             },
         }
     }
@@ -573,6 +610,12 @@ impl ChatProvider for Google {
             tools: None,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Google Gemini request payload: {}", json);
+            }
+        }
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             model = self.model,
@@ -585,7 +628,11 @@ impl ChatProvider for Google {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Google Gemini HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
@@ -738,6 +785,12 @@ impl ChatProvider for Google {
             tools: google_tools,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Google Gemini request payload (tool): {}", json);
+            }
+        }
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             model = self.model,
@@ -751,7 +804,11 @@ impl ChatProvider for Google {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Google Gemini HTTP status (tool): {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         // Get the raw response text for debugging
         let resp_text = resp.text().await?;
@@ -770,6 +827,108 @@ impl ChatProvider for Google {
                 })
             }
         }
+    }
+
+    /// Sends a streaming chat request to Google's Gemini API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Google API key".to_string()));
+        }
+
+        let mut chat_contents = Vec::with_capacity(messages.len());
+
+        if let Some(system) = &self.system {
+            chat_contents.push(GoogleChatContent {
+                role: "user",
+                parts: vec![GoogleContentPart::Text(system)],
+            });
+        }
+
+        for msg in messages {
+            let role = match msg.role {
+                ChatRole::User => "user",
+                ChatRole::Assistant => "model",
+            };
+
+            chat_contents.push(GoogleChatContent {
+                role,
+                parts: match &msg.message_type {
+                    MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
+                    MessageType::Image((image_mime, raw_bytes)) => {
+                        vec![GoogleContentPart::InlineData(GoogleInlineData {
+                            mime_type: image_mime.mime_type().to_string(),
+                            data: BASE64.encode(raw_bytes),
+                        })]
+                    }
+                    MessageType::Pdf(raw_bytes) => {
+                        vec![GoogleContentPart::InlineData(GoogleInlineData {
+                            mime_type: "application/pdf".to_string(),
+                            data: BASE64.encode(raw_bytes),
+                        })]
+                    }
+                    _ => vec![GoogleContentPart::Text(&msg.content)],
+                },
+            });
+        }
+
+        let generation_config = if self.max_tokens.is_none()
+            && self.temperature.is_none()
+            && self.top_p.is_none()
+            && self.top_k.is_none()
+        {
+            None
+        } else {
+            Some(GoogleGenerationConfig {
+                max_output_tokens: self.max_tokens,
+                temperature: self.temperature,
+                top_p: self.top_p,
+                top_k: self.top_k,
+                response_mime_type: None,
+                response_schema: None,
+            })
+        };
+
+        let req_body = GoogleChatRequest {
+            contents: chat_contents,
+            generation_config,
+            tools: None,
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={key}",
+            model = self.model,
+            key = self.api_key
+        );
+
+        let mut request = self.client.post(&url).json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("Google API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(crate::chat::create_sse_stream(response, parse_google_sse_chunk))
     }
 }
 
@@ -848,6 +1007,45 @@ impl LLMProvider for Google {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
     }
+}
+
+/// Parses a Server-Sent Events (SSE) chunk from Google's streaming API.
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    for line in chunk.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+            
+            match serde_json::from_str::<GoogleStreamResponse>(data) {
+                Ok(response) => {
+                    if let Some(candidates) = response.candidates {
+                        if let Some(candidate) = candidates.first() {
+                            if let Some(part) = candidate.content.parts.first() {
+                                if !part.text.is_empty() {
+                                    return Ok(Some(part.text.clone()));
+                                }
+                            }
+                        }
+                    }
+                    return Ok(None);
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    Ok(None)
 }
 
 #[async_trait]

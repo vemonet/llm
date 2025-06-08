@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::{
     chat::{
-        ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, ParametersSchema, Tool,
+        ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool,
         ToolChoice,
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -18,6 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -48,7 +49,8 @@ pub struct Anthropic {
 struct AnthropicTool<'a> {
     name: &'a str,
     description: &'a str,
-    input_schema: &'a ParametersSchema,
+    #[serde(rename = "input_schema")]
+    schema: &'a serde_json::Value,
 }
 
 /// Configuration for the thinking feature
@@ -144,6 +146,23 @@ struct AnthropicContent {
     name: Option<String>,
     input: Option<serde_json::Value>,
     id: Option<String>,
+}
+
+/// Response from Anthropic's streaming messages API endpoint.
+#[derive(Deserialize, Debug)]
+struct AnthropicStreamResponse {
+    #[serde(rename = "type")]
+    response_type: String,
+    delta: Option<AnthropicDelta>,
+}
+
+/// Delta content within an Anthropic streaming response.
+#[derive(Deserialize, Debug)]
+struct AnthropicDelta {
+    #[allow(dead_code)]
+    #[serde(rename = "type")]
+    delta_type: Option<String>,
+    text: Option<String>,
 }
 
 impl std::fmt::Display for AnthropicCompleteResponse {
@@ -384,12 +403,14 @@ impl ChatProvider for Anthropic {
             })
             .collect();
 
-        let anthropic_tools = tools.map(|t| {
-            t.iter()
+        let maybe_tool_slice: Option<&[Tool]> = tools.or(self.tools.as_deref());
+        let anthropic_tools = maybe_tool_slice.map(|slice| {
+            slice
+                .iter()
                 .map(|tool| AnthropicTool {
                     name: &tool.function.name,
                     description: &tool.function.description,
-                    input_schema: &tool.function.parameters,
+                    schema: &tool.function.parameters,
                 })
                 .collect::<Vec<_>>()
         });
@@ -407,6 +428,12 @@ impl ChatProvider for Anthropic {
                 Some(HashMap::from([("type".to_string(), "none".to_string())]))
             }
             None => None,
+        };
+
+        let final_tool_choice = if anthropic_tools.is_some() {
+            tool_choice.clone()
+        } else {
+            None
         };
 
         let thinking = if self.reasoning {
@@ -428,7 +455,7 @@ impl ChatProvider for Anthropic {
             top_p: self.top_p,
             top_k: self.top_k,
             tools: anthropic_tools,
-            tool_choice,
+            tool_choice: final_tool_choice,
             thinking,
         };
 
@@ -444,7 +471,19 @@ impl ChatProvider for Anthropic {
             request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&req_body) {
+                log::trace!("Anthropic request payload: {}", json);
+            }
+        }
+
+        log::debug!("Anthropic request: POST /v1/messages");
+
+        let resp = request.send().await?;
+
+        log::debug!("Anthropic HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
 
         let body = resp.text().await?;
         let json_resp: AnthropicCompleteResponse = serde_json::from_str(&body)
@@ -464,6 +503,115 @@ impl ChatProvider for Anthropic {
     /// The provider's response text or an error
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
+    }
+
+    /// Sends a streaming chat request to Anthropic's API.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Anthropic API key".to_string()));
+        }
+
+        let anthropic_messages: Vec<AnthropicMessage> = messages
+            .iter()
+            .map(|m| AnthropicMessage {
+                role: match m.role {
+                    ChatRole::User => "user",
+                    ChatRole::Assistant => "assistant",
+                },
+                content: match &m.message_type {
+                    MessageType::Text => vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                        source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
+                    }],
+                    MessageType::Pdf(_) => unimplemented!(),
+                    MessageType::Image((image_mime, raw_bytes)) => {
+                        vec![MessageContent {
+                            message_type: Some("image"),
+                            text: None,
+                            image_url: None,
+                            source: Some(ImageSource {
+                                source_type: "base64",
+                                media_type: image_mime.mime_type(),
+                                data: BASE64.encode(raw_bytes),
+                            }),
+                            tool_use_id: None,
+                            tool_input: None,
+                            tool_name: None,
+                            tool_result_id: None,
+                            tool_output: None,
+                        }]
+                    }
+                    _ => vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(&m.content),
+                        image_url: None,
+                        source: None,
+                        tool_use_id: None,
+                        tool_input: None,
+                        tool_name: None,
+                        tool_result_id: None,
+                        tool_output: None,
+                    }],
+                },
+            })
+            .collect();
+
+        let req_body = AnthropicCompleteRequest {
+            messages: anthropic_messages,
+            model: &self.model,
+            max_tokens: Some(self.max_tokens),
+            temperature: Some(self.temperature),
+            system: Some(&self.system),
+            stream: Some(true),
+            top_p: self.top_p,
+            top_k: self.top_k,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+        };
+
+        let mut request = self
+            .client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .header("anthropic-version", "2023-06-01")
+            .json(&req_body);
+
+        if self.timeout_seconds > 0 {
+            request = request.timeout(std::time::Duration::from_secs(self.timeout_seconds));
+        }
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("Anthropic API returned error status: {}", status),
+                raw_response: error_text,
+            });
+        }
+
+        Ok(crate::chat::create_sse_stream(response, parse_anthropic_sse_chunk))
     }
 }
 
@@ -502,4 +650,41 @@ impl crate::LLMProvider for Anthropic {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
     }
+}
+
+/// Parses a Server-Sent Events (SSE) chunk from Anthropic's streaming API.
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    for line in chunk.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+            
+            match serde_json::from_str::<AnthropicStreamResponse>(data) {
+                Ok(response) => {
+                    if response.response_type == "content_block_delta" {
+                        if let Some(delta) = response.delta {
+                            if let Some(text) = delta.text {
+                                return Ok(Some(text));
+                            }
+                        }
+                    }
+                    return Ok(None);
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    Ok(None)
 }

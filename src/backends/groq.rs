@@ -158,6 +158,12 @@ impl ChatProvider for Groq {
             top_k: self.top_k,
         };
 
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("Groq request payload: {}", json);
+            }
+        }
+
         let mut request = self
             .client
             .post("https://api.groq.com/openai/v1/chat/completions")
@@ -169,7 +175,11 @@ impl ChatProvider for Groq {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
-        let resp = request.send().await?.error_for_status()?;
+        let resp = request.send().await?;
+
+        log::debug!("Groq HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
         let json_resp: GroqChatResponse = resp.json().await?;
 
         Ok(Box::new(json_resp))

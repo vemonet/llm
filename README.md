@@ -63,22 +63,29 @@ More details in the [`api_example`](examples/api_example.rs)
 | Name | Description |
 |------|-------------|
 | [`anthropic_example`](examples/anthropic_example.rs) | Demonstrates integration with Anthropic's Claude model for chat completion |
+| [`anthropic_streaming_example`](examples/anthropic_streaming_example.rs) | Anthropic streaming chat example demonstrating real-time token generation |
 | [`chain_example`](examples/chain_example.rs) | Shows how to create multi-step prompt chains for exploring programming language features |
 | [`deepseek_example`](examples/deepseek_example.rs) | Basic DeepSeek chat completion example with deepseek-chat models |
 | [`embedding_example`](examples/embedding_example.rs) | Basic embedding example with OpenAI's API |
 | [`multi_backend_example`](examples/multi_backend_example.rs) | Illustrates chaining multiple LLM backends (OpenAI, Anthropic, DeepSeek) together in a single workflow |
 | [`ollama_example`](examples/ollama_example.rs) | Example of using local LLMs through Ollama integration |
 | [`openai_example`](examples/openai_example.rs) | Basic OpenAI chat completion example with GPT models |
+| [`openai_streaming_example`](examples/openai_streaming_example.rs) | OpenAI streaming chat example demonstrating real-time token generation |
 | [`phind_example`](examples/phind_example.rs) | Basic Phind chat completion example with Phind-70B model |
 | [`validator_example`](examples/validator_example.rs) | Basic validator example with Anthropic's Claude model |
 | [`xai_example`](examples/xai_example.rs) | Basic xAI chat completion example with Grok models |
+| [`xai_streaming_example`](examples/xai_streaming_example.rs) | X.AI streaming chat example demonstrating real-time token generation |
 | [`evaluation_example`](examples/evaluation_example.rs) | Basic evaluation example with Anthropic, Phind and DeepSeek |
 | [`evaluator_parallel_example`](examples/evaluator_parallel_example.rs) | Evaluate multiple LLM providers in parallel |
 | [`google_example`](examples/google_example.rs) | Basic Google Gemini chat completion example with Gemini models |
+| [`google_streaming_example`](examples/google_streaming_example.rs) | Google streaming chat example demonstrating real-time token generation |
 | [`google_pdf`](examples/google_pdf.rs) | Google Gemini chat with PDF attachment |
 | [`google_image`](examples/google_image.rs) | Google Gemini chat with PDF attachment |
 | [`google_embedding_example`](examples/google_embedding_example.rs) | Basic Google Gemini embedding example with Gemini models |
 | [`tool_calling_example`](examples/tool_calling_example.rs) | Basic tool calling example with OpenAI |
+| [`google_tool_calling_example`](examples/google_tool_calling_example.rs) | Google Gemini function calling example with complex JSON schema for meeting scheduling |
+| [`json_schema_nested_example`](examples/json_schema_nested_example.rs) | Advanced example demonstrating deeply nested JSON schemas with arrays of objects and complex data structures |
+| [`tool_json_schema_cycle_example`](examples/tool_json_schema_cycle_example.rs) | Complete tool calling cycle with JSON schema validation and structured responses |
 | [`unified_tool_calling_example`](examples/unified_tool_calling_example.rs) | Unified tool calling with selectable provider - demonstrates multi-turn tool use and tool choice |
 | [`deepclaude_pipeline_example`](examples/deepclaude_pipeline_example.rs) | Basic deepclaude pipeline example with DeepSeek and Claude |
 | [`api_example`](examples/api_example.rs) | Basic API (openai standard format) example with OpenAI, Anthropic, DeepSeek and Groq |

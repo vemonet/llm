@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use async_trait::async_trait;
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -108,15 +109,23 @@ pub struct ParametersSchema {
     pub required: Vec<String>,
 }
 
-/// Represents a function definition for a tool
+/// Represents a function definition for a tool.
+///
+/// The `parameters` field stores the JSON Schema describing the function
+/// arguments.  It is kept as a raw `serde_json::Value` to allow arbitrary
+/// complexity (nested arrays/objects, `oneOf`, etc.) without requiring a
+/// bespoke Rust structure.
+///
+/// Builder helpers can still generate simple schemas automatically, but the
+/// user may also provide any valid schema directly.
 #[derive(Debug, Clone, Serialize)]
 pub struct FunctionTool {
-    /// The name of the function
+    /// Name of the function
     pub name: String,
-    /// Description of what the function does
+    /// Human-readable description
     pub description: String,
-    /// The parameters schema for the function
-    pub parameters: ParametersSchema,
+    /// JSON Schema describing the parameters
+    pub parameters: Value,
 }
 
 /// Defines rules for structured output responses based on [OpenAI's structured output requirements](https://platform.openai.com/docs/api-reference/chat/create#chat-create-response_format).
@@ -268,6 +277,24 @@ pub trait ChatProvider: Sync + Send {
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError>;
 
+    /// Sends a streaming chat request to the provider with a sequence of messages.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// A stream of text tokens or an error
+    async fn chat_stream(
+        &self,
+        _messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        Err(LLMError::Generic(
+            "Streaming not supported for this provider".to_string(),
+        ))
+    }
+
     /// Get current memory contents if provider supports memory
     async fn memory_contents(&self) -> Option<Vec<ChatMessage>> {
         None
@@ -380,4 +407,41 @@ impl ChatMessageBuilder {
             content: self.content,
         }
     }
+}
+
+/// Creates a Server-Sent Events (SSE) stream from an HTTP response.
+///
+/// # Arguments
+///
+/// * `response` - The HTTP response from the streaming API
+/// * `parser` - Function to parse each SSE chunk into optional text content
+///
+/// # Returns
+///
+/// A pinned stream of text tokens or an error
+pub(crate) fn create_sse_stream<F>(
+    response: reqwest::Response,
+    parser: F,
+) -> std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>
+where
+    F: Fn(&str) -> Result<Option<String>, LLMError> + Send + 'static,
+{
+    let stream = response
+        .bytes_stream()
+        .map(move |chunk| match chunk {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                parser(&text)
+            }
+            Err(e) => Err(LLMError::HttpError(e.to_string())),
+        })
+        .filter_map(|result| async move {
+            match result {
+                Ok(Some(content)) => Some(Ok(content)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        });
+
+    Box::pin(stream)
 }
