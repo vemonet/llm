@@ -54,22 +54,10 @@ impl AgentBuilder {
         self
     }
 
-    /// Configures the agent to react to messages from a specific role.
-    ///
-    /// The agent will trigger on any message from the specified role.
-    pub fn on_message_from(mut self, role: impl Into<String>) -> Self {
-        self.role_triggers.push((role.into(), MessageCondition::Any));
-        self
-    }
-
     /// Configures the agent to react to messages from a specific role with a condition.
     ///
     /// The agent will only trigger when messages from the specified role match the condition.
-    pub fn on_message_from_with_trigger(
-        mut self,
-        role: impl Into<String>,
-        condition: MessageCondition,
-    ) -> Self {
+    pub fn on(mut self, role: impl Into<String>, condition: MessageCondition) -> Self {
         self.role_triggers.push((role.into(), condition));
         self
     }

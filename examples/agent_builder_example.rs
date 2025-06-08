@@ -9,7 +9,8 @@ use llm::{
     agent::AgentBuilder,
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
-    memory::{MessageCondition, SharedMemory, SlidingWindowMemory},
+    memory::{SharedMemory, SlidingWindowMemory},
+    cond,
 };
 
 #[tokio::main]
@@ -18,8 +19,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let proposer = AgentBuilder::new()
         .role("assistant")
-        .on_message_from("user")
-        .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
+        .on("user", cond!(any))
+        .on("reviewer", cond!(contains "REJECT"))
         .llm(
             LLMBuilder::new()
                 .backend(LLMBackend::OpenAI)
@@ -45,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _reviewer = AgentBuilder::new()
         .role("reviewer")
-        .on_message_from("assistant")
+        .on("assistant", cond!(any))
         .debounce(800)
         .llm(
             LLMBuilder::new()
@@ -53,13 +54,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .api_key(std::env::var("OPENAI_API_KEY").unwrap_or("sk-TESTKEY".into()))
                 .model("o3")
                 .system("Respond with a single word: ACCEPT (if the assistant is correct) or REJECT (if wrong). No explanation..")
+                .validator(|resp| {
+                    if resp == "ACCEPT" || resp == "REJECT" {
+                        Ok(())
+                    } else {
+                        Err("Invalid response".to_string())
+                    }
+                })
+                .validator_attempts(3)
         )
         .memory(shared_memory.clone())
         .build()?;
 
     let _resumer = AgentBuilder::new()
         .role("resumer")
-        .on_message_from_with_trigger("reviewer", MessageCondition::Contains("ACCEPT".to_string()))
+        .on("reviewer", cond!(contains "ACCEPT"))
         .llm(
             LLMBuilder::new()
                 .backend(LLMBackend::OpenAI)

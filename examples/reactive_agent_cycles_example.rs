@@ -6,7 +6,8 @@ use llm::{
     agent::AgentBuilder,
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
-    memory::{MessageCondition, SharedMemory, SlidingWindowMemory},
+    memory::{SharedMemory, SlidingWindowMemory},
+    cond,
 };
 
 #[tokio::main]
@@ -18,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Proposer agent – limited to 4 reactive turns between user prompts
     let proposer = AgentBuilder::new()
         .role("assistant")
-        .on_message_from_with_trigger("reviewer", MessageCondition::Contains("REJECT".to_string()))
+        .on("reviewer", cond!(contains "REJECT"))
         .max_cycles(4)
         .llm(
             LLMBuilder::new()
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Reviewer agent – replies ACCEPT / REJECT
     let _ = AgentBuilder::new()
         .role("reviewer")
-        .on_message_from("assistant")
+        .on("assistant", cond!(any))
         .llm(
             LLMBuilder::new()
                 .backend(LLMBackend::Anthropic)

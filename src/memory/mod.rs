@@ -5,10 +5,16 @@
 //! - EmbeddingMemory: Semantic search using embeddings (future)
 //! - RAGMemory: Document-based retrieval (future)
 
+pub mod chat_wrapper;
+pub mod shared_memory;
+pub mod sliding_window;
+pub mod cond_macros;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use regex::Regex;
 
 use crate::{chat::ChatMessage, error::LLMError};
 
@@ -42,6 +48,12 @@ pub enum MessageCondition {
     Custom(Arc<dyn Fn(&ChatMessage) -> bool + Send + Sync>),
     /// Empty
     Empty,
+    /// Trigger if all conditions are met
+    All(Vec<MessageCondition>),
+    /// Trigger if any condition is met
+    AnyOf(Vec<MessageCondition>),
+    /// Trigger if message content matches regex
+    Regex(String),
 }
 
 impl MessageCondition {
@@ -57,13 +69,13 @@ impl MessageCondition {
             MessageCondition::LenGt(len) => event.msg.content.len() > *len,
             MessageCondition::Custom(func) => func(&event.msg),
             MessageCondition::Empty => event.msg.content.is_empty(),
+            MessageCondition::All(inner) => inner.iter().all(|c| c.matches(event)),
+            MessageCondition::AnyOf(inner) => inner.iter().any(|c| c.matches(event)),
+            MessageCondition::Regex(regex) => Regex::new(regex).map(|re| re.is_match(&event.msg.content)).unwrap_or(false),
         }
     }
 }
 
-pub mod chat_wrapper;
-pub mod shared_memory;
-pub mod sliding_window;
 
 pub use chat_wrapper::ChatWithMemory;
 pub use shared_memory::SharedMemory;
