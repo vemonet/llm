@@ -480,25 +480,38 @@ impl ChatProvider for OpenAI {
         };
 
         let web_search_options = if self.enable_web_search.unwrap_or(false) {
-            let user_location_type = self.web_search_user_location_type.clone();
-            let user_location_approximate_country = self.web_search_user_location_approximate_country.clone();
-            let user_location_approximate_city = self.web_search_user_location_approximate_city.clone();
-            let user_location_approximate_region = self.web_search_user_location_approximate_region.clone();
-
+            let loc_type_opt = self
+                .web_search_user_location_type
+                .as_ref()
+                .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
+        
+            let country = self.web_search_user_location_approximate_country.as_ref();
+            let city    = self.web_search_user_location_approximate_city.as_ref();
+            let region  = self.web_search_user_location_approximate_region.as_ref();
+        
+            let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
+                Some(ApproximateLocation {
+                    country: country.cloned().unwrap_or_default(),
+                    city:    city.cloned().unwrap_or_default(),
+                    region:  region.cloned().unwrap_or_default(),
+                })
+            } else {
+                None
+            };
+        
+            let user_location = loc_type_opt.map(|loc_type| UserLocation {
+                location_type: loc_type.clone(),
+                approximate,
+            });
+        
             Some(OpenAIWebSearchOptions {
                 search_context_size: self.web_search_context_size.clone(),
-                user_location: Some(UserLocation {
-                    location_type: user_location_type.unwrap_or("city".to_string()),
-                    approximate: Some(ApproximateLocation {
-                        country: user_location_approximate_country.unwrap_or("United States".to_string()),
-                        city: user_location_approximate_city.unwrap_or("Los Angeles".to_string()),
-                        region: user_location_approximate_region.unwrap_or("California".to_string()),
-                    }),
-                }),
+                user_location,
             })
         } else {
             None
         };
+        
 
         let body = OpenAIChatRequest {
             model: &self.model,
