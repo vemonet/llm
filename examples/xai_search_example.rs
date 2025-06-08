@@ -18,8 +18,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::XAI)
         .api_key(std::env::var("XAI_API_KEY").unwrap_or("xai-test-key".into()))
         .model("grok-3-latest")
-        .search_mode("auto")
-        .max_search_results(10)
+        .xai_search_mode("auto")
+        .xai_max_search_results(10)
         .build()?;
 
     let messages = vec![ChatMessage {
@@ -37,9 +37,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::XAI)
         .api_key(std::env::var("XAI_API_KEY").unwrap_or("xai-test-key".into()))
         .model("grok-3-latest")
-        .search_mode("auto")
-        .search_date_range("2022-01-01", "2022-12-31")
-        .max_search_results(5)
+        .xai_search_mode("auto")
+        .xai_search_date_range("2022-01-01", "2022-12-31")
+        .xai_max_search_results(5)
         .build()?;
 
     let dated_messages = vec![ChatMessage {
@@ -57,11 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::XAI)
         .api_key(std::env::var("XAI_API_KEY").unwrap_or("xai-test-key".into()))
         .model("grok-3-latest")
-        .search_mode("auto")
-        .search_source("web", Some(vec!["wikipedia.org".to_string()]))
-        .search_source("news", Some(vec!["bbc.co.uk".to_string()]))
-        .max_search_results(8)
-        .search_from_date("2023-01-01")
+        .xai_search_mode("auto")
+        .xai_search_source("web", Some(vec!["wikipedia.org".to_string()]))
+        .xai_search_source("news", Some(vec!["bbc.co.uk".to_string()]))
+        .xai_max_search_results(8)
+        .xai_search_from_date("2023-01-01")
         .build()?;
 
     let filtered_messages = vec![ChatMessage {
