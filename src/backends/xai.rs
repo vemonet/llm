@@ -5,7 +5,6 @@
 
 #[cfg(feature = "xai")]
 use crate::{
-    builder::SearchParameters,
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -52,10 +51,45 @@ pub struct XAI {
     pub embedding_dimensions: Option<u32>,
     /// JSON schema for structured output
     pub json_schema: Option<StructuredOutputFormat>,
-    /// Search parameters for search functionality
-    pub search_parameters: Option<SearchParameters>,
+    /// XAI search parameters
+    pub xai_search_mode: Option<String>,
+    /// XAI search sources
+    pub xai_search_source_type: Option<String>,
+    /// XAI search excluded websites
+    pub xai_search_excluded_websites: Option<Vec<String>>,
+    /// XAI search max results
+    pub xai_search_max_results: Option<u32>,
+    /// XAI search from date
+    pub xai_search_from_date: Option<String>,
+    /// XAI search to date
+    pub xai_search_to_date: Option<String>,
     /// HTTP client for making API requests
     client: Client,
+}
+
+/// Search source configuration for search parameters
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct XaiSearchSource {
+    /// Type of source: "web" or "news"
+    #[serde(rename = "type")]
+    pub source_type: String,
+    /// List of websites to exclude from this source
+    pub excluded_websites: Option<Vec<String>>,
+}
+
+/// Search parameters for LLM providers that support search functionality
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct XaiSearchParameters {
+    /// Search mode (e.g., "auto")
+    pub mode: Option<String>,
+    /// List of search sources with exclusions
+    pub sources: Option<Vec<XaiSearchSource>>,
+    /// Maximum number of search results to return
+    pub max_search_results: Option<u32>,
+    /// Start date for search results (format: "YYYY-MM-DD")
+    pub from_date: Option<String>,
+    /// End date for search results (format: "YYYY-MM-DD")
+    pub to_date: Option<String>,
 }
 
 /// Individual message in an X.AI chat conversation.
@@ -92,7 +126,7 @@ struct XAIChatRequest<'a> {
     response_format: Option<XAIResponseFormat>,
     /// Search parameters for search functionality
     #[serde(skip_serializing_if = "Option::is_none")]
-    search_parameters: Option<&'a SearchParameters>,
+    search_parameters: Option<&'a XaiSearchParameters>,
 }
 
 /// Response from X.AI's chat API endpoint.
@@ -229,7 +263,12 @@ impl XAI {
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
         json_schema: Option<StructuredOutputFormat>,
-        search_parameters: Option<SearchParameters>,
+        xai_search_mode: Option<String>,
+        xai_search_source_type: Option<String>,
+        xai_search_excluded_websites: Option<Vec<String>>,
+        xai_search_max_results: Option<u32>,
+        xai_search_from_date: Option<String>,
+        xai_search_to_date: Option<String>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -248,7 +287,12 @@ impl XAI {
             embedding_encoding_format,
             embedding_dimensions,
             json_schema,
-            search_parameters,
+            xai_search_mode,
+            xai_search_source_type,
+            xai_search_excluded_websites,
+            xai_search_max_results,
+            xai_search_from_date,
+            xai_search_to_date,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -300,6 +344,17 @@ impl ChatProvider for XAI {
                 json_schema: Some(s.clone()),
             });
 
+        let search_parameters = XaiSearchParameters {
+            mode: self.xai_search_mode.clone(),
+            sources: Some(vec![XaiSearchSource {
+                source_type: self.xai_search_source_type.clone().unwrap_or("web".to_string()),
+                excluded_websites: self.xai_search_excluded_websites.clone(),
+            }]),
+            max_search_results: self.xai_search_max_results.clone(),
+            from_date: self.xai_search_from_date.clone(),
+            to_date: self.xai_search_to_date.clone(),
+        };
+        
         let body = XAIChatRequest {
             model: &self.model,
             messages: xai_msgs,
@@ -309,7 +364,7 @@ impl ChatProvider for XAI {
             top_p: self.top_p,
             top_k: self.top_k,
             response_format,
-            search_parameters: self.search_parameters.as_ref(),
+            search_parameters: Some(&search_parameters),
         };
 
         if log::log_enabled!(log::Level::Trace) {
