@@ -25,6 +25,7 @@ With a **unified API** and **builder style** - similar to the Stripe experience 
 - **Speech to text**: Transcribe audio to text
 - **Text to speech**: Transcribe text to audio
 - **Memory**: Store and retrieve conversation history with sliding window (soon others) and shared memory support
+- **Agentic**: Build reactive agents that can cooperate via shared memory, with configurable triggers, roles and validation.
 
 ## Use any LLM backend on your project
 
@@ -105,3 +106,11 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`memory_example`](examples/memory_example.rs) | Automatic memory integration - LLM remembers conversation context across calls |
 | [`memory_share_example`](examples/memory_share_example.rs) | Example demonstrating shared memory between multiple LLM providers |
 | [`trim_strategy_example`](examples/trim_strategy_example.rs) | Example demonstrating memory trimming strategies with automatic summarization |
+| [`agent_builder_example`](examples/agent_builder_example.rs) | Example of reactive agents cooperating via shared memory, demonstrating creation of LLM agents with roles, conditions|
+
+
+
+
+
+## Usage
+Here's a basic example using OpenAI for chat completion. See the examples directory for other backends (Anthropic, Ollama, DeepSeek, xAI, Google, Phind, Elevenlabs), embedding capabilities, and more advanced use cases.

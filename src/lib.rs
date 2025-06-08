@@ -56,7 +56,11 @@ pub mod tts;
 pub mod secret_store;
 
 /// Memory providers for storing and retrieving conversation history
+#[macro_use]
 pub mod memory;
+
+#[cfg(feature = "agent")]
+pub mod agent;
 
 #[cfg(feature = "api")]
 pub mod api;

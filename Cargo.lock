@@ -1175,6 +1175,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
+ "regex",
  "reqwest",
  "rodio",
  "rustyline",
