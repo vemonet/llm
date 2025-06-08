@@ -107,6 +107,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`memory_share_example`](examples/memory_share_example.rs) | Example demonstrating shared memory between multiple LLM providers |
 | [`trim_strategy_example`](examples/trim_strategy_example.rs) | Example demonstrating memory trimming strategies with automatic summarization |
 | [`agent_builder_example`](examples/agent_builder_example.rs) | Example of reactive agents cooperating via shared memory, demonstrating creation of LLM agents with roles, conditions|
+| [`openai_web_search_example`](examples/openai_web_search_example.rs) | Example demonstrating OpenAI web search functionality with location-based search context |
+
 
 
 

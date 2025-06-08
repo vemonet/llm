@@ -16,31 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Search source configuration for search parameters
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SearchSource {
-    /// Type of source: "web" or "news"
-    #[serde(rename = "type")]
-    pub source_type: String,
-    /// List of websites to exclude from this source
-    pub excluded_websites: Option<Vec<String>>,
-}
-
-/// Search parameters for LLM providers that support search functionality
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct SearchParameters {
-    /// Search mode (e.g., "auto")
-    pub mode: Option<String>,
-    /// List of search sources with exclusions
-    pub sources: Option<Vec<SearchSource>>,
-    /// Maximum number of search results to return
-    pub max_search_results: Option<u32>,
-    /// Start date for search results (format: "YYYY-MM-DD")
-    pub from_date: Option<String>,
-    /// End date for search results (format: "YYYY-MM-DD")
-    pub to_date: Option<String>,
-}
-
 /// A function type for validating LLM provider outputs.
 /// Takes a response string and returns Ok(()) if valid, or Err with an error message if invalid.
 pub type ValidatorFn = dyn Fn(&str) -> Result<(), String> + Send + Sync + 'static;
@@ -175,9 +150,31 @@ pub struct LLMBuilder {
     /// Voice
     voice: Option<String>,
     /// Search parameters for providers that support search functionality
-    search_parameters: Option<SearchParameters>,
+    xai_search_mode: Option<String>,
+    /// XAI search source type
+    xai_search_source_type: Option<String>,
+    /// XAI search excluded websites
+    xai_search_excluded_websites: Option<Vec<String>>,
+    /// XAI search max results
+    xai_search_max_results: Option<u32>,
+    /// XAI search from date
+    xai_search_from_date: Option<String>,
+    /// XAI search to date
+    xai_search_to_date: Option<String>,
     /// Memory provider for conversation history (optional)
     memory: Option<Box<dyn MemoryProvider>>,
+    /// Use web search
+    openai_enable_web_search: Option<bool>,
+    /// OpenAI web search context
+    openai_web_search_context_size: Option<String>,
+    /// OpenAI web search user location type
+    openai_web_search_user_location_type: Option<String>,
+    /// OpenAI web search user location approximate country
+    openai_web_search_user_location_approximate_country: Option<String>,
+    /// OpenAI web search user location approximate city
+    openai_web_search_user_location_approximate_city: Option<String>,
+    /// OpenAI web search user location approximate region
+    openai_web_search_user_location_approximate_region: Option<String>,
 }
 
 impl LLMBuilder {
@@ -364,82 +361,87 @@ impl LLMBuilder {
         self
     }
 
+    /// Enable web search
+    pub fn openai_enable_web_search(mut self, enable: bool) -> Self {
+        self.openai_enable_web_search = Some(enable);
+        self
+    }
+
+    /// Set the web search context
+    pub fn openai_web_search_context_size(mut self, context_size: impl Into<String>) -> Self {
+        self.openai_web_search_context_size = Some(context_size.into());
+        self
+    }
+
+    /// Set the web search user location type
+    pub fn openai_web_search_user_location_type(mut self, location_type: impl Into<String>) -> Self {
+        self.openai_web_search_user_location_type = Some(location_type.into());
+        self
+    }
+
+    /// Set the web search user location approximate country
+    pub fn openai_web_search_user_location_approximate_country(mut self, country: impl Into<String>) -> Self {
+        self.openai_web_search_user_location_approximate_country = Some(country.into());
+        self
+    }
+
+    /// Set the web search user location approximate city
+    pub fn openai_web_search_user_location_approximate_city(mut self, city: impl Into<String>) -> Self {
+        self.openai_web_search_user_location_approximate_city = Some(city.into());
+        self
+    }
+
+    /// Set the web search user location approximate region
+    pub fn openai_web_search_user_location_approximate_region(mut self, region: impl Into<String>) -> Self {
+        self.openai_web_search_user_location_approximate_region = Some(region.into());
+        self
+    }
+    
+
+    #[deprecated(note = "Renamed to `xai_search_mode`.")]
+    pub fn search_mode(self, mode: impl Into<String>) -> Self {
+        self.xai_search_mode(mode)
+    }
+
     /// Sets the search mode for search-enabled providers.
-    pub fn search_mode(mut self, mode: impl Into<String>) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            params.mode = Some(mode.into());
-        }
+    pub fn xai_search_mode(mut self, mode: impl Into<String>) -> Self {
+        self.xai_search_mode = Some(mode.into());
         self
     }
 
     /// Adds a search source with optional excluded websites.
-    pub fn search_source(
+    pub fn xai_search_source(
         mut self,
         source_type: impl Into<String>,
         excluded_websites: Option<Vec<String>>,
     ) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            if params.sources.is_none() {
-                params.sources = Some(Vec::new());
-            }
-            if let Some(ref mut sources) = params.sources {
-                sources.push(SearchSource {
-                    source_type: source_type.into(),
-                    excluded_websites,
-                });
-            }
-        }
+        self.xai_search_source_type = Some(source_type.into());
+        self.xai_search_excluded_websites = excluded_websites;
         self
     }
 
     /// Sets the maximum number of search results.
-    pub fn max_search_results(mut self, max: u32) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            params.max_search_results = Some(max);
-        }
+    pub fn xai_max_search_results(mut self, max: u32) -> Self {
+        self.xai_search_max_results = Some(max);
         self
     }
 
     /// Sets the date range for search results.
-    pub fn search_date_range(mut self, from: impl Into<String>, to: impl Into<String>) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            params.from_date = Some(from.into());
-            params.to_date = Some(to.into());
-        }
+    pub fn xai_search_date_range(mut self, from: impl Into<String>, to: impl Into<String>) -> Self {
+        self.xai_search_from_date = Some(from.into());
+        self.xai_search_to_date = Some(to.into());
         self
     }
 
     /// Sets the start date for search results (format: "YYYY-MM-DD").
-    pub fn search_from_date(mut self, date: impl Into<String>) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            params.from_date = Some(date.into());
-        }
+    pub fn xai_search_from_date(mut self, date: impl Into<String>) -> Self {
+        self.xai_search_from_date = Some(date.into());
         self
     }
 
     /// Sets the end date for search results (format: "YYYY-MM-DD").
-    pub fn search_to_date(mut self, date: impl Into<String>) -> Self {
-        if self.search_parameters.is_none() {
-            self.search_parameters = Some(SearchParameters::default());
-        }
-        if let Some(ref mut params) = self.search_parameters {
-            params.to_date = Some(date.into());
-        }
+    pub fn xai_search_to_date(mut self, date: impl Into<String>) -> Self {
+        self.xai_search_to_date = Some(date.into());
         self
     }
 
@@ -549,13 +551,19 @@ impl LLMBuilder {
     /// - Required configuration like API keys are missing
     pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
         log::debug!(
-            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?}",
+            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
             self.backend,
             self.model,
             self.tools.as_ref().map(|v| v.len()).unwrap_or(0),
             self.tool_choice,
             self.stream,
             self.temperature,
+            self.openai_enable_web_search,
+            self.openai_web_search_context_size,
+            self.openai_web_search_user_location_type,
+            self.openai_web_search_user_location_approximate_country,
+            self.openai_web_search_user_location_approximate_city,
+            self.openai_web_search_user_location_approximate_region,
         );
         let (tools, tool_choice) = self.validate_tool_config()?;
         let backend = self
@@ -593,6 +601,12 @@ impl LLMBuilder {
                         self.reasoning_effort,
                         self.json_schema,
                         self.voice,
+                        self.openai_enable_web_search,
+                        self.openai_web_search_context_size,
+                        self.openai_web_search_user_location_type,
+                        self.openai_web_search_user_location_approximate_country,
+                        self.openai_web_search_user_location_approximate_city,
+                        self.openai_web_search_user_location_approximate_region,
                     ))
                 }
             }
@@ -727,7 +741,12 @@ impl LLMBuilder {
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                         self.json_schema,
-                        self.search_parameters,
+                        self.xai_search_mode,
+                        self.xai_search_source_type,
+                        self.xai_search_excluded_websites,
+                        self.xai_search_max_results,
+                        self.xai_search_from_date,
+                        self.xai_search_to_date,
                     );
                     Box::new(xai)
                 }

@@ -48,6 +48,12 @@ pub struct OpenAI {
     /// JSON schema for structured output
     pub json_schema: Option<StructuredOutputFormat>,
     pub voice: Option<String>,
+    pub enable_web_search: Option<bool>,
+    pub web_search_context_size: Option<String>,
+    pub web_search_user_location_type: Option<String>,
+    pub web_search_user_location_approximate_country: Option<String>,
+    pub web_search_user_location_approximate_city: Option<String>,
+    pub web_search_user_location_approximate_region: Option<String>,
     client: Client,
 }
 
@@ -133,6 +139,8 @@ struct OpenAIChatRequest<'a> {
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     response_format: Option<OpenAIResponseFormat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    web_search_options: Option<OpenAIWebSearchOptions>,
 }
 
 impl std::fmt::Display for ToolCall {
@@ -222,6 +230,29 @@ struct OpenAIResponseFormat {
     response_type: OpenAIResponseType,
     #[serde(skip_serializing_if = "Option::is_none")]
     json_schema: Option<StructuredOutputFormat>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct OpenAIWebSearchOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_location: Option<UserLocation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_context_size: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct UserLocation {
+    #[serde(rename = "type")]
+    location_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    approximate: Option<ApproximateLocation>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct ApproximateLocation {
+    country: String,
+    city: String,
+    region: String,
 }
 
 impl From<StructuredOutputFormat> for OpenAIResponseFormat {
@@ -333,6 +364,12 @@ impl OpenAI {
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         voice: Option<String>,
+        enable_web_search: Option<bool>,
+        web_search_context_size: Option<String>,
+        web_search_user_location_type: Option<String>,
+        web_search_user_location_approximate_country: Option<String>,
+        web_search_user_location_approximate_city: Option<String>,
+        web_search_user_location_approximate_region: Option<String>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -360,6 +397,12 @@ impl OpenAI {
             reasoning_effort,
             json_schema,
             voice,
+            enable_web_search,
+            web_search_context_size,
+            web_search_user_location_type,
+            web_search_user_location_approximate_country,
+            web_search_user_location_approximate_city,
+            web_search_user_location_approximate_region,
         }
     }
 }
@@ -436,6 +479,40 @@ impl ChatProvider for OpenAI {
             None
         };
 
+        let web_search_options = if self.enable_web_search.unwrap_or(false) {
+            let loc_type_opt = self
+                .web_search_user_location_type
+                .as_ref()
+                .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
+        
+            let country = self.web_search_user_location_approximate_country.as_ref();
+            let city    = self.web_search_user_location_approximate_city.as_ref();
+            let region  = self.web_search_user_location_approximate_region.as_ref();
+        
+            let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
+                Some(ApproximateLocation {
+                    country: country.cloned().unwrap_or_default(),
+                    city:    city.cloned().unwrap_or_default(),
+                    region:  region.cloned().unwrap_or_default(),
+                })
+            } else {
+                None
+            };
+        
+            let user_location = loc_type_opt.map(|loc_type| UserLocation {
+                location_type: loc_type.clone(),
+                approximate,
+            });
+        
+            Some(OpenAIWebSearchOptions {
+                search_context_size: self.web_search_context_size.clone(),
+                user_location,
+            })
+        } else {
+            None
+        };
+        
+
         let body = OpenAIChatRequest {
             model: &self.model,
             messages: openai_msgs,
@@ -448,6 +525,7 @@ impl ChatProvider for OpenAI {
             tool_choice: request_tool_choice,
             reasoning_effort: self.reasoning_effort.clone(),
             response_format,
+            web_search_options,
         };
 
         let url = self
@@ -563,6 +641,7 @@ impl ChatProvider for OpenAI {
             tool_choice: self.tool_choice.clone(),
             reasoning_effort: self.reasoning_effort.clone(),
             response_format: None,
+            web_search_options: None,
         };
 
         let url = self
