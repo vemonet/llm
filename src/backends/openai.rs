@@ -11,6 +11,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -24,6 +25,7 @@ use either::*;
 use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
+use serde_json::{to_value, Value};
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -863,6 +865,53 @@ impl EmbeddingProvider for OpenAI {
 
         let embeddings = json_resp.data.into_iter().map(|d| d.embedding).collect();
         Ok(embeddings)
+    }
+}
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct OpenAIModelEntry {
+    pub id: String,
+    pub created: Option<u64>,
+    pub owned_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct OpenAIModelListResponse {
+    pub data: Vec<OpenAIModelEntry>,
+}
+
+impl ModelListResponse for OpenAIModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Value> {
+        self.data.iter().map(|e| to_value(e).unwrap()).collect()
+    }
+}
+
+#[async_trait]
+impl ModelsProvider for OpenAI {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        let url = self
+            .base_url
+            .join("models")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let resp = self
+            .client
+            .get(url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result = resp.json::<OpenAIModelListResponse>().await?;
+
+        Ok(Box::new(result))
     }
 }
 

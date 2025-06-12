@@ -12,6 +12,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     FunctionCall, ToolCall,
@@ -21,7 +22,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{to_value, Value};
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -645,6 +646,49 @@ impl SpeechToTextProvider for Anthropic {
 
 #[async_trait]
 impl TextToSpeechProvider for Anthropic {}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct AnthropicModelListResponse {
+    data: Vec<AnthropicModelEntry>,
+}
+
+impl ModelListResponse for AnthropicModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|m| m.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Value> {
+        self.data.iter().map(|m| to_value(m).unwrap()).collect()
+    }
+}
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct AnthropicModelEntry {
+    created_at: chrono::DateTime<chrono::Utc>,
+    display_name: String,
+    id: String,
+}
+
+#[async_trait]
+impl ModelsProvider for Anthropic {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        let resp = self
+            .client
+            .get("https://api.anthropic.com/v1/models")
+            .header("x-api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .header("anthropic-version", "2023-06-01")
+            .send()
+            .await?;
+
+        let result: AnthropicModelListResponse = resp.json().await?;
+
+        Ok(Box::new(result))
+    }
+}
 
 impl crate::LLMProvider for Anthropic {
     fn tools(&self) -> Option<&[Tool]> {
