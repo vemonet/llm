@@ -6,12 +6,13 @@ use std::time::Duration;
 
 #[cfg(feature = "openai")]
 use crate::{
+    builder::LLMBackend,
     chat::Tool,
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -21,11 +22,12 @@ use crate::{
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use either::*;
 use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
-use serde_json::{to_value, Value};
+use serde_json::Value;
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -868,14 +870,31 @@ impl EmbeddingProvider for OpenAI {
     }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct OpenAIModelEntry {
     pub id: String,
     pub created: Option<u64>,
-    pub owned_by: Option<String>,
+    #[serde(flatten)]
+    pub extra: Value,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+impl ModelListRawEntry for OpenAIModelEntry {
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn get_created_at(&self) -> DateTime<Utc> {
+        self.created
+            .map(|t| chrono::DateTime::from_timestamp(t as i64, 0).unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    fn get_raw(&self) -> Value {
+        self.extra.clone()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct OpenAIModelListResponse {
     pub data: Vec<OpenAIModelEntry>,
 }
@@ -885,8 +904,15 @@ impl ModelListResponse for OpenAIModelListResponse {
         self.data.iter().map(|e| e.id.clone()).collect()
     }
 
-    fn get_models_raw(&self) -> Vec<Value> {
-        self.data.iter().map(|e| to_value(e).unwrap()).collect()
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::OpenAI
     }
 }
 

@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    builder::LLMBackend,
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool,
         ToolChoice,
@@ -12,17 +13,18 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use chrono::{DateTime, Utc};
 use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{to_value, Value};
+use serde_json::Value;
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -647,7 +649,7 @@ impl SpeechToTextProvider for Anthropic {
 #[async_trait]
 impl TextToSpeechProvider for Anthropic {}
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct AnthropicModelListResponse {
     data: Vec<AnthropicModelEntry>,
 }
@@ -657,16 +659,38 @@ impl ModelListResponse for AnthropicModelListResponse {
         self.data.iter().map(|m| m.id.clone()).collect()
     }
 
-    fn get_models_raw(&self) -> Vec<Value> {
-        self.data.iter().map(|m| to_value(m).unwrap()).collect()
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::Anthropic
     }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct AnthropicModelEntry {
-    created_at: chrono::DateTime<chrono::Utc>,
-    display_name: String,
+    created_at: DateTime<Utc>,
     id: String,
+    #[serde(flatten)]
+    extra: Value
+}
+
+impl ModelListRawEntry for AnthropicModelEntry {
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn get_created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    fn get_raw(&self) -> Value {
+        self.extra.clone()
+    }
 }
 
 #[async_trait]
