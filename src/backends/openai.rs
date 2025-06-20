@@ -488,26 +488,26 @@ impl ChatProvider for OpenAI {
                 .web_search_user_location_type
                 .as_ref()
                 .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
-        
+
             let country = self.web_search_user_location_approximate_country.as_ref();
-            let city    = self.web_search_user_location_approximate_city.as_ref();
-            let region  = self.web_search_user_location_approximate_region.as_ref();
-        
+            let city = self.web_search_user_location_approximate_city.as_ref();
+            let region = self.web_search_user_location_approximate_region.as_ref();
+
             let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
                 Some(ApproximateLocation {
                     country: country.cloned().unwrap_or_default(),
-                    city:    city.cloned().unwrap_or_default(),
-                    region:  region.cloned().unwrap_or_default(),
+                    city: city.cloned().unwrap_or_default(),
+                    region: region.cloned().unwrap_or_default(),
                 })
             } else {
                 None
             };
-        
+
             let user_location = loc_type_opt.map(|loc_type| UserLocation {
                 location_type: loc_type.clone(),
                 approximate,
             });
-        
+
             Some(OpenAIWebSearchOptions {
                 search_context_size: self.web_search_context_size.clone(),
                 user_location,
@@ -515,7 +515,6 @@ impl ChatProvider for OpenAI {
         } else {
             None
         };
-        
 
         let body = OpenAIChatRequest {
             model: &self.model,
@@ -592,7 +591,8 @@ impl ChatProvider for OpenAI {
     async fn chat_stream(
         &self,
         messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
+    {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
@@ -1012,29 +1012,36 @@ impl TextToSpeechProvider for OpenAI {
 /// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
 /// * `Err(LLMError)` - If parsing fails
 fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
+    let mut collected_content = String::new();
+
     for line in chunk.lines() {
         let line = line.trim();
-        
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            
+
+        if let Some(data) = line.strip_prefix("data: ") {
             if data == "[DONE]" {
-                return Ok(None);
+                if collected_content.is_empty() {
+                    return Ok(None);
+                } else {
+                    return Ok(Some(collected_content));
+                }
             }
-            
+
             match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
                 Ok(response) => {
                     if let Some(choice) = response.choices.first() {
                         if let Some(content) = &choice.delta.content {
-                            return Ok(Some(content.clone()));
+                            collected_content.push_str(content);
                         }
                     }
-                    return Ok(None);
                 }
                 Err(_) => continue,
             }
         }
     }
-    
-    Ok(None)
+
+    if collected_content.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(collected_content))
+    }
 }
