@@ -2,8 +2,13 @@
 //!
 //! This module provides integration with Ollama's local LLM server through its API.
 
+use std::pin::Pin;
+
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool},
+    chat::{
+        ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat,
+        Tool,
+    },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -13,6 +18,8 @@ use crate::{
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
+use base64::{self, Engine};
+use futures::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,7 +35,6 @@ pub struct Ollama {
     pub temperature: Option<f32>,
     pub system: Option<String>,
     pub timeout_seconds: Option<u64>,
-    pub stream: Option<bool>,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     /// JSON schema for structured output
@@ -61,6 +67,26 @@ struct OllamaOptions {
 struct OllamaChatMessage<'a> {
     role: &'a str,
     content: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<String>>,
+}
+
+impl<'a> From<&'a ChatMessage> for OllamaChatMessage<'a> {
+    fn from(msg: &'a ChatMessage) -> Self {
+        Self {
+            role: match msg.role {
+                ChatRole::User => "user",
+                ChatRole::Assistant => "assistant",
+            },
+            content: &msg.content,
+            images: match &msg.message_type {
+                MessageType::Image((_mime, data)) => {
+                    Some(vec![base64::engine::general_purpose::STANDARD.encode(data)])
+                }
+                _ => None,
+            },
+        }
+    }
 }
 
 /// Response from Ollama's API endpoints.
@@ -132,6 +158,16 @@ impl ChatResponse for OllamaResponse {
 struct OllamaChatResponseMessage {
     content: String,
     tool_calls: Option<Vec<OllamaToolCall>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OllamaChatStreamResponse {
+    message: OllamaChatStreamMessage,
+}
+
+#[derive(Deserialize, Debug)]
+struct OllamaChatStreamMessage {
+    content: String,
 }
 
 /// Request payload for Ollama's generate API endpoint.
@@ -291,7 +327,6 @@ impl Ollama {
             max_tokens,
             timeout_seconds,
             system,
-            stream,
             top_p,
             top_k,
             json_schema,
@@ -299,34 +334,15 @@ impl Ollama {
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
-}
 
-#[async_trait]
-impl ChatProvider for Ollama {
-    /// Sends a chat request to Ollama's API.
-    ///
-    /// # Arguments
-    ///
-    /// * `messages` - Slice of chat messages representing the conversation
-    ///
-    /// # Returns
-    ///
-    /// The model's response text or an error
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
-        if self.base_url.is_empty() {
-            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
-        }
-
-        let mut chat_messages: Vec<OllamaChatMessage> = messages
-            .iter()
-            .map(|msg| OllamaChatMessage {
-                role: match msg.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                content: &msg.content,
-            })
-            .collect();
+    fn make_chat_request<'a>(
+        &'a self,
+        messages: &'a [ChatMessage],
+        tools: Option<&'a [Tool]>,
+        stream: bool,
+    ) -> OllamaChatRequest<'a> {
+        let mut chat_messages: Vec<OllamaChatMessage> =
+            messages.iter().map(OllamaChatMessage::from).collect();
 
         if let Some(system) = &self.system {
             chat_messages.insert(
@@ -334,80 +350,7 @@ impl ChatProvider for Ollama {
                 OllamaChatMessage {
                     role: "system",
                     content: system,
-                },
-            );
-        }
-
-        // Ollama doesn't require the "name" field in the schema, so we just use the schema itself
-        let format = if let Some(schema) = &self.json_schema {
-            schema.schema.as_ref().map(|schema| OllamaResponseFormat {
-                format: OllamaResponseType::StructuredOutput(schema.clone()),
-            })
-        } else {
-            None
-        };
-
-        let req_body = OllamaChatRequest {
-            model: self.model.clone(),
-            messages: chat_messages,
-            stream: self.stream.unwrap_or(false),
-            options: Some(OllamaOptions {
-                top_p: self.top_p,
-                top_k: self.top_k,
-            }),
-            format,
-            tools: None,
-        };
-
-        if log::log_enabled!(log::Level::Trace) {
-            if let Ok(json) = serde_json::to_string(&req_body) {
-                log::trace!("Ollama request payload: {}", json);
-            }
-        }
-
-        let url = format!("{}/api/chat", self.base_url);
-
-        let mut request = self.client.post(&url).json(&req_body);
-
-        if let Some(timeout) = self.timeout_seconds {
-            request = request.timeout(std::time::Duration::from_secs(timeout));
-        }
-
-        let resp = request.send().await?;
-
-        log::debug!("Ollama HTTP status: {}", resp.status());
-
-        let resp = resp.error_for_status()?;
-        let json_resp: OllamaResponse = resp.json().await?;
-        Ok(Box::new(json_resp))
-    }
-
-    async fn chat_with_tools(
-        &self,
-        messages: &[ChatMessage],
-        tools: Option<&[Tool]>,
-    ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        if self.base_url.is_empty() {
-            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
-        }
-
-        let mut chat_messages: Vec<OllamaChatMessage> = messages
-            .iter()
-            .map(|msg| OllamaChatMessage {
-                role: match msg.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                content: &msg.content,
-            })
-            .collect();
-
-        if let Some(system) = &self.system {
-            chat_messages.insert(
-                0,
-                OllamaChatMessage {
-                    role: "system",
-                    content: system,
+                    images: None,
                 },
             );
         }
@@ -424,17 +367,32 @@ impl ChatProvider for Ollama {
             None
         };
 
-        let req_body = OllamaChatRequest {
+        OllamaChatRequest {
             model: self.model.clone(),
             messages: chat_messages,
-            stream: self.stream.unwrap_or(false),
+            stream: stream,
             options: Some(OllamaOptions {
                 top_p: self.top_p,
                 top_k: self.top_k,
             }),
             format,
             tools: ollama_tools,
-        };
+        }
+    }
+}
+
+#[async_trait]
+impl ChatProvider for Ollama {
+    async fn chat_with_tools(
+        &self,
+        messages: &[ChatMessage],
+        tools: Option<&[Tool]>,
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
+        if self.base_url.is_empty() {
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
+        }
+
+        let req_body = self.make_chat_request(messages, tools, false);
 
         if log::log_enabled!(log::Level::Trace) {
             if let Ok(json) = serde_json::to_string(&req_body) {
@@ -458,6 +416,27 @@ impl ChatProvider for Ollama {
         let json_resp = resp.json::<OllamaResponse>().await?;
 
         Ok(Box::new(json_resp))
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+        let req_body = self.make_chat_request(messages, None, true);
+
+        let url = format!("{}/api/chat", self.base_url);
+        let mut request = self.client.post(&url).json(&req_body);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?;
+        log::debug!("Ollama HTTP status: {}", resp.status());
+
+        let resp = resp.error_for_status()?;
+
+        Ok(crate::chat::create_sse_stream(resp, parse_ollama_sse))
     }
 }
 
@@ -550,3 +529,35 @@ impl crate::LLMProvider for Ollama {
 
 #[async_trait]
 impl TextToSpeechProvider for Ollama {}
+
+/// Parses a Server-Sent Events (SSE) chunk from Ollama's streaming API.
+/// Ollama events differ from other providers because it uses json lines instead of the expected SSE format.
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Content token if found
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Err(LLMError)` - If parsing fails
+fn parse_ollama_sse(chunk: &str) -> Result<Option<String>, LLMError> {
+    let mut collected_content = String::new();
+
+    for line in chunk.lines() {
+        let line = line.trim();
+
+        match serde_json::from_str::<OllamaChatStreamResponse>(line) {
+            Ok(data) => {
+                collected_content.push_str(&data.message.content);
+            }
+            Err(e) => return Err(LLMError::JsonError(e.to_string())),
+        }
+    }
+
+    if collected_content.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(collected_content))
+    }
+}
