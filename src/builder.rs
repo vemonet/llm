@@ -43,6 +43,8 @@ pub enum LLMBackend {
     AzureOpenAI,
     /// ElevenLabs API provider
     ElevenLabs,
+    /// Cohere API provider
+    Cohere,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -86,6 +88,7 @@ impl std::str::FromStr for LLMBackend {
             "groq" => Ok(LLMBackend::Groq),
             "azure-openai" => Ok(LLMBackend::AzureOpenAI),
             "elevenlabs" => Ok(LLMBackend::ElevenLabs),
+            "cohere" => Ok(LLMBackend::Cohere),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {s}"
             ))),
@@ -824,6 +827,39 @@ impl LLMBuilder {
                         self.top_k,
                     );
                     Box::new(groq)
+                }
+            }
+            LLMBackend::Cohere => {
+                #[cfg(not(feature = "cohere"))]
+                return Err(LLMError::InvalidRequest(
+                    "Cohere feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "cohere")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for Google".to_string())
+                    })?;
+
+                    let cohere = crate::backends::cohere::Cohere::new(
+                        api_key,
+                        self.base_url,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.stream,
+                        self.top_p,
+                        self.top_k,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
+                        tools,
+                        self.tool_choice,
+                        self.reasoning_effort,
+                        self.json_schema,
+                    );
+                    Box::new(cohere)
                 }
             }
             LLMBackend::AzureOpenAI => {
