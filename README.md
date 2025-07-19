@@ -2,12 +2,12 @@
 
 > **Note**: This crate name previously belonged to another project. The current implementation represents a new and different library. The previous crate is now archived and will not receive any updates. **ref: https://github.com/rustformers/llm**
 
-**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini) and [ElevenLabs](https://elevenlabs.io).
+**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini), [Cohere](https://cohere.com), and [ElevenLabs](https://elevenlabs.io).
 With a **unified API** and **builder style** - similar to the Stripe experience - you can easily create **chat**, text **completion**, speak-to-text requests without multiplying structures and crates.
 
 ## Key Features
 
-- **Multi-backend**: Manage OpenAI, Anthropic, Ollama, DeepSeek, xAI, Phind, Groq and Google through a single entry point.
+- **Multi-backend**: Manage OpenAI, Anthropic, Ollama, DeepSeek, xAI, Phind, Groq, Cohere, Elevenlabs and Google through a single entry point.
 - **Multi-step chains**: Create multi-step chains with different backends at each step.
 - **Templates**: Use templates to create complex prompts with variables.
 - **Builder pattern**: Configure your LLM (model, temperature, max_tokens, timeouts...) with a few simple calls.
@@ -109,6 +109,8 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`agent_builder_example`](examples/agent_builder_example.rs) | Example of reactive agents cooperating via shared memory, demonstrating creation of LLM agents with roles, conditions|
 | [`openai_web_search_example`](examples/openai_web_search_example.rs) | Example demonstrating OpenAI web search functionality with location-based search context |
 | [`model_listing_example`](examples/model_listing_example.rs) | Example demonstrating how to list available models from an LLM backend |
+| [`cohere_example`](examples/cohere_example.rs) | Basic Cohere chat completion example with Command models |
+
 
 
 
