@@ -301,6 +301,7 @@ impl Ollama {
     /// * `json_schema` - JSON schema for structured output
     /// * `tools` - Function tools that the model can use
     #[allow(clippy::too_many_arguments)]
+    #[allow(unused_variables)]
     pub fn new(
         base_url: impl Into<String>,
         api_key: Option<String>,
