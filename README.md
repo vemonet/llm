@@ -2,7 +2,7 @@
 
 > **Note**: This crate name previously belonged to another project. The current implementation represents a new and different library. The previous crate is now archived and will not receive any updates. **ref: https://github.com/rustformers/llm**
 
-**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini), [Cohere](https://cohere.com), and [ElevenLabs](https://elevenlabs.io).
+**LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini), [Cohere](https://cohere.com), [Mistral](https://mistral.ai) and [ElevenLabs](https://elevenlabs.io).
 With a **unified API** and **builder style** - similar to the Stripe experience - you can easily create **chat**, text **completion**, speak-to-text requests without multiplying structures and crates.
 
 ## Key Features
@@ -33,7 +33,7 @@ Simply add **LLM** to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "Elevenlabs"] }
+llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "mistral", "Elevenlabs"] }
 ```
 
 ## Use any LLM on cli
@@ -54,7 +54,7 @@ LLM includes a command-line tool for easily interacting with different LLM model
 
 ```shell
 [dependencies]
-llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api", "elevenlabs"] }
+llm = { version = "1.2.4", features = ["openai", "anthropic", "ollama", "deepseek", "xai", "phind", "google", "groq", "api", "mistral", "elevenlabs"] }
 ```
 
 More details in the [`api_example`](examples/api_example.rs)
@@ -110,6 +110,7 @@ More details in the [`api_example`](examples/api_example.rs)
 | [`openai_web_search_example`](examples/openai_web_search_example.rs) | Example demonstrating OpenAI web search functionality with location-based search context |
 | [`model_listing_example`](examples/model_listing_example.rs) | Example demonstrating how to list available models from an LLM backend |
 | [`cohere_example`](examples/cohere_example.rs) | Basic Cohere chat completion example with Command models |
+| [`mistral_example`](examples/mistral_example.rs) | Basic Mistral example with Mistral models |
 
 
 
