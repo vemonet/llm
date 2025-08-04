@@ -155,7 +155,21 @@ struct MistralChatChoice {
 struct MistralChatMsg {
     role: String,
     content: Option<String>,
-    tool_calls: Option<Vec<ToolCall>>,
+    tool_calls: Option<Vec<MistralToolCall>>,
+}
+
+/// Mistral-specific tool call structure for parsing API responses.
+#[derive(Deserialize, Debug)]
+struct MistralToolCall {
+    pub id: String,
+    pub function: MistralToolFunction,
+}
+
+/// Mistral-specific function call structure.
+#[derive(Deserialize, Debug)]
+struct MistralToolFunction {
+    pub name: String,
+    pub arguments: String,
 }
 
 /// SSE (Server-Sent Events) chunk parser for Mistral's streaming responses.
@@ -261,18 +275,29 @@ impl ChatResponse for MistralChatResponse {
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        self.choices
-            .first()
-            .and_then(|c| c.message.tool_calls.clone())
+        self.choices.first().and_then(|c| {
+            c.message.tool_calls.as_ref().map(|calls| {
+                calls
+                    .iter()
+                    .map(|call| ToolCall {
+                        id: call.id.clone(),
+                        call_type: "function".to_string(),
+                        function: crate::FunctionCall {
+                            name: call.function.name.clone(),
+                            arguments: call.function.arguments.clone(),
+                        },
+                    })
+                    .collect()
+            })
+        })
     }
 }
 
 impl std::fmt::Display for MistralChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (
-            &self.choices.first().unwrap().message.content,
-            &self.choices.first().unwrap().message.tool_calls,
-        ) {
+        let content = self.text();
+        let tool_calls = self.tool_calls();
+        match (content, tool_calls) {
             (Some(content), Some(tool_calls)) => {
                 for tool_call in tool_calls {
                     write!(f, "{}", tool_call)?;
