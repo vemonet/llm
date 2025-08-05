@@ -24,7 +24,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use either::*;
-use futures::stream::Stream;
+use futures::{stream::Stream, StreamExt};
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -607,87 +607,24 @@ impl ChatProvider for OpenAI {
         messages: &[ChatMessage],
     ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
     {
-        if self.api_key.is_empty() {
-            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
-        }
-
-        let messages = messages.to_vec();
-        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
-
-        for msg in messages {
-            if let MessageType::ToolResult(ref results) = msg.message_type {
-                for result in results {
-                    openai_msgs.push(OpenAIChatMessage {
-                        role: "tool",
-                        tool_call_id: Some(result.id.clone()),
-                        tool_calls: None,
-                        content: Some(Right(result.function.arguments.clone())),
-                    });
+        let struct_stream = self.chat_stream_struct(messages).await?;
+        let content_stream = struct_stream.filter_map(|result| async move {
+            match result {
+                Ok(stream_response) => {
+                    if let Some(choice) = stream_response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            if !content.is_empty() {
+                                return Some(Ok(content.clone()));
+                            }
+                        }
+                    }
+                    // Skip chunks without content (like usage metadata)
+                    None
                 }
-            } else {
-                openai_msgs.push(chat_message_to_api_message(msg))
+                Err(e) => Some(Err(e)),
             }
-        }
-
-        if let Some(system) = &self.system {
-            openai_msgs.insert(
-                0,
-                OpenAIChatMessage {
-                    role: "system",
-                    content: Some(Left(vec![MessageContent {
-                        message_type: Some("text"),
-                        text: Some(system),
-                        image_url: None,
-                        tool_call_id: None,
-                        tool_output: None,
-                    }])),
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-            );
-        }
-
-        let body = OpenAIChatRequest {
-            model: &self.model,
-            messages: openai_msgs,
-            max_tokens: self.max_tokens,
-            temperature: self.temperature,
-            stream: true,
-            top_p: self.top_p,
-            top_k: self.top_k,
-            tools: self.tools.clone(),
-            tool_choice: self.tool_choice.clone(),
-            reasoning_effort: self.reasoning_effort.clone(),
-            response_format: None,
-            web_search_options: None,
-            stream_options: Some(OpenAIStreamOptions {
-                include_usage: true,
-            }),
-        };
-
-        let url = self
-            .base_url
-            .join("chat/completions")
-            .map_err(|e| LLMError::HttpError(e.to_string()))?;
-
-        let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
-
-        if let Some(timeout) = self.timeout_seconds {
-            request = request.timeout(std::time::Duration::from_secs(timeout));
-        }
-
-        let response = request.send().await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await?;
-            return Err(LLMError::ResponseFormatError {
-                message: format!("OpenAI API returned error status: {status}"),
-                raw_response: error_text,
-            });
-        }
-
-        Ok(crate::chat::create_sse_stream(response, parse_sse_chunk))
+        });
+        Ok(Box::pin(content_stream))
     }
 
     /// Sends a streaming chat request that returns structured response chunks.
@@ -1104,56 +1041,6 @@ impl TextToSpeechProvider for OpenAI {
     }
 }
 
-/// Parse SSE chunk and extract content tokens for backward compatibility
-///
-/// # Arguments
-///
-/// * `chunk` - The raw SSE chunk text
-///
-/// # Returns
-///
-/// * `Ok(Some(String))` - Content token if found
-/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal, usage data)
-/// * `Err(LLMError)` - If parsing fails
-fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
-    let mut collected_content = String::new();
-
-    for line in chunk.lines() {
-        let line = line.trim();
-
-        if let Some(data) = line.strip_prefix("data: ") {
-            if data == "[DONE]" {
-                if collected_content.is_empty() {
-                    return Ok(None);
-                } else {
-                    return Ok(Some(collected_content));
-                }
-            }
-
-            match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
-                Ok(response) => {
-                    // Skip usage metadata in content-only stream
-                    if response.usage.is_some() {
-                        continue;
-                    }
-                    if let Some(choice) = response.choices.first() {
-                        if let Some(content) = &choice.delta.content {
-                            collected_content.push_str(content);
-                        }
-                    }
-                }
-                Err(_) => continue,
-            }
-        }
-    }
-
-    if collected_content.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(collected_content))
-    }
-}
-
 /// Creates a structured SSE stream that returns StreamResponse objects
 ///
 /// # Arguments
@@ -1172,7 +1059,7 @@ fn create_struct_sse_stream(
         .map(move |chunk| match chunk {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes);
-                parse_sse_chunk_to_struct(&text)
+                parse_sse_chunk(&text)
             }
             Err(e) => Err(LLMError::HttpError(e.to_string())),
         })
@@ -1197,7 +1084,7 @@ fn create_struct_sse_stream(
 /// * `Ok(Some(StreamResponse))` - Structured response if content or usage found
 /// * `Ok(None)` - If chunk should be skipped
 /// * `Err(LLMError)` - If parsing fails
-fn parse_sse_chunk_to_struct(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
+fn parse_sse_chunk(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
     let mut collected_content = String::new();
     for line in chunk.lines() {
         let line = line.trim();
