@@ -3,6 +3,7 @@
 //! This module provides integration with Mistral's LLM models through their API.
 
 use std::time::Duration;
+use crate::chat::Usage;
 #[cfg(feature = "mistral")]
 use crate::{
     chat::Tool,
@@ -136,6 +137,7 @@ struct MistralChatRequest<'a> {
 #[derive(Deserialize, Debug)]
 struct MistralChatResponse {
     choices: Vec<MistralChatChoice>,
+    usage: Option<Usage>,
 }
 
 /// Individual choice within a Mistral chat API response.
@@ -264,6 +266,10 @@ impl ChatResponse for MistralChatResponse {
         self.choices
             .first()
             .and_then(|c| c.message.tool_calls.clone())
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage.clone()
     }
 }
 
@@ -735,4 +741,103 @@ impl TextToSpeechProvider for Mistral {
 #[async_trait]
 impl ModelsProvider for Mistral {
     // Uses default implementation (listing models not supported by Mistral API)
+}
+
+
+#[tokio::test]
+async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
+        chat::ChatMessage,
+    };
+
+    // Skip test if MISTRAL_API_KEY environment variable is not set
+    if std::env::var("MISTRAL_API_KEY").is_err() {
+        eprintln!("test test_mistral_tool_call ... ignored, MISTRAL_API_KEY not set");
+        return Ok(());
+    }
+    let api_key = std::env::var("MISTRAL_API_KEY").unwrap();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Mistral)
+        .api_key(api_key)
+        .model("mistral-small-latest")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(false)
+        .function(
+            FunctionBuilder::new("weather_function")
+                .description("Use this tool to get the weather in a specific city")
+                .param(
+                    ParamBuilder::new("url")
+                        .type_of("string")
+                        .description("The url to get the weather from for the city"),
+                )
+                .required(vec!["url".to_string()]),
+        )
+        .build()
+        .expect("Failed to build LLM");
+
+    let messages = vec![ChatMessage::user().content("You are a weather assistant. What is the weather in Tokyo? Use the tools that you have available").build()];
+    match llm.chat_with_tools(&messages, llm.tools()).await {
+        Ok(response) => {
+            let tool_calls = response.tool_calls();
+            assert!(tool_calls.is_some(), "Expected tool calls to be present");
+            let tool_calls = tool_calls.unwrap();
+            assert_eq!(tool_calls.len(), 1, "Expected exactly 1 tool call, got {}", tool_calls.len());
+            assert_eq!(tool_calls[0].function.name, "weather_function", "Expected function name 'weather_function'");
+            let usage = response.usage();
+            assert!(usage.is_some(), "Expected usage information to be present");
+            let usage = usage.unwrap();
+            assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
+            assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
+            assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
+        },
+        Err(e) => {
+            eprintln!("Chat error: {e}");
+            return Err(e.into());
+        },
+    }
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn test_mistral_chat_call() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{LLMBackend, LLMBuilder},
+        chat::ChatMessage,
+    };
+
+    if std::env::var("MISTRAL_API_KEY").is_err() {
+        eprintln!("test test_mistral_tool_call ... ignored, MISTRAL_API_KEY not set");
+        return Ok(());
+    }
+    let api_key = std::env::var("MISTRAL_API_KEY").unwrap();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Mistral)
+        .api_key(api_key)
+        .model("mistral-small-latest")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(false)
+        .build()
+        .expect("Failed to build LLM");
+
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            assert!(!response.text().unwrap().is_empty(), "Expected response message, got {:?}", response.text());
+            let usage = response.usage();
+            assert!(usage.is_some(), "Expected usage information to be present");
+            let usage = usage.unwrap();
+            assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
+            assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
+            assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
+        },
+        Err(e) => {
+            eprintln!("Chat error: {e}");
+            return Err(e.into());
+        },
+    }
+    Ok(())
 }
