@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::{
     builder::LLMBackend,
     chat::Tool,
-    chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat, Usage},
+    chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat, Usage, StreamResponse, StreamChoice, StreamDelta},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -145,6 +145,8 @@ struct OpenAIChatRequest<'a> {
     response_format: Option<OpenAIResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     web_search_options: Option<OpenAIWebSearchOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream_options: Option<OpenAIStreamOptions>,
 }
 
 impl std::fmt::Display for ToolCall {
@@ -202,6 +204,7 @@ struct OpenAIEmbeddingResponse {
 #[derive(Deserialize, Debug)]
 struct OpenAIChatStreamResponse {
     choices: Vec<OpenAIChatStreamChoice>,
+    usage: Option<Usage>,
 }
 
 /// Individual choice within an OpenAI streaming chat API response.
@@ -243,6 +246,11 @@ struct OpenAIWebSearchOptions {
     user_location: Option<UserLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     search_context_size: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct OpenAIStreamOptions {
+    include_usage: bool,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -534,6 +542,7 @@ impl ChatProvider for OpenAI {
             reasoning_effort: self.reasoning_effort.clone(),
             response_format,
             web_search_options,
+            stream_options: None,
         };
 
         let url = self
@@ -651,6 +660,9 @@ impl ChatProvider for OpenAI {
             reasoning_effort: self.reasoning_effort.clone(),
             response_format: None,
             web_search_options: None,
+            stream_options: Some(OpenAIStreamOptions {
+                include_usage: true,
+            }),
         };
 
         let url = self
@@ -676,6 +688,93 @@ impl ChatProvider for OpenAI {
         }
 
         Ok(crate::chat::create_sse_stream(response, parse_sse_chunk))
+    }
+
+    /// Sends a streaming chat request that returns structured response chunks.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - Slice of chat messages representing the conversation
+    ///
+    /// # Returns
+    ///
+    /// A stream of `StreamResponse` objects mimicking OpenAI's format
+    async fn chat_stream_struct(
+        &self,
+        messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>, LLMError>
+    {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
+        }
+        let messages = messages.to_vec();
+        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
+        for msg in messages {
+            if let MessageType::ToolResult(ref results) = msg.message_type {
+                for result in results {
+                    openai_msgs.push(OpenAIChatMessage {
+                        role: "tool",
+                        tool_call_id: Some(result.id.clone()),
+                        tool_calls: None,
+                        content: Some(Right(result.function.arguments.clone())),
+                    });
+                }
+            } else {
+                openai_msgs.push(chat_message_to_api_message(msg))
+            }
+        }
+        if let Some(system) = &self.system {
+            openai_msgs.insert(
+                0,
+                OpenAIChatMessage {
+                    role: "system",
+                    content: Some(Left(vec![MessageContent {
+                        message_type: Some("text"),
+                        text: Some(system),
+                        image_url: None,
+                        tool_call_id: None,
+                        tool_output: None,
+                    }])),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            );
+        }
+        let body = OpenAIChatRequest {
+            model: &self.model,
+            messages: openai_msgs,
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            stream: true,
+            top_p: self.top_p,
+            top_k: self.top_k,
+            tools: self.tools.clone(),
+            tool_choice: self.tool_choice.clone(),
+            reasoning_effort: self.reasoning_effort.clone(),
+            response_format: None,
+            web_search_options: None,
+            stream_options: Some(OpenAIStreamOptions {
+                include_usage: true,
+            }),
+        };
+        let url = self
+            .base_url
+            .join("chat/completions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+        let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {status}"),
+                raw_response: error_text,
+            });
+        }
+        Ok(create_struct_sse_stream(response))
     }
 }
 
@@ -1005,7 +1104,7 @@ impl TextToSpeechProvider for OpenAI {
     }
 }
 
-/// Parses a Server-Sent Events (SSE) chunk from OpenAI's streaming API.
+/// Parse SSE chunk and extract content tokens for backward compatibility
 ///
 /// # Arguments
 ///
@@ -1014,7 +1113,7 @@ impl TextToSpeechProvider for OpenAI {
 /// # Returns
 ///
 /// * `Ok(Some(String))` - Content token if found
-/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal)
+/// * `Ok(None)` - If chunk should be skipped (e.g., ping, done signal, usage data)
 /// * `Err(LLMError)` - If parsing fails
 fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     let mut collected_content = String::new();
@@ -1033,6 +1132,10 @@ fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
 
             match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
                 Ok(response) => {
+                    // Skip usage metadata in content-only stream
+                    if response.usage.is_some() {
+                        continue;
+                    }
                     if let Some(choice) = response.choices.first() {
                         if let Some(content) = &choice.delta.content {
                             collected_content.push_str(content);
@@ -1049,4 +1152,221 @@ fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     } else {
         Ok(Some(collected_content))
     }
+}
+
+/// Creates a structured SSE stream that returns StreamResponse objects
+///
+/// # Arguments
+///
+/// * `response` - The HTTP response from the streaming API
+///
+/// # Returns
+///
+/// A pinned stream of StreamResponse objects
+fn create_struct_sse_stream(
+    response: reqwest::Response,
+) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
+    use futures::stream::StreamExt;
+    let stream = response
+        .bytes_stream()
+        .map(move |chunk| match chunk {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                parse_sse_chunk_to_struct(&text)
+            }
+            Err(e) => Err(LLMError::HttpError(e.to_string())),
+        })
+        .filter_map(|result| async move {
+            match result {
+                Ok(Some(response)) => Some(Ok(response)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        });
+    Box::pin(stream)
+}
+
+/// Parse SSE chunk and convert to StreamResponse format
+///
+/// # Arguments
+///
+/// * `chunk` - The raw SSE chunk text
+///
+/// # Returns
+///
+/// * `Ok(Some(StreamResponse))` - Structured response if content or usage found
+/// * `Ok(None)` - If chunk should be skipped
+/// * `Err(LLMError)` - If parsing fails
+fn parse_sse_chunk_to_struct(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
+    let mut collected_content = String::new();
+    for line in chunk.lines() {
+        let line = line.trim();
+        if let Some(data) = line.strip_prefix("data: ") {
+            if data == "[DONE]" {
+                if collected_content.is_empty() {
+                    return Ok(None);
+                } else {
+                    return Ok(Some(StreamResponse {
+                        choices: vec![StreamChoice {
+                            delta: StreamDelta {
+                                content: Some(collected_content),
+                            },
+                        }],
+                        usage: None,
+                    }));
+                }
+            }
+            match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
+                Ok(response) => {
+                    // Handle usage metadata if present (typically in the last chunk)
+                    if let Some(usage) = response.usage {
+                        return Ok(Some(StreamResponse {
+                            choices: vec![StreamChoice {
+                                delta: StreamDelta {
+                                    content: None,
+                                },
+                            }],
+                            usage: Some(usage),
+                        }));
+                    }
+                    if let Some(choice) = response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            collected_content.push_str(content);
+                        }
+                    }
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    if collected_content.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(StreamResponse {
+            choices: vec![StreamChoice {
+                delta: StreamDelta {
+                    content: Some(collected_content),
+                },
+            }],
+            usage: None,
+        }))
+    }
+}
+
+
+#[tokio::test]
+async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{LLMBackend, LLMBuilder},
+        chat::ChatMessage,
+    };
+    use futures::StreamExt;
+
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
+        return Ok(());
+    }
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .api_key(api_key)
+        .model("gpt-4.1-nano")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(true)
+        .build()
+        .expect("Failed to build LLM");
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat_stream_struct(&messages).await {
+        Ok(mut stream) => {
+            let mut complete_text = String::new();
+            let mut usage_data = None;
+            // Collect all chunks from the structured stream
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(stream_response) => {
+                        // Extract content from choices.delta.content
+                        if let Some(choice) = stream_response.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                complete_text.push_str(content);
+                            }
+                        }
+                        // Extract usage metadata if present
+                        if let Some(usage) = stream_response.usage {
+                            usage_data = Some(usage);
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Stream error: {e}");
+                        return Err(e.into());
+                    }
+                }
+            }
+            assert!(!complete_text.is_empty(), "Expected response message, got empty text");
+            if let Some(usage) = usage_data {
+                assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
+                assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
+                assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
+                println!("Complete response: {complete_text}");
+                println!("Usage: {usage:?}");
+            } else {
+                panic!("Expected usage data in response");
+            }
+        },
+        Err(e) => {
+            eprintln!("Chat stream struct error: {e}");
+            return Err(e.into());
+        },
+    }
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{LLMBackend, LLMBuilder},
+        chat::ChatMessage,
+    };
+    use futures::StreamExt;
+
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
+        return Ok(());
+    }
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .api_key(api_key)
+        .model("gpt-4.1-nano")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(true)
+        .build()
+        .expect("Failed to build LLM");
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat_stream(&messages).await {
+        Ok(mut stream) => {
+            let mut complete_text = String::new();
+            // Collect all chunks from the structured stream
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(content) => {
+                        complete_text.push_str(&content);
+                    },
+                    Err(e) => {
+                        eprintln!("Stream error: {e}");
+                        return Err(e.into());
+                    }
+                }
+            }
+            assert!(!complete_text.is_empty(), "Expected response message, got empty text");
+            println!("Complete response: {complete_text}");
+        },
+        Err(e) => {
+            eprintln!("Chat stream struct error: {e}");
+            return Err(e.into());
+        },
+    }
+    Ok(())
 }

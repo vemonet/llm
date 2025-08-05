@@ -25,6 +25,31 @@ pub struct Usage {
     pub prompt_tokens_details: Option<PromptTokensDetails>,
 }
 
+/// Stream response chunk that mimics OpenAI's streaming response format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamResponse {
+    /// Array of choices in the response
+    pub choices: Vec<StreamChoice>,
+    /// Usage metadata, typically present in the final chunk
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+/// Individual choice in a streaming response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamChoice {
+    /// Delta containing the incremental content
+    pub delta: StreamDelta,
+}
+
+/// Delta content in a streaming response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamDelta {
+    /// The incremental content, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
 /// Breakdown of completion tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionTokensDetails {
@@ -334,6 +359,27 @@ pub trait ChatProvider: Sync + Send {
     ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
         Err(LLMError::Generic(
             "Streaming not supported for this provider".to_string(),
+        ))
+    }
+
+    /// Sends a streaming chat request that returns structured response chunks.
+    ///
+    /// This method returns a stream of `StreamResponse` objects that mimic OpenAI's
+    /// streaming response format with `.choices[0].delta.content` and `.usage`.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// A stream of `StreamResponse` objects or an error
+    async fn chat_stream_struct(
+        &self,
+        _messages: &[ChatMessage],
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>, LLMError> {
+        Err(LLMError::Generic(
+            "Structured streaming not supported for this provider".to_string(),
         ))
     }
 
