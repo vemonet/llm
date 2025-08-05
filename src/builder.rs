@@ -599,7 +599,7 @@ impl LLMBuilder {
                     let key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for OpenAI".to_string())
                     })?;
-                    Box::new(crate::backends::openai::OpenAI::new(
+                    Box::new(crate::backends::openai::OpenAI::with_config(
                         key,
                         self.base_url,
                         self.model,
@@ -885,7 +885,7 @@ impl LLMBuilder {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Mistral".to_string())
                     })?;
-                    let mistral = crate::backends::mistral::Mistral::new(
+                    let mistral = crate::backends::mistral::Mistral::with_config(
                         api_key,
                         self.base_url,
                         self.model,
@@ -896,10 +896,10 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         tool_choice,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                         self.reasoning_effort,
                         self.json_schema,
                         self.enable_parallel_tool_use,
