@@ -269,20 +269,17 @@ impl ChatResponse for MistralChatResponse {
 
 impl std::fmt::Display for MistralChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (
-            &self.choices.first().unwrap().message.content,
-            &self.choices.first().unwrap().message.tool_calls,
-        ) {
+        match (&self.text(), &self.tool_calls()) {
             (Some(content), Some(tool_calls)) => {
                 for tool_call in tool_calls {
-                    write!(f, "{}", tool_call)?;
+                    write!(f, "{tool_call}")?;
                 }
-                write!(f, "{}", content)
+                write!(f, "{content}")
             }
-            (Some(content), None) => write!(f, "{}", content),
+            (Some(content), None) => write!(f, "{content}"),
             (None, Some(tool_calls)) => {
                 for tool_call in tool_calls {
-                    write!(f, "{}", tool_call)?;
+                    write!(f, "{tool_call}")?;
                 }
                 Ok(())
             }
@@ -475,7 +472,7 @@ impl ChatProvider for Mistral {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("Mistral API returned error status: {}", status),
+                message: format!("Mistral API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
@@ -487,7 +484,7 @@ impl ChatProvider for Mistral {
         match json_resp {
             Ok(res) => Ok(Box::new(res)),
             Err(e) => Err(LLMError::ResponseFormatError {
-                message: format!("Failed to decode Mistral API response: {}", e),
+                message: format!("Failed to decode Mistral API response: {e}"),
                 raw_response: resp_text,
             }),
         }
@@ -574,7 +571,7 @@ impl ChatProvider for Mistral {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("Mistral API returned error status: {}", status),
+                message: format!("Mistral API returned error status: {status}"),
                 raw_response: error_text,
             });
         }

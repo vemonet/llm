@@ -100,11 +100,16 @@ pub trait LLMProvider:
 pub struct ToolCall {
     /// The ID of the tool call.
     pub id: String,
-    /// The type of the tool call (usually "function").
-    #[serde(rename = "type")]
+    /// The type of the tool call (defaults to "function" if not provided).
+    #[serde(rename = "type", default = "default_call_type")]
     pub call_type: String,
     /// The function to call.
     pub function: FunctionCall,
+}
+
+/// Default value for call_type field in ToolCall
+fn default_call_type() -> String {
+    "function".to_string()
 }
 
 /// FunctionCall contains details about which function to call and with what arguments.
