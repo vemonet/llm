@@ -744,7 +744,7 @@ impl ModelsProvider for Mistral {
 }
 
 #[tokio::test]
-async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_mistral_chat_with_tools() -> Result<(), Box<dyn std::error::Error>> {
     use crate::{
         builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
         chat::ChatMessage,
@@ -752,7 +752,7 @@ async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
 
     // Skip test if MISTRAL_API_KEY environment variable is not set
     if std::env::var("MISTRAL_API_KEY").is_err() {
-        eprintln!("test test_mistral_tool_call ... ignored, MISTRAL_API_KEY not set");
+        eprintln!("test test_mistral_chat_with_tools ... ignored, MISTRAL_API_KEY not set");
         return Ok(());
     }
     let api_key = std::env::var("MISTRAL_API_KEY").unwrap();
@@ -820,14 +820,14 @@ async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn test_mistral_chat_call() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_mistral_chat() -> Result<(), Box<dyn std::error::Error>> {
     use crate::{
         builder::{LLMBackend, LLMBuilder},
         chat::ChatMessage,
     };
 
     if std::env::var("MISTRAL_API_KEY").is_err() {
-        eprintln!("test test_mistral_tool_call ... ignored, MISTRAL_API_KEY not set");
+        eprintln!("test test_mistral_chat ... ignored, MISTRAL_API_KEY not set");
         return Ok(());
     }
     let api_key = std::env::var("MISTRAL_API_KEY").unwrap();
