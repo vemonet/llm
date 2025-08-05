@@ -356,7 +356,8 @@ pub trait ChatProvider: Sync + Send {
     async fn chat_stream(
         &self,
         _messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
+    {
         Err(LLMError::Generic(
             "Streaming not supported for this provider".to_string(),
         ))
@@ -377,7 +378,10 @@ pub trait ChatProvider: Sync + Send {
     async fn chat_stream_struct(
         &self,
         _messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>, LLMError> {
+    ) -> Result<
+        std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>,
+        LLMError,
+    > {
         Err(LLMError::Generic(
             "Structured streaming not supported for this provider".to_string(),
         ))
