@@ -155,21 +155,7 @@ struct MistralChatChoice {
 struct MistralChatMsg {
     role: String,
     content: Option<String>,
-    tool_calls: Option<Vec<MistralToolCall>>,
-}
-
-/// Mistral-specific tool call structure for parsing API responses.
-#[derive(Deserialize, Debug)]
-struct MistralToolCall {
-    pub id: String,
-    pub function: MistralToolFunction,
-}
-
-/// Mistral-specific function call structure.
-#[derive(Deserialize, Debug)]
-struct MistralToolFunction {
-    pub name: String,
-    pub arguments: String,
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 /// SSE (Server-Sent Events) chunk parser for Mistral's streaming responses.
@@ -275,21 +261,9 @@ impl ChatResponse for MistralChatResponse {
     }
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
-        self.choices.first().and_then(|c| {
-            c.message.tool_calls.as_ref().map(|calls| {
-                calls
-                    .iter()
-                    .map(|call| ToolCall {
-                        id: call.id.clone(),
-                        call_type: "function".to_string(),
-                        function: crate::FunctionCall {
-                            name: call.function.name.clone(),
-                            arguments: call.function.arguments.clone(),
-                        },
-                    })
-                    .collect()
-            })
-        })
+        self.choices
+            .first()
+            .and_then(|c| c.message.tool_calls.clone())
     }
 }
 
