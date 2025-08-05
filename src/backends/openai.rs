@@ -1151,11 +1151,13 @@ async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Erro
     };
     use futures::StreamExt;
 
-    if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
-        return Ok(());
-    }
-    let api_key = std::env::var("OPENAI_API_KEY").unwrap();
+    let api_key = match std::env::var("OPENAI_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
+            return Ok(());
+        }
+    };
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI)
         .api_key(api_key)
@@ -1211,16 +1213,11 @@ async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Erro
                     "Expected total tokens > 0, got {}",
                     usage.total_tokens
                 );
-                println!("Complete response: {complete_text}");
-                println!("Usage: {usage:?}");
             } else {
                 panic!("Expected usage data in response");
             }
         }
-        Err(e) => {
-            eprintln!("Chat stream struct error: {e}");
-            return Err(e.into());
-        }
+        Err(e) => return Err(e.into()),
     }
     Ok(())
 }
@@ -1233,11 +1230,13 @@ async fn test_openai_chat_stream() -> Result<(), Box<dyn std::error::Error>> {
     };
     use futures::StreamExt;
 
-    if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("test test_openai_chat_stream ... ignored, OPENAI_API_KEY not set");
-        return Ok(());
-    }
-    let api_key = std::env::var("OPENAI_API_KEY").unwrap();
+    let api_key = match std::env::var("OPENAI_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
+            return Ok(());
+        }
+    };
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI)
         .api_key(api_key)
@@ -1267,12 +1266,8 @@ async fn test_openai_chat_stream() -> Result<(), Box<dyn std::error::Error>> {
                 !complete_text.is_empty(),
                 "Expected response message, got empty text"
             );
-            println!("Complete response: {complete_text}");
         }
-        Err(e) => {
-            eprintln!("Chat stream struct error: {e}");
-            return Err(e.into());
-        }
+        Err(e) => return Err(e.into()),
     }
     Ok(())
 }

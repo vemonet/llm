@@ -3,7 +3,7 @@
 //! This module provides integration with Groq's LLM models through their API.
 
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool, Usage},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -54,6 +54,7 @@ struct GroqChatRequest<'a> {
 #[derive(Deserialize, Debug)]
 struct GroqChatResponse {
     choices: Vec<GroqChatChoice>,
+    usage: Option<Usage>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -85,6 +86,10 @@ impl ChatResponse for GroqChatResponse {
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
         todo!()
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage.clone()
     }
 }
 
@@ -229,3 +234,61 @@ impl TextToSpeechProvider for Groq {}
 impl ModelsProvider for Groq {}
 
 impl LLMProvider for Groq {}
+
+#[tokio::test]
+async fn test_groq_chat() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{LLMBackend, LLMBuilder},
+        chat::ChatMessage,
+    };
+
+    let api_key = match std::env::var("GROQ_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_groq_chat ... ignored, GROQ_API_KEY not set");
+            return Ok(());
+        }
+    };
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Groq)
+        .api_key(api_key)
+        .model("llama3-8b-8192")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(false)
+        .build()
+        .expect("Failed to build LLM");
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            println!("LLM response: {response:?}");
+            assert!(
+                !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+            let usage = response.usage();
+            assert!(usage.is_some(), "Expected usage information to be present");
+            let usage = usage.unwrap();
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens, got {}",
+                usage.total_tokens
+            );
+        }
+        Err(e) => {
+            return Err(e.into());
+        }
+    }
+    Ok(())
+}

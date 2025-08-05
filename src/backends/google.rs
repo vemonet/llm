@@ -1096,11 +1096,13 @@ async fn test_google_chat() -> Result<(), Box<dyn std::error::Error>> {
         chat::ChatMessage,
     };
 
-    if std::env::var("GOOGLE_API_KEY").is_err() {
-        eprintln!("test test_google_chat ... ignored, GOOGLE_API_KEY not set");
-        return Ok(());
-    }
-    let api_key = std::env::var("GOOGLE_API_KEY").unwrap();
+    let api_key = match std::env::var("GOOGLE_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_google_chat ... ignored, GOOGLE_API_KEY not set");
+            return Ok(());
+        }
+    };
     let llm = LLMBuilder::new()
         .backend(LLMBackend::Google)
         .api_key(api_key)
