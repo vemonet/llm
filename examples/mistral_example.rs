@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let llm = LLMBuilder::new()
         .backend(LLMBackend::Mistral)
         .api_key(api_key)
-        .model("mistral-medium-2505")         // default model
+        .model("mistral-small-latest")         // default model
         .max_tokens(512)
         .temperature(0.7)
         .stream(false)
@@ -23,8 +23,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
     // Send chat request
     match llm.chat(&messages).await {
-        Ok(response) => println!("Chat response:\n{}", response),
-        Err(e) => eprintln!("Chat error: {}", e),
+        Ok(response) => {
+            println!("Chat response:\n{response}");
+            println!("Chat response:\n{:?}", response.usage())
+        },
+        Err(e) => eprintln!("Chat error: {e}"),
     }
     Ok(())
 }
