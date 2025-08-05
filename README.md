@@ -1,5 +1,7 @@
 # LLM
 
+[![Tests](https://github.com/graniet/llm/actions/workflows/test.yml/badge.svg)](https://github.com/graniet/llm/actions/workflows/test.yml)
+
 > **Note**: This crate name previously belonged to another project. The current implementation represents a new and different library. The previous crate is now archived and will not receive any updates. **ref: https://github.com/rustformers/llm**
 
 **LLM** is a **Rust** library that lets you use **multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini), [Cohere](https://cohere.com), [Mistral](https://mistral.ai) and [ElevenLabs](https://elevenlabs.io).
