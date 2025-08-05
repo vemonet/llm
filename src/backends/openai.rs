@@ -1226,7 +1226,7 @@ async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
-async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_openai_chat_stream() -> Result<(), Box<dyn std::error::Error>> {
     use crate::{
         builder::{LLMBackend, LLMBuilder},
         chat::ChatMessage,
@@ -1234,7 +1234,7 @@ async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error
     use futures::StreamExt;
 
     if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("test test_openai_chat_stream_plain ... ignored, OPENAI_API_KEY not set");
+        eprintln!("test test_openai_chat_stream ... ignored, OPENAI_API_KEY not set");
         return Ok(());
     }
     let api_key = std::env::var("OPENAI_API_KEY").unwrap();
