@@ -31,7 +31,9 @@ pub enum TrimStrategy {
 /// # Examples
 ///
 /// ```rust
-/// use llm::memory::SlidingWindowMemory;
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use llm::memory::{SlidingWindowMemory, MemoryProvider};
 /// use llm::chat::ChatMessage;
 ///
 /// let mut memory = SlidingWindowMemory::new(3);
@@ -44,6 +46,8 @@ pub enum TrimStrategy {
 ///
 /// // Only the last 3 messages are kept
 /// assert_eq!(memory.size(), 3);
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct SlidingWindowMemory {
@@ -67,7 +71,7 @@ impl SlidingWindowMemory {
     /// # Examples
     ///
     /// ```rust
-    /// use llm::memory::SlidingWindowMemory;
+    /// use llm::memory::{SlidingWindowMemory, MemoryProvider};
     ///
     /// let memory = SlidingWindowMemory::new(10);
     /// assert_eq!(memory.window_size(), 10);
