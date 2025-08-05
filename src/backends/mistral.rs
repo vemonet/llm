@@ -2,7 +2,6 @@
 //!
 //! This module provides integration with Mistral's LLM models through their API.
 
-use std::time::Duration;
 use crate::chat::Usage;
 #[cfg(feature = "mistral")]
 use crate::{
@@ -26,6 +25,7 @@ use either::*;
 use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 /// Client for interacting with Mistral's API.
 ///
@@ -743,7 +743,6 @@ impl ModelsProvider for Mistral {
     // Uses default implementation (listing models not supported by Mistral API)
 }
 
-
 #[tokio::test]
 async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
     use crate::{
@@ -783,23 +782,42 @@ async fn test_mistral_tool_call() -> Result<(), Box<dyn std::error::Error>> {
             let tool_calls = response.tool_calls();
             assert!(tool_calls.is_some(), "Expected tool calls to be present");
             let tool_calls = tool_calls.unwrap();
-            assert_eq!(tool_calls.len(), 1, "Expected exactly 1 tool call, got {}", tool_calls.len());
-            assert_eq!(tool_calls[0].function.name, "weather_function", "Expected function name 'weather_function'");
+            assert_eq!(
+                tool_calls.len(),
+                1,
+                "Expected exactly 1 tool call, got {}",
+                tool_calls.len()
+            );
+            assert_eq!(
+                tool_calls[0].function.name, "weather_function",
+                "Expected function name 'weather_function'"
+            );
             let usage = response.usage();
             assert!(usage.is_some(), "Expected usage information to be present");
             let usage = usage.unwrap();
-            assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
-            assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
-            assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
-        },
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens > 0, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens > 0, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens > 0, got {}",
+                usage.total_tokens
+            );
+        }
         Err(e) => {
             eprintln!("Chat error: {e}");
             return Err(e.into());
-        },
+        }
     }
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_mistral_chat_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -826,18 +844,34 @@ async fn test_mistral_chat_call() -> Result<(), Box<dyn std::error::Error>> {
     let messages = vec![ChatMessage::user().content("Hello.").build()];
     match llm.chat(&messages).await {
         Ok(response) => {
-            assert!(!response.text().unwrap().is_empty(), "Expected response message, got {:?}", response.text());
+            assert!(
+                !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
             let usage = response.usage();
             assert!(usage.is_some(), "Expected usage information to be present");
             let usage = usage.unwrap();
-            assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
-            assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
-            assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
-        },
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens > 0, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens > 0, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens > 0, got {}",
+                usage.total_tokens
+            );
+        }
         Err(e) => {
             eprintln!("Chat error: {e}");
             return Err(e.into());
-        },
+        }
     }
     Ok(())
 }

@@ -8,7 +8,10 @@ use std::time::Duration;
 use crate::{
     builder::LLMBackend,
     chat::Tool,
-    chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat, Usage, StreamResponse, StreamChoice, StreamDelta},
+    chat::{
+        ChatMessage, ChatProvider, ChatRole, MessageType, StreamChoice, StreamDelta,
+        StreamResponse, StructuredOutputFormat, Usage,
+    },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -202,20 +205,20 @@ struct OpenAIEmbeddingResponse {
 
 /// Response from OpenAI's streaming chat API endpoint.
 #[derive(Deserialize, Debug)]
-struct OpenAIChatStreamResponse {
-    choices: Vec<OpenAIChatStreamChoice>,
+struct ChatStreamChunk {
+    choices: Vec<ChatStreamChoice>,
     usage: Option<Usage>,
 }
 
 /// Individual choice within an OpenAI streaming chat API response.
 #[derive(Deserialize, Debug)]
-struct OpenAIChatStreamChoice {
-    delta: OpenAIChatStreamDelta,
+struct ChatStreamChoice {
+    delta: ChatStreamDelta,
 }
 
 /// Delta content within an OpenAI streaming chat API response.
 #[derive(Deserialize, Debug)]
-struct OpenAIChatStreamDelta {
+struct ChatStreamDelta {
     content: Option<String>,
 }
 
@@ -639,8 +642,10 @@ impl ChatProvider for OpenAI {
     async fn chat_stream_struct(
         &self,
         messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>, LLMError>
-    {
+    ) -> Result<
+        std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>,
+        LLMError,
+    > {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
         }
@@ -1103,15 +1108,13 @@ fn parse_sse_chunk(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
                     }));
                 }
             }
-            match serde_json::from_str::<OpenAIChatStreamResponse>(data) {
+            match serde_json::from_str::<ChatStreamChunk>(data) {
                 Ok(response) => {
                     // Handle usage metadata if present (typically in the last chunk)
                     if let Some(usage) = response.usage {
                         return Ok(Some(StreamResponse {
                             choices: vec![StreamChoice {
-                                delta: StreamDelta {
-                                    content: None,
-                                },
+                                delta: StreamDelta { content: None },
                             }],
                             usage: Some(usage),
                         }));
@@ -1139,7 +1142,6 @@ fn parse_sse_chunk(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
         }))
     }
 }
-
 
 #[tokio::test]
 async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Error>> {
@@ -1182,32 +1184,46 @@ async fn test_openai_chat_stream_struct() -> Result<(), Box<dyn std::error::Erro
                         if let Some(usage) = stream_response.usage {
                             usage_data = Some(usage);
                         }
-                    },
+                    }
                     Err(e) => {
                         eprintln!("Stream error: {e}");
                         return Err(e.into());
                     }
                 }
             }
-            assert!(!complete_text.is_empty(), "Expected response message, got empty text");
+            assert!(
+                !complete_text.is_empty(),
+                "Expected response message, got empty text"
+            );
             if let Some(usage) = usage_data {
-                assert!(usage.prompt_tokens > 0, "Expected prompt tokens > 0, got {}", usage.prompt_tokens);
-                assert!(usage.completion_tokens > 0, "Expected completion tokens > 0, got {}", usage.completion_tokens);
-                assert!(usage.total_tokens > 0, "Expected total tokens > 0, got {}", usage.total_tokens);
+                assert!(
+                    usage.prompt_tokens > 0,
+                    "Expected prompt tokens > 0, got {}",
+                    usage.prompt_tokens
+                );
+                assert!(
+                    usage.completion_tokens > 0,
+                    "Expected completion tokens > 0, got {}",
+                    usage.completion_tokens
+                );
+                assert!(
+                    usage.total_tokens > 0,
+                    "Expected total tokens > 0, got {}",
+                    usage.total_tokens
+                );
                 println!("Complete response: {complete_text}");
                 println!("Usage: {usage:?}");
             } else {
                 panic!("Expected usage data in response");
             }
-        },
+        }
         Err(e) => {
             eprintln!("Chat stream struct error: {e}");
             return Err(e.into());
-        },
+        }
     }
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error>> {
@@ -1218,7 +1234,7 @@ async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error
     use futures::StreamExt;
 
     if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("test test_openai_chat_stream_struct ... ignored, OPENAI_API_KEY not set");
+        eprintln!("test test_openai_chat_stream_plain ... ignored, OPENAI_API_KEY not set");
         return Ok(());
     }
     let api_key = std::env::var("OPENAI_API_KEY").unwrap();
@@ -1240,20 +1256,23 @@ async fn test_openai_chat_stream_plain() -> Result<(), Box<dyn std::error::Error
                 match chunk_result {
                     Ok(content) => {
                         complete_text.push_str(&content);
-                    },
+                    }
                     Err(e) => {
                         eprintln!("Stream error: {e}");
                         return Err(e.into());
                     }
                 }
             }
-            assert!(!complete_text.is_empty(), "Expected response message, got empty text");
+            assert!(
+                !complete_text.is_empty(),
+                "Expected response message, got empty text"
+            );
             println!("Complete response: {complete_text}");
-        },
+        }
         Err(e) => {
             eprintln!("Chat stream struct error: {e}");
             return Err(e.into());
-        },
+        }
     }
     Ok(())
 }

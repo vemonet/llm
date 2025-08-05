@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("No usage information available");
             }
-        },
+        }
         Err(e) => eprintln!("Chat error: {e}"),
     }
     Ok(())
