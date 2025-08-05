@@ -44,7 +44,7 @@
 use crate::{
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat,
-        Tool,
+        Tool, Usage,
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -161,6 +161,23 @@ struct GoogleGenerationConfig {
 struct GoogleChatResponse {
     /// Generated completion candidates
     candidates: Vec<GoogleCandidate>,
+    /// Usage metadata containing token counts
+    #[serde(rename = "usageMetadata")]
+    usage_metadata: Option<GoogleUsageMetadata>,
+}
+
+/// Usage metadata for token counts
+#[derive(Deserialize, Debug)]
+struct GoogleUsageMetadata {
+    /// Number of tokens in the prompt
+    #[serde(rename = "promptTokenCount")]
+    prompt_token_count: Option<u32>,
+    /// Number of tokens in the completion
+    #[serde(rename = "candidatesTokenCount")]
+    candidates_token_count: Option<u32>,
+    /// Total number of tokens used
+    #[serde(rename = "totalTokenCount")]
+    total_token_count: Option<u32>,
 }
 
 /// Response from the streaming chat completion API
@@ -168,6 +185,9 @@ struct GoogleChatResponse {
 struct GoogleStreamResponse {
     /// Generated completion candidates
     candidates: Option<Vec<GoogleCandidate>>,
+    // /// Usage metadata containing token counts (usually not present in streaming)
+    // #[serde(rename = "usageMetadata")]
+    // usage_metadata: Option<GoogleUsageMetadata>,
 }
 
 impl std::fmt::Display for GoogleChatResponse {
@@ -175,14 +195,14 @@ impl std::fmt::Display for GoogleChatResponse {
         match (self.text(), self.tool_calls()) {
             (Some(text), Some(tool_calls)) => {
                 for call in tool_calls {
-                    write!(f, "{}", call)?;
+                    write!(f, "{call}")?;
                 }
-                write!(f, "{}", text)
+                write!(f, "{text}")
             }
-            (Some(text), None) => write!(f, "{}", text),
+            (Some(text), None) => write!(f, "{text}"),
             (None, Some(tool_calls)) => {
                 for call in tool_calls {
-                    write!(f, "{}", call)?;
+                    write!(f, "{call}")?;
                 }
                 Ok(())
             }
@@ -268,6 +288,23 @@ impl ChatResponse for GoogleChatResponse {
                         },
                     }]
                 })
+            }
+        })
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage_metadata.as_ref().and_then(|metadata| {
+            match (metadata.prompt_token_count, metadata.candidates_token_count) {
+                (Some(prompt_tokens), Some(completion_tokens)) => {
+                    Some(Usage {
+                        prompt_tokens,
+                        completion_tokens,
+                        total_tokens: metadata.total_token_count.unwrap_or(prompt_tokens + completion_tokens),
+                        completion_tokens_details: None,
+                        prompt_tokens_details: None,
+                    })
+                }
+                _ => None,
             }
         })
     }
@@ -647,7 +684,7 @@ impl ChatProvider for Google {
             Err(e) => {
                 // Return a more descriptive error with the raw response
                 Err(LLMError::ResponseFormatError {
-                    message: format!("Failed to decode Google API response: {}", e),
+                    message: format!("Failed to decode Google API response: {e}"),
                     raw_response: resp_text,
                 })
             }
@@ -823,7 +860,7 @@ impl ChatProvider for Google {
             Err(e) => {
                 // Return a more descriptive error with the raw response
                 Err(LLMError::ResponseFormatError {
-                    message: format!("Failed to decode Google API response: {}", e),
+                    message: format!("Failed to decode Google API response: {e}"),
                     raw_response: resp_text,
                 })
             }
@@ -924,7 +961,7 @@ impl ChatProvider for Google {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("Google API returned error status: {}", status),
+                message: format!("Google API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
@@ -1024,10 +1061,7 @@ impl LLMProvider for Google {
 fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     for line in chunk.lines() {
         let line = line.trim();
-        
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            
+        if let Some(data) = line.strip_prefix("data: ") {
             match serde_json::from_str::<GoogleStreamResponse>(data) {
                 Ok(response) => {
                     if let Some(candidates) = response.candidates {
@@ -1045,7 +1079,7 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
             }
         }
     }
-    
+
     Ok(None)
 }
 
@@ -1054,3 +1088,59 @@ impl TextToSpeechProvider for Google {}
 
 #[async_trait]
 impl ModelsProvider for Google {}
+
+#[tokio::test]
+async fn test_google_chat() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::{
+        builder::{LLMBackend, LLMBuilder},
+        chat::ChatMessage,
+    };
+
+    if std::env::var("GOOGLE_API_KEY").is_err() {
+        eprintln!("test test_google_chat ... ignored, GOOGLE_API_KEY not set");
+        return Ok(());
+    }
+    let api_key = std::env::var("GOOGLE_API_KEY").unwrap();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Google)
+        .api_key(api_key)
+        .model("gemini-2.5-flash-lite")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(false)
+        .build()
+        .expect("Failed to build LLM");
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            println!("Google response: {response:?}");
+            assert!(
+                !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+            let usage = response.usage();
+            assert!(usage.is_some(), "Expected usage information to be present");
+            let usage = usage.unwrap();
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens, got {}",
+                usage.total_tokens
+            );
+        }
+        Err(e) => {
+            return Err(e.into());
+        }
+    }
+    Ok(())
+}
