@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install ALSA development libraries
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: rustup update
       # - run: cargo fmt -- --check
       - run: cargo clippy --all --all-targets --all-features
