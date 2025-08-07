@@ -190,11 +190,11 @@ async fn test_groq_chat_with_tools() -> Result<(), Box<dyn std::error::Error>> {
             FunctionBuilder::new("weather_function")
                 .description("Use this tool to get the weather in a specific city")
                 .param(
-                    ParamBuilder::new("url")
+                    ParamBuilder::new("city")
                         .type_of("string")
-                        .description("The url to get the weather from for the city"),
+                        .description("The city to get the weather for"),
                 )
-                .required(vec!["url".to_string()]),
+                .required(vec!["city".to_string()]),
         )
         .build()
         .expect("Failed to build LLM");
