@@ -859,9 +859,8 @@ impl LLMBuilder {
                 #[cfg(feature = "cohere")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Google".to_string())
+                        LLMError::InvalidRequest("No API key provided for Cohere".to_string())
                     })?;
-
                     let cohere = crate::backends::cohere::Cohere::new(
                         api_key,
                         self.base_url,
@@ -873,13 +872,14 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         self.tool_choice,
                         self.reasoning_effort,
                         self.json_schema,
+                        None,
+                        None,
                     );
+                    // TODO: self.embedding_dimensions,
                     Box::new(cohere)
                 }
             }

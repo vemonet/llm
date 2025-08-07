@@ -38,6 +38,12 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "llama3-8b-8192",
         backend_name: "groq",
     },
+    BackendTestConfig {
+        backend: LLMBackend::Cohere,
+        env_key: "COHERE_API_KEY",
+        model: "command-r7b-12-2024",
+        backend_name: "cohere",
+    },
 ];
 
 // Rstest parameterized tests for all backends
