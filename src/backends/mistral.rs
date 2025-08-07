@@ -23,13 +23,12 @@ impl OpenAICompatibleConfig for MistralConfig {
     const PROVIDER_NAME: &'static str = "Mistral";
     const DEFAULT_BASE_URL: &'static str = "https://api.mistral.ai/v1/";
     const DEFAULT_MODEL: &'static str = "mistral-small-latest";
-    const SUPPORTS_WEB_SEARCH: bool = false;
     const SUPPORTS_REASONING_EFFORT: bool = false;
     const SUPPORTS_STRUCTURED_OUTPUT: bool = true;
     const SUPPORTS_PARALLEL_TOOL_CALLS: bool = true;
 }
 
-/// Type alias for Mistral client using the generic provider
+/// Type alias for Mistral client using the generic OpenAI-compatible provider
 pub type Mistral = OpenAICompatibleProvider<MistralConfig>;
 
 impl Mistral {
@@ -57,7 +56,6 @@ impl Mistral {
         // Note: embedding params are stored but not used in the generic impl
         // They would need to be handled by specific Mistral-only implementations
         let _ = (embedding_encoding_format, embedding_dimensions);
-
         <OpenAICompatibleProvider<MistralConfig>>::new(
             api_key,
             base_url,
@@ -73,19 +71,13 @@ impl Mistral {
             tool_choice,
             reasoning_effort,
             json_schema,
-            None, // voice - not supported by Mistral
-            None, // enable_web_search - not supported
-            None, // web_search_context_size
-            None, // web_search_user_location_type
-            None, // web_search_user_location_approximate_country
-            None, // web_search_user_location_approximate_city
-            None, // web_search_user_location_approximate_region
+            None, // Not supported by Mistral
             parallel_tool_calls,
         )
     }
 }
 
-// Mistral-specific implementations that don't fit in the generic provider
+// Mistral-specific implementations that don't fit in the generic OpenAI-compatible provider
 
 #[derive(Serialize)]
 struct MistralEmbeddingRequest {
@@ -105,6 +97,12 @@ struct MistralEmbeddingData {
 #[derive(Deserialize, Debug)]
 struct MistralEmbeddingResponse {
     data: Vec<MistralEmbeddingData>,
+}
+
+impl LLMProvider for Mistral {
+    fn tools(&self) -> Option<&[Tool]> {
+        self.tools.as_deref()
+    }
 }
 
 #[async_trait]
@@ -164,7 +162,6 @@ impl EmbeddingProvider for Mistral {
     }
 }
 
-// For Mistral, we'll just return an error since it doesn't have a models endpoint
 #[async_trait]
 impl ModelsProvider for Mistral {
     async fn list_models(
@@ -175,11 +172,6 @@ impl ModelsProvider for Mistral {
     }
 }
 
-impl LLMProvider for Mistral {
-    fn tools(&self) -> Option<&[Tool]> {
-        self.tools.as_deref()
-    }
-}
 
 #[async_trait]
 impl TextToSpeechProvider for Mistral {
@@ -206,7 +198,7 @@ async fn test_mistral_chat() -> Result<(), Box<dyn std::error::Error>> {
     let llm = LLMBuilder::new()
         .backend(LLMBackend::Mistral)
         .api_key(api_key)
-        .model("mistral-large-latest")
+        .model("mistral-small-latest")
         .max_tokens(512)
         .temperature(0.7)
         .build()
@@ -306,7 +298,6 @@ async fn test_mistral_chat_with_tools() -> Result<(), Box<dyn std::error::Error>
 }
 
 
-// Tests remain the same, but would use the new generic implementation
 #[tokio::test]
 async fn test_mistral_chat_stream_struct() -> Result<(), Box<dyn std::error::Error>> {
     use crate::{

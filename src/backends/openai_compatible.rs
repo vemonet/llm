@@ -39,12 +39,6 @@ pub struct OpenAICompatibleProvider<T: OpenAICompatibleConfig> {
     pub reasoning_effort: Option<String>,
     pub json_schema: Option<StructuredOutputFormat>,
     pub voice: Option<String>,
-    pub enable_web_search: Option<bool>,
-    pub web_search_context_size: Option<String>,
-    pub web_search_user_location_type: Option<String>,
-    pub web_search_user_location_approximate_country: Option<String>,
-    pub web_search_user_location_approximate_city: Option<String>,
-    pub web_search_user_location_approximate_region: Option<String>,
     pub parallel_tool_calls: Option<bool>,
     pub client: Client,
     _phantom: PhantomData<T>,
@@ -67,9 +61,6 @@ pub trait OpenAICompatibleConfig: Send + Sync {
     /// Chat completions endpoint path (usually "chat/completions")
     const CHAT_ENDPOINT: &'static str = "chat/completions";
 
-    /// Whether this provider supports web search
-    const SUPPORTS_WEB_SEARCH: bool = false;
-
     /// Whether this provider supports reasoning effort
     const SUPPORTS_REASONING_EFFORT: bool = false;
 
@@ -89,13 +80,13 @@ pub trait OpenAICompatibleConfig: Send + Sync {
 
     /// Transform the request before sending (for provider-specific modifications)
     fn transform_request(request: &mut OpenAICompatibleChatRequest) -> Result<(), LLMError> {
-        let _ = request; // Avoid unused parameter warning
+        let _ = request;
         Ok(())
     }
 
     /// Transform the response after receiving (for provider-specific processing)
     fn transform_response(response: &mut OpenAICompatibleChatResponse) -> Result<(), LLMError> {
-        let _ = response; // Avoid unused parameter warning
+        let _ = response;
         Ok(())
     }
 }
@@ -171,8 +162,6 @@ pub struct OpenAICompatibleChatRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub web_search_options: Option<WebSearchOptions>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<StreamOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
@@ -216,31 +205,8 @@ pub struct ResponseFormat {
 }
 
 #[derive(Deserialize, Debug, Serialize)]
-pub struct WebSearchOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_location: Option<UserLocation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub search_context_size: Option<String>,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
 pub struct StreamOptions {
     pub include_usage: bool,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-pub struct UserLocation {
-    #[serde(rename = "type")]
-    pub location_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub approximate: Option<ApproximateLocation>,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-pub struct ApproximateLocation {
-    pub country: String,
-    pub city: String,
-    pub region: String,
 }
 
 /// Streaming response structures
@@ -347,12 +313,6 @@ impl<T: OpenAICompatibleConfig> OpenAICompatibleProvider<T> {
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         voice: Option<String>,
-        enable_web_search: Option<bool>,
-        web_search_context_size: Option<String>,
-        web_search_user_location_type: Option<String>,
-        web_search_user_location_approximate_country: Option<String>,
-        web_search_user_location_approximate_city: Option<String>,
-        web_search_user_location_approximate_region: Option<String>,
         parallel_tool_calls: Option<bool>,
     ) -> Self {
         let mut builder = Client::builder();
@@ -379,12 +339,6 @@ impl<T: OpenAICompatibleConfig> OpenAICompatibleProvider<T> {
             reasoning_effort,
             json_schema,
             voice,
-            enable_web_search,
-            web_search_context_size,
-            web_search_user_location_type,
-            web_search_user_location_approximate_country,
-            web_search_user_location_approximate_city,
-            web_search_user_location_approximate_region,
             parallel_tool_calls,
             client: builder.build().expect("Failed to build reqwest Client"),
             _phantom: PhantomData,
@@ -444,53 +398,17 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         } else {
             None
         };
-
         let request_tools = tools.map(|t| t.to_vec()).or_else(|| self.tools.clone());
         let request_tool_choice = if request_tools.is_some() {
             self.tool_choice.clone()
         } else {
             None
         };
-
-        let web_search_options = if T::SUPPORTS_WEB_SEARCH && self.enable_web_search.unwrap_or(false) {
-            let loc_type_opt = self
-                .web_search_user_location_type
-                .as_ref()
-                .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
-
-            let country = self.web_search_user_location_approximate_country.as_ref();
-            let city = self.web_search_user_location_approximate_city.as_ref();
-            let region = self.web_search_user_location_approximate_region.as_ref();
-
-            let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
-                Some(ApproximateLocation {
-                    country: country.cloned().unwrap_or_default(),
-                    city: city.cloned().unwrap_or_default(),
-                    region: region.cloned().unwrap_or_default(),
-                })
-            } else {
-                None
-            };
-
-            let user_location = loc_type_opt.map(|loc_type| UserLocation {
-                location_type: loc_type.clone(),
-                approximate,
-            });
-
-            Some(WebSearchOptions {
-                search_context_size: self.web_search_context_size.clone(),
-                user_location,
-            })
-        } else {
-            None
-        };
-
         let reasoning_effort = if T::SUPPORTS_REASONING_EFFORT {
             self.reasoning_effort.clone()
         } else {
             None
         };
-
         let parallel_tool_calls = if T::SUPPORTS_PARALLEL_TOOL_CALLS {
             self.parallel_tool_calls
         } else {
@@ -509,7 +427,6 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
             tool_choice: request_tool_choice,
             reasoning_effort,
             response_format,
-            web_search_options,
             stream_options: None,
             parallel_tool_calls,
         };
@@ -571,10 +488,12 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         }
     }
 
+    /// Perform a chat request without tool calls
     async fn chat(&self, messages: &[ChatMessage]) -> Result<Box<dyn ChatResponse>, LLMError> {
         self.chat_with_tools(messages, None).await
     }
 
+    /// Stream chat responses as a stream of strings
     async fn chat_stream(
         &self,
         messages: &[ChatMessage],
@@ -599,6 +518,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         Ok(Box::pin(content_stream))
     }
 
+    /// Stream chat responses as structured objects, including usage information
     async fn chat_stream_struct(
         &self,
         messages: &[ChatMessage],
@@ -658,7 +578,6 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 None
             },
             response_format: None,
-            web_search_options: None,
             stream_options: if T::SUPPORTS_STREAM_OPTIONS {
                 Some(StreamOptions {
                     include_usage: true,
@@ -737,14 +656,9 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
                 let owned_calls: Vec<OpenAICompatibleFunctionCall<'static>> = calls
                     .iter()
                     .map(|c| {
-                        let owned_id = c.id.clone();
-                        let owned_name = c.function.name.clone();
-                        let owned_args = c.function.arguments.clone();
-
-                        let id_str = Box::leak(owned_id.into_boxed_str());
-                        let name_str = Box::leak(owned_name.into_boxed_str());
-                        let args_str = Box::leak(owned_args.into_boxed_str());
-
+                        let id_str = Box::leak(c.id.clone().into_boxed_str());
+                        let name_str = Box::leak(c.function.name.clone().into_boxed_str());
+                        let args_str = Box::leak(c.function.arguments.clone().into_boxed_str());
                         OpenAICompatibleFunctionCall {
                             id: id_str,
                             content_type: "function",
