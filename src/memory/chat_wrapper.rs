@@ -152,7 +152,7 @@ impl ChatProvider for ChatWithMemory {
             // record incoming user messages once
             let mut mem = self.memory.write().await;
             for m in messages {
-                mem.remember(&m).await?;
+                mem.remember(m).await?;
             }
         }
 

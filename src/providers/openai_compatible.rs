@@ -80,17 +80,7 @@ pub trait OpenAICompatibleConfig: Send + Sync {
         None
     }
 
-    /// Transform the request before sending (for provider-specific modifications)
-    fn transform_request(request: &mut OpenAICompatibleChatRequest) -> Result<(), LLMError> {
-        let _ = request;
-        Ok(())
-    }
 
-    /// Transform the response after receiving (for provider-specific processing)
-    fn transform_response(response: &mut OpenAICompatibleChatResponse) -> Result<(), LLMError> {
-        let _ = response;
-        Ok(())
-    }
 }
 
 /// Generic OpenAI-compatible chat message
@@ -362,25 +352,26 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError(format!("Missing {} API key", T::PROVIDER_NAME)));
         }
-
-        let messages = messages.to_vec();
-        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = vec![];
-
-        for msg in messages {
-            if let MessageType::ToolResult(ref results) = msg.message_type {
-                for result in results {
-                    openai_msgs.push(OpenAICompatibleChatMessage {
-                        role: "tool",
-                        tool_call_id: Some(result.id.clone()),
-                        tool_calls: None,
-                        content: Some(Right(result.function.arguments.clone())),
-                    });
+        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
+            .iter()
+            .flat_map(|msg| {
+                if let MessageType::ToolResult(ref results) = msg.message_type {
+                    // Expand ToolResult into multiple messages
+                    results
+                        .iter()
+                        .map(|result| OpenAICompatibleChatMessage {
+                            role: "tool",
+                            tool_call_id: Some(result.id.clone()),
+                            tool_calls: None,
+                            content: Some(Right(result.function.arguments.clone())),
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    // Convert single message
+                    vec![chat_message_to_api_message(msg.clone())]
                 }
-            } else {
-                openai_msgs.push(chat_message_to_api_message(msg))
-            }
-        }
-
+            })
+            .collect();
         if let Some(system) = &self.system {
             openai_msgs.insert(
                 0,
@@ -398,7 +389,6 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 },
             );
         }
-
         let response_format: Option<ResponseFormat> = if T::SUPPORTS_STRUCTURED_OUTPUT {
             self.json_schema.clone().map(|s| s.into())
         } else {
@@ -420,8 +410,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         } else {
             None
         };
-
-        let mut body = OpenAICompatibleChatRequest {
+        let body = OpenAICompatibleChatRequest {
             model: &self.model,
             messages: openai_msgs,
             max_tokens: self.max_tokens,
@@ -436,38 +425,27 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
             stream_options: None,
             parallel_tool_calls,
         };
-
-        // Allow provider-specific request transformation
-        T::transform_request(&mut body)?;
-
         let url = self
             .base_url
             .join(T::CHAT_ENDPOINT)
             .map_err(|e| LLMError::HttpError(e.to_string()))?;
-
         let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
-
         // Add custom headers if provider specifies them
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
                 request = request.header(key, value);
             }
         }
-
         if log::log_enabled!(log::Level::Trace) {
             if let Ok(json) = serde_json::to_string(&body) {
                 log::trace!("{} request payload: {}", T::PROVIDER_NAME, json);
             }
         }
-
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
-
         let response = request.send().await?;
-
         log::debug!("{} HTTP status: {}", T::PROVIDER_NAME, response.status());
-
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await?;
@@ -476,17 +454,10 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 raw_response: error_text,
             });
         }
-
         let resp_text = response.text().await?;
-        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> =
-            serde_json::from_str(&resp_text);
-
+        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> = serde_json::from_str(&resp_text);
         match json_resp {
-            Ok(mut response) => {
-                // Allow provider-specific response transformation
-                T::transform_response(&mut response)?;
-                Ok(Box::new(response))
-            }
+            Ok(response) => Ok(Box::new(response)),
             Err(e) => Err(LLMError::ResponseFormatError {
                 message: format!("Failed to decode {} API response: {e}", T::PROVIDER_NAME),
                 raw_response: resp_text,
@@ -535,22 +506,26 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError(format!("Missing {} API key", T::PROVIDER_NAME)));
         }
-        let messages = messages.to_vec();
-        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = vec![];
-        for msg in messages {
-            if let MessageType::ToolResult(ref results) = msg.message_type {
-                for result in results {
-                    openai_msgs.push(OpenAICompatibleChatMessage {
-                        role: "tool",
-                        tool_call_id: Some(result.id.clone()),
-                        tool_calls: None,
-                        content: Some(Right(result.function.arguments.clone())),
-                    });
+        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
+            .iter()
+            .flat_map(|msg| {
+                if let MessageType::ToolResult(ref results) = msg.message_type {
+                    // Expand ToolResult into multiple messages
+                    results
+                        .iter()
+                        .map(|result| OpenAICompatibleChatMessage {
+                            role: "tool",
+                            tool_call_id: Some(result.id.clone()),
+                            tool_calls: None,
+                            content: Some(Right(result.function.arguments.clone())),
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    // Convert single message
+                    vec![chat_message_to_api_message(msg.clone())]
                 }
-            } else {
-                openai_msgs.push(chat_message_to_api_message(msg))
-            }
-        }
+            })
+            .collect();
         if let Some(system) = &self.system {
             openai_msgs.insert(
                 0,
@@ -568,7 +543,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 },
             );
         }
-        let mut body = OpenAICompatibleChatRequest {
+        let body = OpenAICompatibleChatRequest {
             model: &self.model,
             messages: openai_msgs,
             max_tokens: self.max_tokens,
@@ -597,21 +572,16 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 None
             },
         };
-
         let url = self
             .base_url
             .join(T::CHAT_ENDPOINT)
             .map_err(|e| LLMError::HttpError(e.to_string()))?;
-
         let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
-
-        T::transform_request(&mut body)?;
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
                 request = request.header(key, value);
             }
         }
-
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
