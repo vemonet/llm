@@ -2,7 +2,19 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
-use crate::backends::openai_compatible::{OpenAICompatibleConfig, OpenAICompatibleProvider};
+use crate::providers::openai_compatible::{
+    OpenAICompatibleConfig,
+    OpenAICompatibleProvider,
+    // OpenAICompatibleFunctionCall,
+    // OpenAICompatibleFunctionPayload,
+    OpenAICompatibleChatMessage,
+    // MessageContent,
+    // ImageUrlContent,
+    // OpenAICompatibleChatResponse as OpenAIChatResponse,
+    // OpenAICompatibleChatChoice as OpenAIChatChoice,
+    // OpenAICompatibleChatMsg as OpenAIChatMsg,
+    ResponseFormat as OpenAIResponseFormat,
+};
 use crate::{
     chat::{Tool, ToolChoice, StructuredOutputFormat, ChatMessage, ChatProvider, ChatResponse, StreamResponse},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -69,16 +81,6 @@ pub struct ApproximateLocation {
     pub region: String,
 }
 
-// OpenAI-specific types for web search implementation
-// Reuse the compatible types from the base module
-pub use crate::backends::openai_compatible::{
-    OpenAICompatibleFunctionCall,
-    OpenAICompatibleFunctionPayload,
-    OpenAICompatibleChatMessage,
-    MessageContent,
-    ImageUrlContent,
-};
-
 #[derive(Serialize, Debug)]
 pub struct OpenAIChatRequest<'a> {
     pub model: &'a str,
@@ -111,14 +113,6 @@ pub struct OpenAIWebSearchOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_location: Option<UserLocation>,
 }
-
-// Use the OpenAI-compatible versions from the base module
-pub use crate::backends::openai_compatible::{
-    OpenAICompatibleChatResponse as OpenAIChatResponse,
-    OpenAICompatibleChatChoice as OpenAIChatChoice,
-    OpenAICompatibleChatMsg as OpenAIChatMsg,
-    ResponseFormat as OpenAIResponseFormat,
-};
 
 impl OpenAI {
     /// Creates a new OpenAI client with the specified configuration.

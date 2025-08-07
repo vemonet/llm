@@ -1,9 +1,6 @@
 #[cfg(feature = "openai")]
 pub mod openai;
 
-// Base implementation for OpenAI-compatible providers
-pub mod openai_compatible;
-
 #[cfg(feature = "anthropic")]
 pub mod anthropic;
 

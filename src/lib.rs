@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 /// Backend implementations for supported LLM providers like OpenAI, Anthropic, etc.
 pub mod backends;
 
+pub mod providers;
+
 /// Builder pattern for configuring and instantiating LLM providers
 pub mod builder;
 

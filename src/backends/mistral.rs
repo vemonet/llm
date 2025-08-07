@@ -2,7 +2,7 @@
 //!
 //! This module provides integration with Mistral's LLM models through their API.
 
-use crate::backends::openai_compatible::{OpenAICompatibleConfig, OpenAICompatibleProvider};
+use crate::providers::openai_compatible::{OpenAICompatibleConfig, OpenAICompatibleProvider};
 use crate::{
     chat::{Tool, ToolChoice, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -33,7 +33,6 @@ pub type Mistral = OpenAICompatibleProvider<MistralConfig>;
 
 impl Mistral {
     /// Creates a new Mistral client with the specified configuration.
-    #[allow(clippy::too_many_arguments)]
     pub fn with_config(
         api_key: impl Into<String>,
         base_url: Option<String>,

@@ -828,8 +828,9 @@ impl LLMBuilder {
                         LLMError::InvalidRequest("No API key provided for Groq".to_string())
                     })?;
 
-                    let groq = crate::backends::groq::Groq::new(
+                    let groq = crate::backends::groq::Groq::with_config(
                         api_key,
+                        None, // base_url
                         self.model,
                         self.max_tokens,
                         self.temperature,
@@ -838,6 +839,13 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        None, // parallel_tool_calls
                     );
                     Box::new(groq)
                 }
