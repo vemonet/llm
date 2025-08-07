@@ -40,6 +40,8 @@ pub struct OpenAICompatibleProvider<T: OpenAICompatibleConfig> {
     pub json_schema: Option<StructuredOutputFormat>,
     pub voice: Option<String>,
     pub parallel_tool_calls: Option<bool>,
+    pub embedding_encoding_format: Option<String>,
+    pub embedding_dimensions: Option<u32>,
     pub client: Client,
     _phantom: PhantomData<T>,
 }
@@ -314,6 +316,8 @@ impl<T: OpenAICompatibleConfig> OpenAICompatibleProvider<T> {
         json_schema: Option<StructuredOutputFormat>,
         voice: Option<String>,
         parallel_tool_calls: Option<bool>,
+        embedding_encoding_format: Option<String>,
+        embedding_dimensions: Option<u32>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -340,6 +344,8 @@ impl<T: OpenAICompatibleConfig> OpenAICompatibleProvider<T> {
             json_schema,
             voice,
             parallel_tool_calls,
+            embedding_encoding_format,
+            embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
             _phantom: PhantomData,
         }
@@ -518,7 +524,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
         Ok(Box::pin(content_stream))
     }
 
-    /// Stream chat responses as structured objects, including usage information
+    /// Stream chat responses as `ChatMessage` structured objects, including usage information
     async fn chat_stream_struct(
         &self,
         messages: &[ChatMessage],
@@ -592,9 +598,6 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
             },
         };
 
-        // Allow provider-specific request transformation
-        T::transform_request(&mut body)?;
-
         let url = self
             .base_url
             .join(T::CHAT_ENDPOINT)
@@ -602,7 +605,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
 
         let mut request = self.client.post(url).bearer_auth(&self.api_key).json(&body);
 
-        // Add custom headers if provider specifies them
+        T::transform_request(&mut body)?;
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
                 request = request.header(key, value);
@@ -625,7 +628,7 @@ impl<T: OpenAICompatibleConfig> ChatProvider for OpenAICompatibleProvider<T> {
     }
 }
 
-// Create an owned OpenAICompatibleChatMessage that doesn't borrow from any temporary variables
+/// Create an owned `OpenAICompatibleChatMessage` that doesn't borrow from any temporary variables
 pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleChatMessage<'static> {
     OpenAICompatibleChatMessage {
         role: match chat_msg.role {
@@ -676,7 +679,7 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
     }
 }
 
-/// Creates a structured SSE stream that returns StreamResponse objects
+/// Creates a structured SSE stream that returns `StreamResponse` objects
 pub fn create_struct_sse_stream(
     response: reqwest::Response,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
@@ -699,7 +702,7 @@ pub fn create_struct_sse_stream(
     Box::pin(stream)
 }
 
-/// Parse SSE chunk and convert to StreamResponse format
+/// Parse SSE chunk and convert to `StreamResponse` format
 pub fn parse_sse_chunk(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
     let mut collected_content = String::new();
     for line in chunk.lines() {

@@ -37,13 +37,12 @@ impl Groq {
         top_k: Option<u32>,
         tools: Option<Vec<Tool>>,
         tool_choice: Option<ToolChoice>,
-        embedding_encoding_format: Option<String>,
-        embedding_dimensions: Option<u32>,
+        _embedding_encoding_format: Option<String>,
+        _embedding_dimensions: Option<u32>,
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         parallel_tool_calls: Option<bool>,
     ) -> Self {
-        let _ = (embedding_encoding_format, embedding_dimensions);
         OpenAICompatibleProvider::<GroqConfig>::new(
             api_key,
             base_url,
@@ -59,8 +58,10 @@ impl Groq {
             tool_choice,
             reasoning_effort,
             json_schema,
-            None, // Not supported by Groq
+            None, // voice - not supported by Groq
             parallel_tool_calls,
+            None, // embedding_encoding_format - not supported by Groq
+            None, // embedding_dimensions - not supported by Groq
         )
     }
 }

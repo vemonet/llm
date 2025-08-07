@@ -53,9 +53,6 @@ impl Cohere {
         json_schema: Option<StructuredOutputFormat>,
         parallel_tool_calls: Option<bool>,
     ) -> Self {
-        // Note: embedding params are stored but not used in the generic impl
-        // They would need to be handled by specific Cohere-only implementations
-        let _ = (embedding_encoding_format, embedding_dimensions);
         <OpenAICompatibleProvider<CohereConfig>>::new(
             api_key,
             base_url,
@@ -71,8 +68,10 @@ impl Cohere {
             tool_choice,
             reasoning_effort,
             json_schema,
-            None, // Not supported by Cohere
+            None, // voice - not supported by Cohere
             parallel_tool_calls,
+            embedding_encoding_format,
+            embedding_dimensions,
         )
     }
 }
@@ -133,13 +132,11 @@ impl EmbeddingProvider for Cohere {
             return Err(LLMError::AuthError("Missing Cohere API key".into()));
         }
 
-        // Note: This would need access to embedding-specific fields that aren't in the generic provider
-        // For now, use defaults
         let body = CohereEmbeddingRequest {
             model: self.model.clone(),
             input,
-            encoding_format: Some("float".to_string()),
-            dimensions: None,
+            encoding_format: self.embedding_encoding_format.clone(),
+            dimensions: self.embedding_dimensions,
         };
 
         let url = self

@@ -44,14 +44,21 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "command-r7b-12-2024",
         backend_name: "cohere",
     },
+    // BackendTestConfig {
+    //     backend: LLMBackend::Anthropic,
+    //     env_key: "ANTHROPIC_API_KEY",
+    //     model: "claude-3-5-haiku-20241022",
+    //     backend_name: "anthropic",
+    // },
 ];
 
-// Rstest parameterized tests for all backends
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+// #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -112,6 +119,8 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+// #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -124,7 +133,6 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
             return;
         }
     };
-
     let llm = LLMBuilder::new()
         .backend(config.backend.clone())
         .api_key(api_key)
@@ -148,7 +156,6 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let messages = vec![ChatMessage::user()
         .content("You are a weather assistant. What is the weather in Tokyo? Use the tools that you have available")
         .build()];
-
     match llm.chat_with_tools(&messages, llm.tools()).await {
         Ok(response) => {
             let tool_calls = response.tool_calls();
@@ -194,6 +201,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -206,7 +214,6 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
             return;
         }
     };
-
     let llm = LLMBuilder::new()
         .backend(config.backend.clone())
         .api_key(api_key)
@@ -218,11 +225,9 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
         .expect("Failed to build LLM");
 
     let messages = vec![ChatMessage::user().content("Hello.").build()];
-
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
-
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
@@ -253,6 +258,8 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+// #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -295,5 +302,69 @@ async fn test_chat_stream(#[case] config: &BackendTestConfig) {
             );
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
+    }
+}
+
+#[rstest]
+#[case::openai(&BACKEND_CONFIGS[0])]
+#[case::mistral(&BACKEND_CONFIGS[1])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+#[tokio::test]
+async fn test_embedding(#[case] config: &BackendTestConfig) {
+    let api_key = match std::env::var(config.env_key) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test test_{}_embedding ... ignored, {} not set",
+                config.backend_name, config.env_key
+            );
+            return;
+        }
+    };
+    // Use embedding-specific models for each backend
+    let embedding_model = match config.backend {
+        LLMBackend::OpenAI => "text-embedding-3-small",
+        LLMBackend::Mistral => "mistral-embed",
+        LLMBackend::Cohere => "embed-english-v3.0",
+        _ => config.model,
+    };
+    let llm = LLMBuilder::new()
+        .backend(config.backend.clone())
+        .api_key(api_key)
+        .model(embedding_model)
+        .build()
+        .expect("Failed to build LLM");
+    let input_texts = vec!["Test sentence for embedding generation".to_string()];
+    match llm.embed(input_texts).await {
+        Ok(embeddings) => {
+            assert!(
+                !embeddings.is_empty(),
+                "Expected at least one embedding, got empty vector for {}",
+                config.backend_name
+            );
+            let first_embedding = &embeddings[0];
+            assert!(
+                !first_embedding.is_empty(),
+                "Expected non-empty embedding vector for {}",
+                config.backend_name
+            );
+            // Check that embeddings have reasonable dimensions
+            let embedding_dim = first_embedding.len();
+            assert!(
+                embedding_dim > 100,
+                "Expected embedding dimension > 100, got {embedding_dim} for {}",
+                config.backend_name
+            );
+            // Verify the embedding values are not all zeros
+            let non_zero_count = first_embedding.iter().filter(|&&x| x != 0.0).count();
+            assert!(
+                non_zero_count > 0,
+                "Expected some non-zero embedding values for {}",
+                config.backend_name
+            );
+        }
+        Err(e) => {
+            panic!("Embedding error for {}: {e}", config.backend_name);
+        }
     }
 }

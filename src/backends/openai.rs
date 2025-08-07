@@ -142,9 +142,6 @@ impl OpenAI {
         web_search_user_location_approximate_city: Option<String>,
         web_search_user_location_approximate_region: Option<String>,
     ) -> Self {
-        // Note: embedding params and voice are stored but not used in the generic impl
-        // They would need to be handled by specific OpenAI-only implementations
-        let _ = (embedding_encoding_format, embedding_dimensions, voice);
         OpenAI {
             provider: <OpenAICompatibleProvider<OpenAIConfig>>::new(
                 api_key,
@@ -161,8 +158,10 @@ impl OpenAI {
                 tool_choice,
                 reasoning_effort,
                 json_schema,
-                None, // voice - would need custom implementation
+                voice,
                 None, // parallel_tool_calls
+                embedding_encoding_format,
+                embedding_dimensions,
             ),
             enable_web_search,
             web_search_context_size,
@@ -548,13 +547,11 @@ impl EmbeddingProvider for OpenAI {
             return Err(LLMError::AuthError("Missing OpenAI API key".into()));
         }
 
-        // Note: This would need access to embedding-specific fields that aren't in the generic provider
-        // For now, use defaults
         let body = OpenAIEmbeddingRequest {
             model: self.model().to_string(),
             input,
-            encoding_format: Some("float".to_string()),
-            dimensions: None,
+            encoding_format: self.provider.embedding_encoding_format.clone(),
+            dimensions: self.provider.embedding_dimensions,
         };
 
         let url = self

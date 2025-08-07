@@ -878,6 +878,8 @@ impl LLMBuilder {
                         self.json_schema,
                         None,
                         None,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                     );
                     // TODO: self.embedding_dimensions,
                     Box::new(cohere)
