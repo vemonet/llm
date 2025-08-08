@@ -11,7 +11,6 @@ use llm::{FunctionCall, ToolCall};
 use serde::Deserialize;
 use serde_json::json;
 
-
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct User {
@@ -23,7 +22,6 @@ struct User {
 struct ImportUsersArgs {
     users: Vec<User>,
 }
-
 
 fn import_users_tool() -> FunctionBuilder {
     let schema = json!({

@@ -2,9 +2,9 @@
 //!
 //! This module provides integration with Cohere's LLM models through their API.
 
-use crate::providers::openai_compatible::{OpenAIProviderConfig, OpenAICompatibleProvider};
+use crate::providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig};
 use crate::{
-    chat::{Tool, ToolChoice, StructuredOutputFormat},
+    chat::{StructuredOutputFormat, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -116,11 +116,15 @@ impl CompletionProvider for Cohere {
 #[async_trait]
 impl SpeechToTextProvider for Cohere {
     async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
-        Err(LLMError::ProviderError("Cohere does not support speech-to-text".into()))
+        Err(LLMError::ProviderError(
+            "Cohere does not support speech-to-text".into(),
+        ))
     }
 
     async fn transcribe_file(&self, _file_path: &str) -> Result<String, LLMError> {
-        Err(LLMError::ProviderError("Cohere does not support speech-to-text".into()))
+        Err(LLMError::ProviderError(
+            "Cohere does not support speech-to-text".into(),
+        ))
     }
 }
 
@@ -165,14 +169,17 @@ impl ModelsProvider for Cohere {
         &self,
         _request: Option<&crate::models::ModelListRequest>,
     ) -> Result<Box<dyn crate::models::ModelListResponse>, LLMError> {
-        Err(LLMError::ProviderError("Cohere does not provide a models listing endpoint".into()))
+        Err(LLMError::ProviderError(
+            "Cohere does not provide a models listing endpoint".into(),
+        ))
     }
 }
-
 
 #[async_trait]
 impl TextToSpeechProvider for Cohere {
     async fn speech(&self, _text: &str) -> Result<Vec<u8>, LLMError> {
-        Err(LLMError::ProviderError("Cohere does not support text-to-speech".into()))
+        Err(LLMError::ProviderError(
+            "Cohere does not support text-to-speech".into(),
+        ))
     }
 }
