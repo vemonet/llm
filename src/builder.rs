@@ -862,8 +862,9 @@ impl LLMBuilder {
                         LLMError::InvalidRequest("No API key provided for Groq".to_string())
                     })?;
 
-                    let groq = crate::backends::groq::Groq::new(
+                    let groq = crate::backends::groq::Groq::with_config(
                         api_key,
+                        None, // base_url
                         self.model,
                         self.max_tokens,
                         self.temperature,
@@ -872,6 +873,13 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        None, // parallel_tool_calls
                     );
                     Box::new(groq)
                 }
@@ -885,9 +893,8 @@ impl LLMBuilder {
                 #[cfg(feature = "cohere")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Google".to_string())
+                        LLMError::InvalidRequest("No API key provided for Cohere".to_string())
                     })?;
-
                     let cohere = crate::backends::cohere::Cohere::new(
                         api_key,
                         self.base_url,
@@ -899,12 +906,14 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         self.tool_choice,
                         self.reasoning_effort,
                         self.json_schema,
+                        None,
+                        None,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                     );
                     Box::new(cohere)
                 }
@@ -919,7 +928,7 @@ impl LLMBuilder {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Mistral".to_string())
                     })?;
-                    let mistral = crate::backends::mistral::Mistral::new(
+                    let mistral = crate::backends::mistral::Mistral::with_config(
                         api_key,
                         self.base_url,
                         self.model,
@@ -930,10 +939,10 @@ impl LLMBuilder {
                         self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         tool_choice,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                         self.reasoning_effort,
                         self.json_schema,
                         self.enable_parallel_tool_use,
@@ -1036,7 +1045,7 @@ impl LLMBuilder {
             Some(ToolChoice::Tool(ref name)) => {
                 match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
                     Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
-                    _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+                    _ => Err(LLMError::ToolConfigError(format!("Tool({name}) cannot be tool choice: no tool with name {name} found.  Did you forget to add it with .function?"))),
                 }
             }
             Some(_) if self.tools.is_none() => Err(LLMError::ToolConfigError(
