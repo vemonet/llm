@@ -26,8 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send chat request and display response or error
     match llm.chat(&messages).await {
-        Ok(response) => println!("Cohere model response:\n{}", response),
-        Err(e) => eprintln!("Error calling Cohere: {}", e),
+        Ok(response) => println!("Cohere model response:\n{response}"),
+        Err(e) => eprintln!("Error calling Cohere: {e}"),
     }
 
     Ok(())

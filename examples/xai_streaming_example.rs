@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("\n\nStreaming completed.");
         }
-        Err(e) => eprintln!("Chat error: {}", e),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())
