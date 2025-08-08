@@ -229,6 +229,8 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
+            // NOTE: groq and cohere do not return usage in stream responses
+            // let mut usage_data = None;
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
@@ -237,6 +239,9 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                                 complete_text.push_str(content);
                             }
                         }
+                        // if let Some(usage) = stream_response.usage {
+                        //     usage_data = Some(usage);
+                        // }
                     }
                     Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
                 }
@@ -245,6 +250,27 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                 !complete_text.is_empty(),
                 "Expected response message, got empty text"
             );
+            // if let Some(usage) = usage_data {
+            //     assert!(
+            //         usage.prompt_tokens > 0,
+            //         "Expected prompt tokens > 0, got {}",
+            //         usage.prompt_tokens
+            //     );
+            //     // assert!(
+            //     //     usage.completion_tokens > 0,
+            //     //     "Expected completion tokens > 0, got {}",
+            //     //     usage.completion_tokens
+            //     // );
+            //     assert!(
+            //         usage.total_tokens > 0,
+            //         "Expected total tokens > 0, got {}",
+            //         usage.total_tokens
+            //     );
+            //     println!("Complete response: {complete_text}");
+            //     println!("Usage: {usage:?}");
+            // } else {
+            //     panic!("Expected usage data in response");
+            // }
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
