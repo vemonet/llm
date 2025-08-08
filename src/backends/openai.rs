@@ -42,11 +42,13 @@ impl OpenAIProviderConfig for OpenAIConfig {
     const SUPPORTS_STREAM_OPTIONS: bool = true;
 }
 
+// NOTE: OpenAI cannot directly use the OpenAICompatibleProvider type alias, as it needs specific fields
+
 /// Client for OpenAI API
 pub struct OpenAI {
     // Delegate to the generic provider for common functionality
     provider: OpenAICompatibleProvider<OpenAIConfig>,
-    pub enable_web_search: Option<bool>,
+    pub enable_web_search: bool,
     pub web_search_context_size: Option<String>,
     pub web_search_user_location_type: Option<String>,
     pub web_search_user_location_approximate_country: Option<String>,
@@ -179,7 +181,7 @@ impl OpenAI {
                 embedding_encoding_format,
                 embedding_dimensions,
             ),
-            enable_web_search,
+            enable_web_search: enable_web_search.unwrap_or(false),
             web_search_context_size,
             web_search_user_location_type,
             web_search_user_location_approximate_country,
@@ -320,7 +322,7 @@ impl ChatProvider for OpenAI {
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
         // If web search is not enabled, delegate to the generic provider
-        if !self.enable_web_search.unwrap_or(false) {
+        if !self.enable_web_search {
             return self.provider.chat_with_tools(messages, tools).await;
         }
         // Full web search implementation
@@ -374,7 +376,7 @@ impl ChatProvider for OpenAI {
         } else {
             None
         };
-        let web_search_options = if self.enable_web_search.unwrap_or(false) {
+        let web_search_options = if self.enable_web_search {
             let loc_type_opt = self
                 .web_search_user_location_type
                 .as_ref()
@@ -407,7 +409,7 @@ impl ChatProvider for OpenAI {
             messages: openai_msgs,
             max_tokens: self.provider.max_tokens,
             temperature: self.provider.temperature,
-            stream: self.provider.stream.unwrap_or(false),
+            stream: self.provider.stream,
             top_p: self.provider.top_p,
             top_k: self.provider.top_k,
             tools: request_tools,

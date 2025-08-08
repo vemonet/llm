@@ -31,7 +31,7 @@ pub struct OpenAICompatibleProvider<T: OpenAIProviderConfig> {
     pub temperature: Option<f32>,
     pub system: Option<String>,
     pub timeout_seconds: Option<u64>,
-    pub stream: Option<bool>,
+    pub stream: bool,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
@@ -39,7 +39,7 @@ pub struct OpenAICompatibleProvider<T: OpenAIProviderConfig> {
     pub reasoning_effort: Option<String>,
     pub json_schema: Option<StructuredOutputFormat>,
     pub voice: Option<String>,
-    pub parallel_tool_calls: Option<bool>,
+    pub parallel_tool_calls: bool,
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
     pub client: Client,
@@ -311,7 +311,7 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
             temperature,
             system,
             timeout_seconds,
-            stream,
+            stream: stream.unwrap_or(false),
             top_p,
             top_k,
             tools,
@@ -319,7 +319,7 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
             reasoning_effort,
             json_schema,
             voice,
-            parallel_tool_calls,
+            parallel_tool_calls: parallel_tool_calls.unwrap_or(false),
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -395,7 +395,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
             None
         };
         let parallel_tool_calls = if T::SUPPORTS_PARALLEL_TOOL_CALLS {
-            self.parallel_tool_calls
+            Some(self.parallel_tool_calls)
         } else {
             None
         };
@@ -404,7 +404,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
             messages: openai_msgs,
             max_tokens: self.max_tokens,
             temperature: self.temperature,
-            stream: self.stream.unwrap_or(false),
+            stream: self.stream,
             top_p: self.top_p,
             top_k: self.top_k,
             tools: request_tools,
@@ -560,7 +560,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 None
             },
             parallel_tool_calls: if T::SUPPORTS_PARALLEL_TOOL_CALLS {
-                self.parallel_tool_calls
+                Some(self.parallel_tool_calls)
             } else {
                 None
             },

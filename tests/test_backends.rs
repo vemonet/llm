@@ -89,9 +89,11 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
                 "Expected response message, got {:?}",
                 response.text()
             );
-            let usage = response.usage();
-            assert!(usage.is_some(), "Expected usage information to be present");
-            let usage = usage.unwrap();
+            assert!(
+                response.usage().is_some(),
+                "Expected usage information to be present"
+            );
+            let usage = response.usage().unwrap();
             assert!(
                 usage.prompt_tokens > 0,
                 "Expected prompt tokens > 0, got {}",
@@ -108,9 +110,7 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
                 usage.total_tokens
             );
         }
-        Err(e) => {
-            panic!("Chat error for {}: {e}", config.backend_name);
-        }
+        Err(e) => panic!("Chat error for {}: {e}", config.backend_name),
     }
 }
 
@@ -171,9 +171,11 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
                 tool_calls[0].function.name, "weather_function",
                 "Expected function name 'weather_function'"
             );
-            let usage = response.usage();
-            assert!(usage.is_some(), "Expected usage information to be present");
-            let usage = usage.unwrap();
+            assert!(
+                response.usage().is_some(),
+                "Expected usage information to be present"
+            );
+            let usage = response.usage().unwrap();
             assert!(
                 usage.prompt_tokens > 0,
                 "Expected prompt tokens > 0, got {}",
@@ -190,9 +192,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
                 usage.total_tokens
             );
         }
-        Err(e) => {
-            panic!("Chat with tools error for {}: {e}", config.backend_name);
-        }
+        Err(e) => panic!("Chat with tools error for {}: {e}", config.backend_name),
     }
 }
 
@@ -238,9 +238,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                             }
                         }
                     }
-                    Err(e) => {
-                        panic!("Stream error for {}: {e}", config.backend_name);
-                    }
+                    Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
                 }
             }
             assert!(
@@ -248,9 +246,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                 "Expected response message, got empty text"
             );
         }
-        Err(e) => {
-            panic!("Stream error for {}: {e}", config.backend_name);
-        }
+        Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
 }
 
@@ -288,12 +284,8 @@ async fn test_chat_stream(#[case] config: &BackendTestConfig) {
             let mut complete_text = String::new();
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
-                    Ok(content) => {
-                        complete_text.push_str(&content);
-                    }
-                    Err(e) => {
-                        panic!("Stream error: {e}");
-                    }
+                    Ok(content) => complete_text.push_str(&content),
+                    Err(e) => panic!("Stream error: {e}"),
                 }
             }
             assert!(
@@ -364,14 +356,11 @@ async fn test_embedding(#[case] config: &BackendTestConfig) {
                 config.backend_name
             );
         }
-        Err(e) => {
-            panic!("Embedding error for {}: {e}", config.backend_name);
-        }
+        Err(e) => panic!("Embedding error for {}: {e}", config.backend_name),
     }
 }
 
-
-/// We can use a generic OpenAI-compatible `LLMBackend` like Mistral,
+/// We can use a generic OpenAI-compatible `LLMBackend` like Groq,
 /// to query OpenAI-compatible providers like OpenRouter
 #[rstest]
 #[tokio::test]
@@ -379,34 +368,36 @@ async fn test_chat_openrouter() {
     let api_key = match std::env::var("OPENROUTER_API_KEY") {
         Ok(key) => key,
         Err(_) => {
-            eprintln!(
-                "test_chat_custom_openai_url ... ignored, OPENROUTER_API_KEY not set"
-            );
+            eprintln!("test_chat_custom_openai_url ... ignored, OPENROUTER_API_KEY not set");
             return;
         }
     };
     let llm = LLMBuilder::new()
-        .backend(LLMBackend::Mistral)
+        .backend(LLMBackend::Groq)
         .base_url("https://openrouter.ai/api/v1/")
         .api_key(api_key)
-        .model("google/gemma-3-4b-it:free")
+        .model("google/gemma-3n-e2b-it:free")
         .max_tokens(512)
         .temperature(0.7)
         .stream(false)
         .build()
         .expect("Failed to build LLM");
 
-    let messages = vec![ChatMessage::user().content("Hello.").build()];
-    match llm.chat(&messages).await {
+    match llm
+        .chat(&[ChatMessage::user().content("Hello.").build()])
+        .await
+    {
         Ok(response) => {
             assert!(
                 response.text().is_some() && !response.text().unwrap().is_empty(),
                 "Expected response message, got {:?}",
                 response.text()
             );
-            let usage = response.usage();
-            assert!(usage.is_some(), "Expected usage information to be present");
-            let usage = usage.unwrap();
+            assert!(
+                response.usage().is_some(),
+                "Expected usage information to be present"
+            );
+            let usage = response.usage().unwrap();
             assert!(
                 usage.prompt_tokens > 0,
                 "Expected prompt tokens > 0, got {}",
@@ -418,8 +409,6 @@ async fn test_chat_openrouter() {
                 usage.total_tokens
             );
         }
-        Err(e) => {
-            panic!("Chat error for OpenRouter: {e}");
-        }
+        Err(e) => panic!("Chat error for OpenRouter: {e}"),
     }
 }
