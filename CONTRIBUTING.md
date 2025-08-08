@@ -13,7 +13,7 @@ Instructions to run the project in development.
 >
 > Recommended VSCode extension: [`rust-analyzer`](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
-### 📥 Install dev dependencies
+## 📥 Install dev dependencies
 
 ```sh
 rustup update
@@ -66,7 +66,7 @@ Many usage examples can be found in the [`examples/`](https://github.com/graniet
 cargo run --example mistral_example
 ```
 
-### 📦 Build
+## 📦 Build
 
 Build binaries for production in `target/release/`
 
@@ -82,7 +82,7 @@ cargo build --release
 > ./target/release/llm --help
 > ```
 
-### 🧼 Format & lint
+## 🧼 Format & lint
 
 Automatically format the codebase using `rustfmt`:
 
@@ -109,4 +109,3 @@ Build:
 ```sh
 cargo doc --open
 ```
-

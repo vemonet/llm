@@ -4,9 +4,9 @@
 
 use crate::chat::{ChatRole, MessageType};
 use crate::providers::openai_compatible::{
-    ImageUrlContent, MessageContent, OpenAICompatibleChatMessage, OpenAICompatibleChatResponse,
-    OpenAICompatibleFunctionCall, OpenAICompatibleFunctionPayload, OpenAICompatibleProvider,
-    OpenAIProviderConfig, ResponseFormat,
+    ImageUrlContent, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
+    OpenAIFunctionCall, OpenAIFunctionPayload, OpenAIMessageContent, OpenAIProviderConfig,
+    OpenAIResponseFormat,
 };
 use crate::{
     chat::{
@@ -56,13 +56,12 @@ pub struct OpenAI {
     pub web_search_user_location_approximate_region: Option<String>,
 }
 
-/// Web search options specific to OpenAI
-#[derive(Deserialize, Debug, Serialize)]
-pub struct WebSearchOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_location: Option<UserLocation>,
+#[derive(Serialize, Debug)]
+pub struct OpenAIWebSearchOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_context_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_location: Option<UserLocation>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -82,9 +81,9 @@ pub struct ApproximateLocation {
 
 /// Request payload for OpenAI's chat API endpoint.
 #[derive(Serialize, Debug)]
-pub struct OpenAIChatRequest {
+pub struct OpenAIAPIChatRequest {
     pub model: String,
-    pub messages: Vec<OpenAICompatibleChatMessage>,
+    pub messages: Vec<OpenAIChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,17 +100,9 @@ pub struct OpenAIChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_format: Option<ResponseFormat>,
+    pub response_format: Option<OpenAIResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_search_options: Option<OpenAIWebSearchOptions>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct OpenAIWebSearchOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub search_context_size: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_location: Option<UserLocation>,
 }
 
 impl OpenAI {
@@ -191,8 +182,8 @@ impl OpenAI {
     }
 
     /// Convert a ChatMessage to OpenAI-specific message format
-    fn chat_msg_to_openai_msg(&self, chat_msg: ChatMessage) -> OpenAICompatibleChatMessage {
-        OpenAICompatibleChatMessage {
+    fn chat_msg_to_openai_msg(&self, chat_msg: ChatMessage) -> OpenAIChatMessage {
+        OpenAIChatMessage {
             role: match chat_msg.role {
                 ChatRole::User => "user".to_string(),
                 ChatRole::Assistant => "assistant".to_string(),
@@ -202,7 +193,7 @@ impl OpenAI {
                 MessageType::Text => Some(Right(chat_msg.content.clone())),
                 MessageType::Image(_) => unreachable!(),
                 MessageType::Pdf(_) => unimplemented!(),
-                MessageType::ImageURL(url) => Some(Left(vec![MessageContent {
+                MessageType::ImageURL(url) => Some(Left(vec![OpenAIMessageContent {
                     message_type: Some("image_url".to_string()),
                     text: None,
                     image_url: Some(ImageUrlContent { url: url.clone() }),
@@ -214,12 +205,12 @@ impl OpenAI {
             },
             tool_calls: match &chat_msg.message_type {
                 MessageType::ToolUse(calls) => {
-                    let owned_calls: Vec<OpenAICompatibleFunctionCall> = calls
+                    let owned_calls: Vec<OpenAIFunctionCall> = calls
                         .iter()
-                        .map(|c| OpenAICompatibleFunctionCall {
+                        .map(|c| OpenAIFunctionCall {
                             id: c.id.clone(),
                             content_type: "function".to_string(),
-                            function: OpenAICompatibleFunctionPayload {
+                            function: OpenAIFunctionPayload {
                                 name: c.function.name.clone(),
                                 arguments: c.function.arguments.clone(),
                             },
@@ -331,13 +322,13 @@ impl ChatProvider for OpenAI {
         }
         // Clone the messages to have an owned mutable vector.
         let messages = messages.to_vec();
-        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = vec![];
+        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
         for msg in messages {
             if let MessageType::ToolResult(ref results) = msg.message_type {
                 for result in results {
                     openai_msgs.push(
                         // Clone strings to own them
-                        OpenAICompatibleChatMessage {
+                        OpenAIChatMessage {
                             role: "tool".to_string(),
                             tool_call_id: Some(result.id.clone()),
                             tool_calls: None,
@@ -352,9 +343,9 @@ impl ChatProvider for OpenAI {
         if let Some(system) = &self.provider.system {
             openai_msgs.insert(
                 0,
-                OpenAICompatibleChatMessage {
+                OpenAIChatMessage {
                     role: "system".to_string(),
-                    content: Some(Left(vec![MessageContent {
+                    content: Some(Left(vec![OpenAIMessageContent {
                         message_type: Some("text".to_string()),
                         text: Some(system.clone()),
                         image_url: None,
@@ -366,7 +357,7 @@ impl ChatProvider for OpenAI {
                 },
             );
         }
-        let response_format: Option<ResponseFormat> =
+        let response_format: Option<OpenAIResponseFormat> =
             self.provider.json_schema.clone().map(|s| s.into());
         let request_tools = tools
             .map(|t| t.to_vec())
@@ -404,7 +395,7 @@ impl ChatProvider for OpenAI {
         } else {
             None
         };
-        let body = OpenAIChatRequest {
+        let body = OpenAIAPIChatRequest {
             model: self.provider.model.clone(),
             messages: openai_msgs,
             max_tokens: self.provider.max_tokens,
@@ -449,7 +440,7 @@ impl ChatProvider for OpenAI {
         }
         // Parse the successful response
         let resp_text = response.text().await?;
-        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> =
+        let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
             serde_json::from_str(&resp_text);
         match json_resp {
             Ok(response) => Ok(Box::new(response)),

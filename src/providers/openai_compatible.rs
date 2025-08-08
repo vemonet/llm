@@ -75,35 +75,35 @@ pub trait OpenAIProviderConfig: Send + Sync {
 
 /// Generic OpenAI-compatible chat message
 #[derive(Serialize, Debug)]
-pub struct OpenAICompatibleChatMessage {
+pub struct OpenAIChatMessage {
     pub role: String,
     #[serde(
         skip_serializing_if = "Option::is_none",
         with = "either::serde_untagged_optional"
     )]
-    pub content: Option<Either<Vec<MessageContent>, String>>,
+    pub content: Option<Either<Vec<OpenAIMessageContent>, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<OpenAICompatibleFunctionCall>>,
+    pub tool_calls: Option<Vec<OpenAIFunctionCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
-pub struct OpenAICompatibleFunctionPayload {
+pub struct OpenAIFunctionPayload {
     pub name: String,
     pub arguments: String,
 }
 
 #[derive(Serialize, Debug)]
-pub struct OpenAICompatibleFunctionCall {
+pub struct OpenAIFunctionCall {
     pub id: String,
     #[serde(rename = "type")]
     pub content_type: String,
-    pub function: OpenAICompatibleFunctionPayload,
+    pub function: OpenAIFunctionPayload,
 }
 
 #[derive(Serialize, Debug)]
-pub struct MessageContent {
+pub struct OpenAIMessageContent {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,9 +123,9 @@ pub struct ImageUrlContent {
 
 /// Generic OpenAI-compatible chat request
 #[derive(Serialize, Debug)]
-pub struct OpenAICompatibleChatRequest {
+pub struct OpenAIChatRequest {
     pub model: String,
-    pub messages: Vec<OpenAICompatibleChatMessage>,
+    pub messages: Vec<OpenAIChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,34 +142,34 @@ pub struct OpenAICompatibleChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_format: Option<ResponseFormat>,
+    pub response_format: Option<OpenAIResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream_options: Option<StreamOptions>,
+    pub stream_options: Option<OpenAIStreamOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
 }
 
 /// Generic OpenAI-compatible chat response
 #[derive(Deserialize, Debug)]
-pub struct OpenAICompatibleChatResponse {
-    pub choices: Vec<OpenAICompatibleChatChoice>,
+pub struct OpenAIChatResponse {
+    pub choices: Vec<OpenAIChatChoice>,
     pub usage: Option<Usage>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct OpenAICompatibleChatChoice {
-    pub message: OpenAICompatibleChatMsg,
+pub struct OpenAIChatChoice {
+    pub message: OpenAIChatMsg,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct OpenAICompatibleChatMsg {
+pub struct OpenAIChatMsg {
     pub role: String,
     pub content: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
-pub enum ResponseType {
+pub enum OpenAIResponseType {
     #[serde(rename = "text")]
     Text,
     #[serde(rename = "json_schema")]
@@ -179,15 +179,15 @@ pub enum ResponseType {
 }
 
 #[derive(Deserialize, Debug, Serialize)]
-pub struct ResponseFormat {
+pub struct OpenAIResponseFormat {
     #[serde(rename = "type")]
-    pub response_type: ResponseType,
+    pub response_type: OpenAIResponseType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json_schema: Option<StructuredOutputFormat>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
-pub struct StreamOptions {
+pub struct OpenAIStreamOptions {
     pub include_usage: bool,
 }
 
@@ -208,11 +208,11 @@ pub struct ChatStreamDelta {
     pub content: Option<String>,
 }
 
-impl From<StructuredOutputFormat> for ResponseFormat {
+impl From<StructuredOutputFormat> for OpenAIResponseFormat {
     fn from(structured_response_format: StructuredOutputFormat) -> Self {
         match structured_response_format.schema {
-            None => ResponseFormat {
-                response_type: ResponseType::JsonSchema,
+            None => OpenAIResponseFormat {
+                response_type: OpenAIResponseType::JsonSchema,
                 json_schema: Some(structured_response_format),
             },
             Some(mut schema) => {
@@ -222,8 +222,8 @@ impl From<StructuredOutputFormat> for ResponseFormat {
                 } else {
                     schema
                 };
-                ResponseFormat {
-                    response_type: ResponseType::JsonSchema,
+                OpenAIResponseFormat {
+                    response_type: OpenAIResponseType::JsonSchema,
                     json_schema: Some(StructuredOutputFormat {
                         name: structured_response_format.name,
                         description: structured_response_format.description,
@@ -236,7 +236,7 @@ impl From<StructuredOutputFormat> for ResponseFormat {
     }
 }
 
-impl ChatResponse for OpenAICompatibleChatResponse {
+impl ChatResponse for OpenAIChatResponse {
     fn text(&self) -> Option<String> {
         self.choices.first().and_then(|c| c.message.content.clone())
     }
@@ -252,7 +252,7 @@ impl ChatResponse for OpenAICompatibleChatResponse {
     }
 }
 
-impl std::fmt::Display for OpenAICompatibleChatResponse {
+impl std::fmt::Display for OpenAIChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (
             &self.choices.first().unwrap().message.content,
@@ -341,14 +341,14 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 T::PROVIDER_NAME
             )));
         }
-        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
+        let mut openai_msgs: Vec<OpenAIChatMessage> = messages
             .iter()
             .flat_map(|msg| {
                 if let MessageType::ToolResult(ref results) = msg.message_type {
                     // Expand ToolResult into multiple messages
                     results
                         .iter()
-                        .map(|result| OpenAICompatibleChatMessage {
+                        .map(|result| OpenAIChatMessage {
                             role: "tool".to_string(),
                             tool_call_id: Some(result.id.clone()),
                             tool_calls: None,
@@ -364,9 +364,9 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         if let Some(system) = &self.system {
             openai_msgs.insert(
                 0,
-                OpenAICompatibleChatMessage {
+                OpenAIChatMessage {
                     role: "system".to_string(),
-                    content: Some(Left(vec![MessageContent {
+                    content: Some(Left(vec![OpenAIMessageContent {
                         message_type: Some("text".to_string()),
                         text: Some(system.clone()),
                         image_url: None,
@@ -378,7 +378,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 },
             );
         }
-        let response_format: Option<ResponseFormat> = if T::SUPPORTS_STRUCTURED_OUTPUT {
+        let response_format: Option<OpenAIResponseFormat> = if T::SUPPORTS_STRUCTURED_OUTPUT {
             self.json_schema.clone().map(|s| s.into())
         } else {
             None
@@ -399,7 +399,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         } else {
             None
         };
-        let body = OpenAICompatibleChatRequest {
+        let body = OpenAIChatRequest {
             model: self.model.clone(),
             messages: openai_msgs,
             max_tokens: self.max_tokens,
@@ -444,7 +444,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
             });
         }
         let resp_text = response.text().await?;
-        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> =
+        let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
             serde_json::from_str(&resp_text);
         match json_resp {
             Ok(response) => Ok(Box::new(response)),
@@ -499,14 +499,14 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 T::PROVIDER_NAME
             )));
         }
-        let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
+        let mut openai_msgs: Vec<OpenAIChatMessage> = messages
             .iter()
             .flat_map(|msg| {
                 if let MessageType::ToolResult(ref results) = msg.message_type {
                     // Expand ToolResult into multiple messages
                     results
                         .iter()
-                        .map(|result| OpenAICompatibleChatMessage {
+                        .map(|result| OpenAIChatMessage {
                             role: "tool".to_string(),
                             tool_call_id: Some(result.id.clone()),
                             tool_calls: None,
@@ -522,9 +522,9 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         if let Some(system) = &self.system {
             openai_msgs.insert(
                 0,
-                OpenAICompatibleChatMessage {
+                OpenAIChatMessage {
                     role: "system".to_string(),
-                    content: Some(Left(vec![MessageContent {
+                    content: Some(Left(vec![OpenAIMessageContent {
                         message_type: Some("text".to_string()),
                         text: Some(system.clone()),
                         image_url: None,
@@ -536,7 +536,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 },
             );
         }
-        let body = OpenAICompatibleChatRequest {
+        let body = OpenAIChatRequest {
             model: self.model.clone(),
             messages: openai_msgs,
             max_tokens: self.max_tokens,
@@ -553,7 +553,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
             },
             response_format: None,
             stream_options: if T::SUPPORTS_STREAM_OPTIONS {
-                Some(StreamOptions {
+                Some(OpenAIStreamOptions {
                     include_usage: true,
                 })
             } else {
@@ -592,8 +592,8 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
 }
 
 /// Create an owned `OpenAICompatibleChatMessage` that doesn't borrow from any temporary variables
-pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleChatMessage {
-    OpenAICompatibleChatMessage {
+pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAIChatMessage {
+    OpenAIChatMessage {
         role: match chat_msg.role {
             ChatRole::User => "user".to_string(),
             ChatRole::Assistant => "assistant".to_string(),
@@ -603,7 +603,7 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
             MessageType::Text => Some(Right(chat_msg.content.clone())),
             MessageType::Image(_) => unreachable!(),
             MessageType::Pdf(_) => unimplemented!(),
-            MessageType::ImageURL(url) => Some(Left(vec![MessageContent {
+            MessageType::ImageURL(url) => Some(Left(vec![OpenAIMessageContent {
                 message_type: Some("image_url".to_string()),
                 text: None,
                 image_url: Some(ImageUrlContent { url: url.clone() }),
@@ -615,12 +615,12 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
         },
         tool_calls: match &chat_msg.message_type {
             MessageType::ToolUse(calls) => {
-                let owned_calls: Vec<OpenAICompatibleFunctionCall> = calls
+                let owned_calls: Vec<OpenAIFunctionCall> = calls
                     .iter()
-                    .map(|c| OpenAICompatibleFunctionCall {
+                    .map(|c| OpenAIFunctionCall {
                         id: c.id.clone(),
                         content_type: "function".to_string(),
-                        function: OpenAICompatibleFunctionPayload {
+                        function: OpenAIFunctionPayload {
                             name: c.function.name.clone(),
                             arguments: c.function.arguments.clone(),
                         },
