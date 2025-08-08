@@ -44,12 +44,12 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "command-r7b-12-2024",
         backend_name: "cohere",
     },
-    // BackendTestConfig {
-    //     backend: LLMBackend::Anthropic,
-    //     env_key: "ANTHROPIC_API_KEY",
-    //     model: "claude-3-5-haiku-20241022",
-    //     backend_name: "anthropic",
-    // },
+    BackendTestConfig {
+        backend: LLMBackend::Anthropic,
+        env_key: "ANTHROPIC_API_KEY",
+        model: "claude-3-5-haiku-20241022",
+        backend_name: "anthropic",
+    },
 ];
 
 #[rstest]
@@ -58,7 +58,7 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
-// #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -120,7 +120,7 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
-// #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -202,6 +202,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
+// #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -259,7 +260,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
-// #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
