@@ -4,18 +4,15 @@
 
 use crate::chat::{ChatRole, MessageType};
 use crate::providers::openai_compatible::{
-    OpenAIProviderConfig,
-    OpenAICompatibleProvider,
-    OpenAICompatibleChatMessage,
-    ResponseFormat,
-    OpenAICompatibleFunctionCall,
-    OpenAICompatibleFunctionPayload,
-    MessageContent,
-    ImageUrlContent,
-    OpenAICompatibleChatResponse,
+    ImageUrlContent, MessageContent, OpenAICompatibleChatMessage, OpenAICompatibleChatResponse,
+    OpenAICompatibleFunctionCall, OpenAICompatibleFunctionPayload, OpenAICompatibleProvider,
+    OpenAIProviderConfig, ResponseFormat,
 };
 use crate::{
-    chat::{Tool, ToolChoice, StructuredOutputFormat, ChatMessage, ChatProvider, ChatResponse, StreamResponse},
+    chat::{
+        ChatMessage, ChatProvider, ChatResponse, StreamResponse, StructuredOutputFormat, Tool,
+        ToolChoice,
+    },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -203,15 +200,13 @@ impl OpenAI {
                 MessageType::Text => Some(Right(chat_msg.content.clone())),
                 MessageType::Image(_) => unreachable!(),
                 MessageType::Pdf(_) => unimplemented!(),
-                MessageType::ImageURL(url) => {
-                    Some(Left(vec![MessageContent {
-                        message_type: Some("image_url".to_string()),
-                        text: None,
-                        image_url: Some(ImageUrlContent { url: url.clone() }),
-                        tool_output: None,
-                        tool_call_id: None,
-                    }]))
-                }
+                MessageType::ImageURL(url) => Some(Left(vec![MessageContent {
+                    message_type: Some("image_url".to_string()),
+                    text: None,
+                    image_url: Some(ImageUrlContent { url: url.clone() }),
+                    tool_output: None,
+                    tool_call_id: None,
+                }])),
                 MessageType::ToolUse(_) => None,
                 MessageType::ToolResult(_) => None,
             },
@@ -371,7 +366,9 @@ impl ChatProvider for OpenAI {
         }
         let response_format: Option<ResponseFormat> =
             self.provider.json_schema.clone().map(|s| s.into());
-        let request_tools = tools.map(|t| t.to_vec()).or_else(|| self.provider.tools.clone());
+        let request_tools = tools
+            .map(|t| t.to_vec())
+            .or_else(|| self.provider.tools.clone());
         let request_tool_choice = if request_tools.is_some() {
             self.provider.tool_choice.clone()
         } else {
@@ -420,10 +417,16 @@ impl ChatProvider for OpenAI {
             web_search_options,
         };
         let url = self
-            .provider.base_url
+            .provider
+            .base_url
             .join("chat/completions")
             .map_err(|e| LLMError::HttpError(e.to_string()))?;
-        let mut request = self.provider.client.post(url).bearer_auth(&self.provider.api_key).json(&body);
+        let mut request = self
+            .provider
+            .client
+            .post(url)
+            .bearer_auth(&self.provider.api_key)
+            .json(&body);
         if log::log_enabled!(log::Level::Trace) {
             if let Ok(json) = serde_json::to_string(&body) {
                 log::trace!("OpenAI request payload: {}", json);
@@ -458,7 +461,8 @@ impl ChatProvider for OpenAI {
     async fn chat_stream(
         &self,
         messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
+    {
         self.provider.chat_stream(messages).await
     }
 

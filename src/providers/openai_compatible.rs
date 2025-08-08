@@ -3,15 +3,15 @@
 //! This module provides a generic base for OpenAI-compatible APIs that can be reused
 //! across multiple providers like OpenAI, Mistral, XAI, Groq, DeepSeek, etc.
 
+use crate::error::LLMError;
 use crate::{
+    chat::ChatResponse,
     chat::{
         ChatMessage, ChatProvider, ChatRole, MessageType, StreamChoice, StreamDelta,
         StreamResponse, StructuredOutputFormat, Tool, ToolChoice, Usage,
     },
-    chat::ChatResponse,
     ToolCall,
 };
-use crate::error::LLMError;
 use async_trait::async_trait;
 use either::*;
 use futures::{stream::Stream, StreamExt};
@@ -304,10 +304,8 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
         }
         Self {
             api_key: api_key.into(),
-            base_url: Url::parse(
-                &base_url.unwrap_or_else(|| T::DEFAULT_BASE_URL.to_owned()),
-            )
-            .expect("Failed to parse base URL"),
+            base_url: Url::parse(&base_url.unwrap_or_else(|| T::DEFAULT_BASE_URL.to_owned()))
+                .expect("Failed to parse base URL"),
             model: model.unwrap_or_else(|| T::DEFAULT_MODEL.to_string()),
             max_tokens,
             temperature,
@@ -338,7 +336,10 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError(format!("Missing {} API key", T::PROVIDER_NAME)));
+            return Err(LLMError::AuthError(format!(
+                "Missing {} API key",
+                T::PROVIDER_NAME
+            )));
         }
         let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
             .iter()
@@ -443,7 +444,8 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
             });
         }
         let resp_text = response.text().await?;
-        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> = serde_json::from_str(&resp_text);
+        let json_resp: Result<OpenAICompatibleChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
         match json_resp {
             Ok(response) => Ok(Box::new(response)),
             Err(e) => Err(LLMError::ResponseFormatError {
@@ -492,7 +494,10 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         LLMError,
     > {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError(format!("Missing {} API key", T::PROVIDER_NAME)));
+            return Err(LLMError::AuthError(format!(
+                "Missing {} API key",
+                T::PROVIDER_NAME
+            )));
         }
         let mut openai_msgs: Vec<OpenAICompatibleChatMessage> = messages
             .iter()
@@ -598,15 +603,13 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
             MessageType::Text => Some(Right(chat_msg.content.clone())),
             MessageType::Image(_) => unreachable!(),
             MessageType::Pdf(_) => unimplemented!(),
-            MessageType::ImageURL(url) => {
-                Some(Left(vec![MessageContent {
-                    message_type: Some("image_url".to_string()),
-                    text: None,
-                    image_url: Some(ImageUrlContent { url: url.clone() }),
-                    tool_output: None,
-                    tool_call_id: None,
-                }]))
-            }
+            MessageType::ImageURL(url) => Some(Left(vec![MessageContent {
+                message_type: Some("image_url".to_string()),
+                text: None,
+                image_url: Some(ImageUrlContent { url: url.clone() }),
+                tool_output: None,
+                tool_call_id: None,
+            }])),
             MessageType::ToolUse(_) => None,
             MessageType::ToolResult(_) => None,
         },
@@ -614,15 +617,13 @@ pub fn chat_message_to_api_message(chat_msg: ChatMessage) -> OpenAICompatibleCha
             MessageType::ToolUse(calls) => {
                 let owned_calls: Vec<OpenAICompatibleFunctionCall> = calls
                     .iter()
-                    .map(|c| {
-                        OpenAICompatibleFunctionCall {
-                            id: c.id.clone(),
-                            content_type: "function".to_string(),
-                            function: OpenAICompatibleFunctionPayload {
-                                name: c.function.name.clone(),
-                                arguments: c.function.arguments.clone(),
-                            },
-                        }
+                    .map(|c| OpenAICompatibleFunctionCall {
+                        id: c.id.clone(),
+                        content_type: "function".to_string(),
+                        function: OpenAICompatibleFunctionPayload {
+                            name: c.function.name.clone(),
+                            arguments: c.function.arguments.clone(),
+                        },
                     })
                     .collect();
                 Some(owned_calls)

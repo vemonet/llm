@@ -295,15 +295,15 @@ impl ChatResponse for GoogleChatResponse {
     fn usage(&self) -> Option<Usage> {
         self.usage_metadata.as_ref().and_then(|metadata| {
             match (metadata.prompt_token_count, metadata.candidates_token_count) {
-                (Some(prompt_tokens), Some(completion_tokens)) => {
-                    Some(Usage {
-                        prompt_tokens,
-                        completion_tokens,
-                        total_tokens: metadata.total_token_count.unwrap_or(prompt_tokens + completion_tokens),
-                        completion_tokens_details: None,
-                        prompt_tokens_details: None,
-                    })
-                }
+                (Some(prompt_tokens), Some(completion_tokens)) => Some(Usage {
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens: metadata
+                        .total_token_count
+                        .unwrap_or(prompt_tokens + completion_tokens),
+                    completion_tokens_details: None,
+                    prompt_tokens_details: None,
+                }),
                 _ => None,
             }
         })
@@ -1095,9 +1095,7 @@ fn create_google_sse_stream(
         })
         .filter_map(|result| async move {
             match result {
-                Ok(Some(response)) => {
-                    Some(Ok(response))
-                },
+                Ok(Some(response)) => Some(Ok(response)),
                 Ok(None) => None,
                 Err(e) => Some(Err(e)),
             }
@@ -1136,12 +1134,16 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<crate::chat::StreamRespo
                     }
                     // Check for usage metadata
                     if let Some(usage_metadata) = &response.usage_metadata {
-                        if let (Some(prompt_tokens), Some(completion_tokens)) =
-                            (usage_metadata.prompt_token_count, usage_metadata.candidates_token_count) {
+                        if let (Some(prompt_tokens), Some(completion_tokens)) = (
+                            usage_metadata.prompt_token_count,
+                            usage_metadata.candidates_token_count,
+                        ) {
                             usage = Some(Usage {
                                 prompt_tokens,
                                 completion_tokens,
-                                total_tokens: usage_metadata.total_token_count.unwrap_or(prompt_tokens + completion_tokens),
+                                total_tokens: usage_metadata
+                                    .total_token_count
+                                    .unwrap_or(prompt_tokens + completion_tokens),
                                 completion_tokens_details: None,
                                 prompt_tokens_details: None,
                             });
@@ -1151,9 +1153,7 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<crate::chat::StreamRespo
                     if content.is_some() || usage.is_some() {
                         return Ok(Some(crate::chat::StreamResponse {
                             choices: vec![crate::chat::StreamChoice {
-                                delta: crate::chat::StreamDelta {
-                                    content,
-                                },
+                                delta: crate::chat::StreamDelta { content },
                             }],
                             usage,
                         }));

@@ -3,7 +3,15 @@
 //! This module provides integration with Groq's LLM models through their API.
 
 use crate::{
-    providers::openai_compatible::{OpenAIProviderConfig, OpenAICompatibleProvider}, chat::{StructuredOutputFormat, Tool, ToolChoice}, completion::{CompletionProvider, CompletionRequest, CompletionResponse}, embedding::EmbeddingProvider, error::LLMError, models::ModelsProvider, stt::SpeechToTextProvider, tts::TextToSpeechProvider, LLMProvider
+    chat::{StructuredOutputFormat, Tool, ToolChoice},
+    completion::{CompletionProvider, CompletionRequest, CompletionResponse},
+    embedding::EmbeddingProvider,
+    error::LLMError,
+    models::ModelsProvider,
+    providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
+    stt::SpeechToTextProvider,
+    tts::TextToSpeechProvider,
+    LLMProvider,
 };
 use async_trait::async_trait;
 
@@ -65,7 +73,6 @@ impl Groq {
         )
     }
 }
-
 
 impl LLMProvider for Groq {
     fn tools(&self) -> Option<&[Tool]> {

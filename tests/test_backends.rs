@@ -1,8 +1,8 @@
+use futures::StreamExt;
 use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
     chat::ChatMessage,
 };
-use futures::StreamExt;
 use rstest::rstest;
 
 #[derive(Debug, Clone)]
