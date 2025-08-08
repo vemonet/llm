@@ -23,7 +23,7 @@ impl OpenAIProviderConfig for GroqConfig {
     const DEFAULT_BASE_URL: &'static str = "https://api.groq.com/openai/v1/";
     const DEFAULT_MODEL: &'static str = "llama3-8b-8192";
     const SUPPORTS_REASONING_EFFORT: bool = false;
-    const SUPPORTS_STRUCTURED_OUTPUT: bool = false;
+    const SUPPORTS_STRUCTURED_OUTPUT: bool = true;
     const SUPPORTS_PARALLEL_TOOL_CALLS: bool = false;
 }
 

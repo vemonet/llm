@@ -593,7 +593,6 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "OpenAI feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "openai")]
                 {
                     let key = self.api_key.ok_or_else(|| {
@@ -631,13 +630,11 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "ElevenLabs feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "elevenlabs")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for ElevenLabs".to_string())
                     })?;
-
                     let elevenlabs = crate::backends::elevenlabs::ElevenLabs::new(
                         api_key,
                         self.model.unwrap_or("eleven_multilingual_v2".to_string()),
@@ -653,13 +650,11 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "Anthropic feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "anthropic")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
                     })?;
-
                     let anthro = crate::backends::anthropic::Anthropic::new(
                         api_key,
                         self.model,
@@ -675,7 +670,6 @@ impl LLMBuilder {
                         self.reasoning,
                         self.reasoning_budget_tokens,
                     );
-
                     Box::new(anthro)
                 }
             }
@@ -684,7 +678,6 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "Ollama feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "ollama")]
                 {
                     let url = self
@@ -718,7 +711,6 @@ impl LLMBuilder {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
                     })?;
-
                     let deepseek = crate::backends::deepseek::DeepSeek::new(
                         api_key,
                         self.model,
@@ -728,7 +720,6 @@ impl LLMBuilder {
                         self.system,
                         self.stream,
                     );
-
                     Box::new(deepseek)
                 }
             }
@@ -830,7 +821,7 @@ impl LLMBuilder {
 
                     let groq = crate::backends::groq::Groq::with_config(
                         api_key,
-                        None, // base_url
+                        self.base_url,
                         self.model,
                         self.max_tokens,
                         self.temperature,
@@ -845,7 +836,7 @@ impl LLMBuilder {
                         None, // embedding_dimensions
                         None, // reasoning_effort
                         self.json_schema,
-                        None, // parallel_tool_calls
+                        self.enable_parallel_tool_use,
                     );
                     Box::new(groq)
                 }
@@ -877,7 +868,7 @@ impl LLMBuilder {
                         self.reasoning_effort,
                         self.json_schema,
                         None,
-                        None,
+                        self.enable_parallel_tool_use,
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                     );
@@ -921,29 +912,24 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "OpenAI feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "azure_openai")]
                 {
                     let endpoint = self.base_url.ok_or_else(|| {
                         LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
                     })?;
-
                     let key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Azure OpenAI".to_string())
                     })?;
-
                     let api_version = self.api_version.ok_or_else(|| {
                         LLMError::InvalidRequest(
                             "No API version provided for Azure OpenAI".to_string(),
                         )
                     })?;
-
                     let deployment = self.deployment_id.ok_or_else(|| {
                         LLMError::InvalidRequest(
                             "No deployment ID provided for Azure OpenAI".into(),
                         )
                     })?;
-
                     Box::new(crate::backends::azure_openai::AzureOpenAI::new(
                         key,
                         api_version,
@@ -991,7 +977,6 @@ impl LLMBuilder {
                 None,
             ));
         }
-
         Ok(final_provider)
     }
 
@@ -1128,7 +1113,6 @@ impl FunctionBuilder {
                 let (name, prop) = param.build();
                 properties.insert(name, prop);
             }
-
             serde_json::to_value(ParametersSchema {
                 schema_type: "object".to_string(),
                 properties,
@@ -1136,7 +1120,6 @@ impl FunctionBuilder {
             })
             .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()))
         };
-
         Tool {
             tool_type: "function".to_string(),
             function: FunctionTool {

@@ -46,9 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "multi" => run_multi_turn_scenario(&llm).await?,
         "choice" => run_tool_choice_scenario(&llm).await?,
         _ => {
-            println!(
-                "Unknown scenario: {scenario}. Available scenarios: simple, multi, choice"
-            );
+            println!("Unknown scenario: {scenario}. Available scenarios: simple, multi, choice");
             println!("Example: cargo run --example unified_tool_calling_example -- openai multi");
         }
     }
@@ -206,9 +204,7 @@ async fn run_simple_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn E
             println!("\nFinal response: {final_response}");
         }
     } else {
-        println!(
-            "\nModel provided a direct response (no tools used):\n{response}"
-        );
+        println!("\nModel provided a direct response (no tools used):\n{response}");
     }
 
     Ok(())
@@ -288,8 +284,7 @@ async fn test_tool_choice(
     if let Some(tools) = llm.tools() {
         for tool in tools {
             builder = builder.function(
-                FunctionBuilder::new(&tool.function.name)
-                    .description(&tool.function.description), // Note: we'd need to recreate all parameters here in a real implementation
+                FunctionBuilder::new(&tool.function.name).description(&tool.function.description), // Note: we'd need to recreate all parameters here in a real implementation
             );
         }
     }
