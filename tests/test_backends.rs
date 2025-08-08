@@ -369,3 +369,57 @@ async fn test_embedding(#[case] config: &BackendTestConfig) {
         }
     }
 }
+
+
+/// We can use a generic OpenAI-compatible `LLMBackend` like Mistral,
+/// to query OpenAI-compatible providers like OpenRouter
+#[rstest]
+#[tokio::test]
+async fn test_chat_openrouter() {
+    let api_key = match std::env::var("OPENROUTER_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test_chat_custom_openai_url ... ignored, OPENROUTER_API_KEY not set"
+            );
+            return;
+        }
+    };
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Mistral)
+        .base_url("https://openrouter.ai/api/v1/")
+        .api_key(api_key)
+        .model("google/gemma-3-4b-it:free")
+        .max_tokens(512)
+        .temperature(0.7)
+        .stream(false)
+        .build()
+        .expect("Failed to build LLM");
+
+    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            assert!(
+                response.text().is_some() && !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+            let usage = response.usage();
+            assert!(usage.is_some(), "Expected usage information to be present");
+            let usage = usage.unwrap();
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens > 0, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens > 0, got {}",
+                usage.total_tokens
+            );
+        }
+        Err(e) => {
+            panic!("Chat error for OpenRouter: {e}");
+        }
+    }
+}

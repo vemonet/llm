@@ -25,7 +25,7 @@ impl OpenAIProviderConfig for CohereConfig {
     const DEFAULT_MODEL: &'static str = "command-r7b-12-2024";
     const SUPPORTS_REASONING_EFFORT: bool = false;
     const SUPPORTS_STRUCTURED_OUTPUT: bool = true;
-    const SUPPORTS_PARALLEL_TOOL_CALLS: bool = true;
+    const SUPPORTS_PARALLEL_TOOL_CALLS: bool = false;
 }
 
 /// Type alias for Cohere client using the generic OpenAI-compatible provider
