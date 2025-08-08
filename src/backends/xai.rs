@@ -354,7 +354,7 @@ impl ChatProvider for XAI {
                     .unwrap_or("web".to_string()),
                 excluded_websites: self.xai_search_excluded_websites.clone(),
             }]),
-            max_search_results: self.xai_search_max_results.clone(),
+            max_search_results: self.xai_search_max_results,
             from_date: self.xai_search_from_date.clone(),
             to_date: self.xai_search_to_date.clone(),
         };
@@ -483,7 +483,7 @@ impl ChatProvider for XAI {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("X.AI API returned error status: {}", status),
+                message: format!("X.AI API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
@@ -582,9 +582,7 @@ fn parse_xai_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     for line in chunk.lines() {
         let line = line.trim();
 
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-
+        if let Some(data) = line.strip_prefix("data: ") {
             if data == "[DONE]" {
                 return Ok(None);
             }

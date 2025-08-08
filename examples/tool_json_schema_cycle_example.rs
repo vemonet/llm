@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()];
 
     let first_resp = llm.chat(&messages).await?;
-    println!("[assistant] {}", first_resp);
+    println!("[assistant] {first_resp}");
 
     if let Some(tool_calls) = first_resp.tool_calls() {
         let mut tool_results = Vec::new();
@@ -100,7 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         messages.push(ChatMessage::assistant().tool_result(tool_results).build());
 
         let final_resp = llm.chat(&messages).await?;
-        println!("[assistant] {}", final_resp);
+        println!("[assistant] {final_resp}");
     }
 
     Ok(())

@@ -95,9 +95,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conversation.push(ChatMessage::user().tool_result(tool_results).build());
 
         let final_response = llm.chat_with_tools(&conversation, llm.tools()).await?;
-        println!("\nFinal response: {}", final_response);
+        println!("\nFinal response: {final_response}");
     } else {
-        println!("Direct response: {}", response);
+        println!("Direct response: {response}");
     }
 
     Ok(())

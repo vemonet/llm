@@ -36,8 +36,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Print example information
     println!("=== Unified Tool Calling Example ===");
-    println!("Provider: {}", provider);
-    println!("Scenario: {}", scenario);
+    println!("Provider: {provider}");
+    println!("Scenario: {scenario}");
     println!("=================================\n");
 
     // Run the requested scenario
@@ -47,8 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "choice" => run_tool_choice_scenario(&llm).await?,
         _ => {
             println!(
-                "Unknown scenario: {}. Available scenarios: simple, multi, choice",
-                scenario
+                "Unknown scenario: {scenario}. Available scenarios: simple, multi, choice"
             );
             println!("Example: cargo run --example unified_tool_calling_example -- openai multi");
         }
@@ -67,8 +66,7 @@ fn create_llm(provider_name: &str) -> Result<Box<dyn LLMProvider>, Box<dyn Error
         "ollama" => LLMBackend::Ollama,
         _ => {
             return Err(format!(
-                "Unsupported provider: {}. Use 'openai', 'anthropic', or 'google'",
-                provider_name
+                "Unsupported provider: {provider_name}. Use 'openai', 'anthropic', or 'google'"
             )
             .into());
         }
@@ -205,12 +203,11 @@ async fn run_simple_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn E
             // Get final response
             println!("Getting final response with tool results...");
             let final_response = llm.chat_with_tools(&follow_up, llm.tools()).await?;
-            println!("\nFinal response: {}", final_response);
+            println!("\nFinal response: {final_response}");
         }
     } else {
         println!(
-            "\nModel provided a direct response (no tools used):\n{}",
-            response
+            "\nModel provided a direct response (no tools used):\n{response}"
         );
     }
 
@@ -227,26 +224,26 @@ async fn run_multi_turn_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<d
 
     // First turn
     let user_query = "I'm planning a trip to Tokyo. What's the weather like there?";
-    println!("User: {}\n", user_query);
+    println!("User: {user_query}\n");
 
     await_tool_response(llm, &mut conversation, user_query).await?;
 
     // Second turn - building on previous context
     let user_query = "What time is it there right now?";
-    println!("\nUser: {}\n", user_query);
+    println!("\nUser: {user_query}\n");
 
     await_tool_response(llm, &mut conversation, user_query).await?;
 
     // Third turn - building on full conversation context
     let user_query = "Can you recommend some good sushi restaurants in Tokyo?";
-    println!("\nUser: {}\n", user_query);
+    println!("\nUser: {user_query}\n");
 
     await_tool_response(llm, &mut conversation, user_query).await?;
 
     // Fourth turn - follow-up that requires memory of entire conversation
     let user_query =
         "Based on the weather and time, when would be a good time to visit those restaurants?";
-    println!("\nUser: {}\n", user_query);
+    println!("\nUser: {user_query}\n");
 
     await_tool_response(llm, &mut conversation, user_query).await?;
 
@@ -282,22 +279,19 @@ async fn test_tool_choice(
     tool_choice: ToolChoice,
     query: &str,
 ) -> Result<(), Box<dyn Error>> {
-    println!("\n--- Testing {:?} ---", tool_choice);
+    println!("\n--- Testing {tool_choice:?} ---");
 
     // Create a custom LLM with the specified tool choice
     let mut builder = LLMBuilder::new();
 
     // Copy properties from the original LLM
-    match llm.tools() {
-        Some(tools) => {
-            for tool in tools {
-                builder = builder.function(
-                    FunctionBuilder::new(&tool.function.name)
-                        .description(&tool.function.description), // Note: we'd need to recreate all parameters here in a real implementation
-                );
-            }
+    if let Some(tools) = llm.tools() {
+        for tool in tools {
+            builder = builder.function(
+                FunctionBuilder::new(&tool.function.name)
+                    .description(&tool.function.description), // Note: we'd need to recreate all parameters here in a real implementation
+            );
         }
-        None => {}
     }
 
     let custom_llm = builder
@@ -316,7 +310,7 @@ async fn test_tool_choice(
     // Send query with the specified tool choice
     let messages = vec![ChatMessage::user().content(query).build()];
 
-    println!("User: {}\n", query);
+    println!("User: {query}\n");
 
     let response = custom_llm
         .chat_with_tools(&messages, custom_llm.tools())
@@ -332,7 +326,7 @@ async fn test_tool_choice(
         println!("No tools called");
     }
 
-    println!("\nResponse: {}", response);
+    println!("\nResponse: {response}");
 
     Ok(())
 }
@@ -401,7 +395,7 @@ async fn await_tool_response(
         // Direct response (no tools)
         let response_text = response.text().unwrap_or_default();
 
-        println!("\nAssistant: {}", response_text);
+        println!("\nAssistant: {response_text}");
 
         // Add to conversation history
         conversation.push(ChatMessage::assistant().content(response_text).build());
