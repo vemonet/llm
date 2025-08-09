@@ -8,6 +8,70 @@ use serde_json::Value;
 
 use crate::{error::LLMError, ToolCall};
 
+/// Usage metadata for a chat response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Usage {
+    /// Number of tokens in the prompt
+    pub prompt_tokens: u32,
+    /// Number of tokens in the completion
+    pub completion_tokens: u32,
+    /// Total number of tokens used
+    pub total_tokens: u32,
+    /// Breakdown of completion tokens, if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_tokens_details: Option<CompletionTokensDetails>,
+    /// Breakdown of prompt tokens, if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens_details: Option<PromptTokensDetails>,
+}
+
+/// Stream response chunk that mimics OpenAI's streaming response format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamResponse {
+    /// Array of choices in the response
+    pub choices: Vec<StreamChoice>,
+    /// Usage metadata, typically present in the final chunk
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+/// Individual choice in a streaming response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamChoice {
+    /// Delta containing the incremental content
+    pub delta: StreamDelta,
+}
+
+/// Delta content in a streaming response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamDelta {
+    /// The incremental content, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+/// Breakdown of completion tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletionTokensDetails {
+    /// Tokens used for reasoning (for reasoning models)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u32>,
+    /// Tokens used for audio output
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_tokens: Option<u32>,
+}
+
+/// Breakdown of prompt tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PromptTokensDetails {
+    /// Tokens used for cached content
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cached_tokens: Option<u32>,
+    /// Tokens used for audio input
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_tokens: Option<u32>,
+}
+
 /// Role of a participant in a chat conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatRole {
@@ -243,6 +307,9 @@ pub trait ChatResponse: std::fmt::Debug + std::fmt::Display {
     fn thinking(&self) -> Option<String> {
         None
     }
+    fn usage(&self) -> Option<Usage> {
+        None
+    }
 }
 
 /// Trait for providers that support chat-style interactions.
@@ -289,9 +356,34 @@ pub trait ChatProvider: Sync + Send {
     async fn chat_stream(
         &self,
         _messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
+    {
         Err(LLMError::Generic(
             "Streaming not supported for this provider".to_string(),
+        ))
+    }
+
+    /// Sends a streaming chat request that returns structured response chunks.
+    ///
+    /// This method returns a stream of `StreamResponse` objects that mimic OpenAI's
+    /// streaming response format with `.choices[0].delta.content` and `.usage`.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation history as a slice of chat messages
+    ///
+    /// # Returns
+    ///
+    /// A stream of `StreamResponse` objects or an error
+    async fn chat_stream_struct(
+        &self,
+        _messages: &[ChatMessage],
+    ) -> Result<
+        std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>,
+        LLMError,
+    > {
+        Err(LLMError::Generic(
+            "Structured streaming not supported for this provider".to_string(),
         ))
     }
 

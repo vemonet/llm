@@ -380,29 +380,40 @@ impl LLMBuilder {
     }
 
     /// Set the web search user location type
-    pub fn openai_web_search_user_location_type(mut self, location_type: impl Into<String>) -> Self {
+    pub fn openai_web_search_user_location_type(
+        mut self,
+        location_type: impl Into<String>,
+    ) -> Self {
         self.openai_web_search_user_location_type = Some(location_type.into());
         self
     }
 
     /// Set the web search user location approximate country
-    pub fn openai_web_search_user_location_approximate_country(mut self, country: impl Into<String>) -> Self {
+    pub fn openai_web_search_user_location_approximate_country(
+        mut self,
+        country: impl Into<String>,
+    ) -> Self {
         self.openai_web_search_user_location_approximate_country = Some(country.into());
         self
     }
 
     /// Set the web search user location approximate city
-    pub fn openai_web_search_user_location_approximate_city(mut self, city: impl Into<String>) -> Self {
+    pub fn openai_web_search_user_location_approximate_city(
+        mut self,
+        city: impl Into<String>,
+    ) -> Self {
         self.openai_web_search_user_location_approximate_city = Some(city.into());
         self
     }
 
     /// Set the web search user location approximate region
-    pub fn openai_web_search_user_location_approximate_region(mut self, region: impl Into<String>) -> Self {
+    pub fn openai_web_search_user_location_approximate_region(
+        mut self,
+        region: impl Into<String>,
+    ) -> Self {
         self.openai_web_search_user_location_approximate_region = Some(region.into());
         self
     }
-    
 
     #[deprecated(note = "Renamed to `xai_search_mode`.")]
     pub fn search_mode(self, mode: impl Into<String>) -> Self {
@@ -463,7 +474,7 @@ impl LLMBuilder {
     /// use llm::builder::{LLMBuilder, LLMBackend};
     /// use llm::memory::SlidingWindowMemory;
     ///
-    /// let memory = Box::new(SlidingWindowMemory::new(10));
+    /// let memory = SlidingWindowMemory::new(10);
     /// let builder = LLMBuilder::new()
     ///     .backend(LLMBackend::OpenAI)
     ///     .memory(memory);
@@ -545,7 +556,6 @@ impl LLMBuilder {
         )));
         self
     }
-
 
     /// Builds and returns a configured LLM provider instance.
     ///
@@ -867,12 +877,14 @@ impl LLMBuilder {
             }
             LLMBackend::Mistral => {
                 #[cfg(not(feature = "mistral"))]
-                return Err(LLMError::InvalidRequest("Mistral feature not enabled".to_string()));
+                return Err(LLMError::InvalidRequest(
+                    "Mistral feature not enabled".to_string(),
+                ));
                 #[cfg(feature = "mistral")]
                 {
-                    let api_key = self.api_key.ok_or_else(|| 
+                    let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Mistral".to_string())
-                    )?;
+                    })?;
                     let mistral = crate::backends::mistral::Mistral::new(
                         api_key,
                         self.base_url,

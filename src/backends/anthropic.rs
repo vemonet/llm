@@ -8,7 +8,7 @@ use crate::{
     builder::LLMBackend,
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool,
-        ToolChoice,
+        ToolChoice, Usage,
     },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
@@ -137,6 +137,18 @@ struct ImageSource<'a> {
 #[derive(Deserialize, Debug)]
 struct AnthropicCompleteResponse {
     content: Vec<AnthropicContent>,
+    usage: Option<AnthropicUsage>,
+}
+
+/// Usage information from Anthropic API response.
+#[derive(Deserialize, Debug)]
+struct AnthropicUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_creation_input_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_read_input_tokens: Option<u32>,
 }
 
 /// Content block within an Anthropic API response.
@@ -246,6 +258,27 @@ impl ChatResponse for AnthropicCompleteResponse {
             v if v.is_empty() => None,
             v => Some(v),
         }
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage.as_ref().map(|anthropic_usage| {
+            let cached_tokens = anthropic_usage.cache_creation_input_tokens.unwrap_or(0)
+                + anthropic_usage.cache_read_input_tokens.unwrap_or(0);
+            Usage {
+                prompt_tokens: anthropic_usage.input_tokens,
+                completion_tokens: anthropic_usage.output_tokens,
+                total_tokens: anthropic_usage.input_tokens + anthropic_usage.output_tokens,
+                completion_tokens_details: None,
+                prompt_tokens_details: if cached_tokens > 0 {
+                    Some(crate::chat::PromptTokensDetails {
+                        cached_tokens: Some(cached_tokens),
+                        audio_tokens: None,
+                    })
+                } else {
+                    None
+                },
+            }
+        })
     }
 }
 
@@ -481,17 +514,14 @@ impl ChatProvider for Anthropic {
         }
 
         log::debug!("Anthropic request: POST /v1/messages");
-
         let resp = request.send().await?;
-
         log::debug!("Anthropic HTTP status: {}", resp.status());
 
         let resp = resp.error_for_status()?;
 
         let body = resp.text().await?;
         let json_resp: AnthropicCompleteResponse = serde_json::from_str(&body)
-            .map_err(|e| LLMError::HttpError(format!("Failed to parse JSON: {}", e)))?;
-
+            .map_err(|e| LLMError::HttpError(format!("Failed to parse JSON: {e}")))?;
         Ok(Box::new(json_resp))
     }
 
@@ -604,16 +634,14 @@ impl ChatProvider for Anthropic {
         }
 
         let response = request.send().await?;
-
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("Anthropic API returned error status: {}", status),
+                message: format!("Anthropic API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
-
         Ok(crate::chat::create_sse_stream(response, parse_anthropic_sse_chunk))
     }
 }
@@ -734,10 +762,7 @@ impl crate::LLMProvider for Anthropic {
 fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     for line in chunk.lines() {
         let line = line.trim();
-        
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            
+        if let Some(data) = line.strip_prefix("data: ") {
             match serde_json::from_str::<AnthropicStreamResponse>(data) {
                 Ok(response) => {
                     if response.response_type == "content_block_delta" {
@@ -753,6 +778,5 @@ fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
             }
         }
     }
-    
     Ok(None)
 }
