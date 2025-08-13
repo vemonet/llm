@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
-    chat::ChatMessage,
+    chat::{ChatMessage, StructuredOutputFormat},
 };
 use rstest::rstest;
 
@@ -17,7 +17,8 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::OpenAI,
         env_key: "OPENAI_API_KEY",
-        model: "gpt-4o-mini",
+        // model: "gpt-4.1-nano",
+        model: "gpt-5-nano",
         backend_name: "openai",
     },
     BackendTestConfig {
@@ -35,7 +36,8 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::Groq,
         env_key: "GROQ_API_KEY",
-        model: "llama3-8b-8192",
+        // model: "llama3-8b-8192",
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
         backend_name: "groq",
     },
     BackendTestConfig {
@@ -76,7 +78,8 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
         .api_key(api_key)
         .model(config.model)
         .max_tokens(512)
-        .temperature(0.7)
+        .temperature(1.0)
+        // Somehow with gpt-5 'temperature' does not support 0.7 with this model. Only the default (1) value is supported
         .stream(false)
         .build()
         .expect("Failed to build LLM");
@@ -138,7 +141,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
         .api_key(api_key)
         .model(config.model)
         .max_tokens(512)
-        .temperature(0.7)
+        .temperature(1.0)
         .stream(false)
         .function(
             FunctionBuilder::new("weather_function")
@@ -152,7 +155,6 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
         )
         .build()
         .expect("Failed to build LLM");
-
     let messages = vec![ChatMessage::user()
         .content("You are a weather assistant. What is the weather in Tokyo? Use the tools that you have available")
         .build()];
@@ -202,6 +204,144 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
+#[tokio::test]
+async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
+    let api_key = match std::env::var(config.env_key) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test test_{}_embedding ... ignored, {} not set",
+                config.backend_name, config.env_key
+            );
+            return;
+        }
+    };
+    // Define a simple JSON schema for structured output
+    // NOTE: description field only required by Groq
+    let schema = r#"
+        {
+            "name": "student",
+            "description": "Generate random students",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "age": {
+                        "type": "integer"
+                    },
+                    "is_student": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["name", "age", "is_student"],
+                "additionalProperties": false
+            },
+            "strict": true
+        }
+    "#;
+    let schema: StructuredOutputFormat = serde_json::from_str(schema).unwrap();
+    let llm = LLMBuilder::new()
+        .backend(config.backend.clone())
+        .api_key(api_key)
+        .model(config.model)
+        .temperature(1.0)
+        .max_tokens(512)
+        .stream(false)
+        .system("You are an AI assistant that can provide structured output to generate random students as example data. Respond in JSON format using the provided JSON schema.") // Set system description
+        .schema(schema) // Set JSON schema for structured output
+        .build()
+        .expect("Failed to build LLM");
+    // Prepare conversation history with example messages
+    let messages = vec![ChatMessage::user()
+        .content("Generate a random student with a short name")
+        .build()];
+    // Send chat request and handle the response
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            println!("Response: {response}");
+            // Validate that response contains text
+            assert!(
+                response.text().is_some() && !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+            // Parse the response as JSON and validate structure
+            let response_text = response.text().unwrap();
+            match serde_json::from_str::<serde_json::Value>(&response_text) {
+                Ok(json) => {
+                    // Validate the expected fields exist
+                    assert!(
+                        json.get("name").is_some(),
+                        "Expected 'name' field in JSON response"
+                    );
+                    assert!(
+                        json.get("age").is_some(),
+                        "Expected 'age' field in JSON response"
+                    );
+                    assert!(
+                        json.get("is_student").is_some(),
+                        "Expected 'is_student' field in JSON response"
+                    );
+                    // Validate field types
+                    assert!(
+                        json["name"].is_string(),
+                        "Expected 'name' to be a string, got: {:?}",
+                        json["name"]
+                    );
+                    assert!(
+                        json["age"].is_number(),
+                        "Expected 'age' to be a number, got: {:?}",
+                        json["age"]
+                    );
+                    assert!(
+                        json["is_student"].is_boolean(),
+                        "Expected 'is_student' to be a boolean, got: {:?}",
+                        json["is_student"]
+                    );
+                    println!("Successfully parsed JSON: {json}");
+                }
+                Err(e) => panic!(
+                    "Failed to parse response as JSON for {}: {e}. Response: {response_text}",
+                    config.backend_name
+                ),
+            }
+            assert!(
+                response.usage().is_some(),
+                "Expected usage information to be present"
+            );
+            let usage = response.usage().unwrap();
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens > 0, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens > 0, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens > 0, got {}",
+                usage.total_tokens
+            );
+        }
+        Err(e) => panic!(
+            "Chat with structured output error for {}: {e}",
+            config.backend_name
+        ),
+    }
+}
+
+#[rstest]
+#[case::openai(&BACKEND_CONFIGS[0])]
+#[case::mistral(&BACKEND_CONFIGS[1])]
+#[case::google(&BACKEND_CONFIGS[2])]
+#[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
 // #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
@@ -220,7 +360,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
         .api_key(api_key)
         .model(config.model)
         .max_tokens(512)
-        .temperature(0.7)
+        .temperature(1.0)
         .stream(true)
         .build()
         .expect("Failed to build LLM");
@@ -230,7 +370,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
         Ok(mut stream) => {
             let mut complete_text = String::new();
             // NOTE: groq and cohere do not return usage in stream responses
-            // let mut usage_data = None;
+            let mut usage_data = None;
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
@@ -239,9 +379,9 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                                 complete_text.push_str(content);
                             }
                         }
-                        // if let Some(usage) = stream_response.usage {
-                        //     usage_data = Some(usage);
-                        // }
+                        if let Some(usage) = stream_response.usage {
+                            usage_data = Some(usage);
+                        }
                     }
                     Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
                 }
@@ -250,27 +390,26 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
                 !complete_text.is_empty(),
                 "Expected response message, got empty text"
             );
-            // if let Some(usage) = usage_data {
-            //     assert!(
-            //         usage.prompt_tokens > 0,
-            //         "Expected prompt tokens > 0, got {}",
-            //         usage.prompt_tokens
-            //     );
-            //     // assert!(
-            //     //     usage.completion_tokens > 0,
-            //     //     "Expected completion tokens > 0, got {}",
-            //     //     usage.completion_tokens
-            //     // );
-            //     assert!(
-            //         usage.total_tokens > 0,
-            //         "Expected total tokens > 0, got {}",
-            //         usage.total_tokens
-            //     );
-            //     println!("Complete response: {complete_text}");
-            //     println!("Usage: {usage:?}");
-            // } else {
-            //     panic!("Expected usage data in response");
-            // }
+            if config.backend_name == "groq" || config.backend_name == "cohere" {
+                // Groq and Cohere do not return usage in streamed chat responses
+                assert!(
+                    usage_data.is_none(),
+                    "Expected no usage data for Groq/Cohere"
+                );
+            } else if let Some(usage) = usage_data {
+                assert!(
+                    usage.prompt_tokens > 0,
+                    "Expected prompt tokens > 0, got {}",
+                    usage.prompt_tokens
+                );
+                assert!(
+                    usage.total_tokens > 0,
+                    "Expected total tokens > 0, got {}",
+                    usage.total_tokens
+                );
+            } else {
+                panic!("Expected usage data in response");
+            }
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
@@ -300,7 +439,7 @@ async fn test_chat_stream(#[case] config: &BackendTestConfig) {
         .api_key(api_key)
         .model(config.model)
         .max_tokens(512)
-        .temperature(0.7)
+        .temperature(1.0)
         .stream(true)
         .build()
         .expect("Failed to build LLM");
@@ -394,7 +533,7 @@ async fn test_chat_openrouter() {
     let api_key = match std::env::var("OPENROUTER_API_KEY") {
         Ok(key) => key,
         Err(_) => {
-            eprintln!("test_chat_custom_openai_url ... ignored, OPENROUTER_API_KEY not set");
+            eprintln!("test_chat_openrouter ... ignored, OPENROUTER_API_KEY not set");
             return;
         }
     };
@@ -436,5 +575,42 @@ async fn test_chat_openrouter() {
             );
         }
         Err(e) => panic!("Chat error for OpenRouter: {e}"),
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_chat_with_web_search_openai() {
+    let api_key = match std::env::var("OPENAI_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_chat_with_web_search ... ignored, OPENAI_API_KEY not set");
+            return;
+        }
+    };
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .api_key(api_key)
+        .model("gpt-5-nano")
+        .max_tokens(5000)
+        // .temperature(0.7)
+        .stream(false)
+        .openai_enable_web_search(true)
+        .build()
+        .expect("Failed to build LLM");
+
+    match llm
+        .chat_with_web_search("What is the weather in Tokyo?".to_string())
+        .await
+    {
+        Ok(response) => {
+            // println!("Response: {:?}", response.text());
+            assert!(
+                response.text().is_some() && !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+        }
+        Err(e) => panic!("Chat error for OpenAI web search: {e}"),
     }
 }
