@@ -1002,10 +1002,18 @@ impl LLMBuilder {
         // Wrap with resilience retry/backoff if enabled
         if self.resilient_enable.unwrap_or(false) {
             let mut cfg = crate::resilient_llm::ResilienceConfig::defaults();
-            if let Some(attempts) = self.resilient_attempts { cfg.max_attempts = attempts; }
-            if let Some(base) = self.resilient_base_delay_ms { cfg.base_delay_ms = base; }
-            if let Some(maxd) = self.resilient_max_delay_ms { cfg.max_delay_ms = maxd; }
-            if let Some(j) = self.resilient_jitter { cfg.jitter = j; }
+            if let Some(attempts) = self.resilient_attempts {
+                cfg.max_attempts = attempts;
+            }
+            if let Some(base) = self.resilient_base_delay_ms {
+                cfg.base_delay_ms = base;
+            }
+            if let Some(maxd) = self.resilient_max_delay_ms {
+                cfg.max_delay_ms = maxd;
+            }
+            if let Some(j) = self.resilient_jitter {
+                cfg.jitter = j;
+            }
             final_provider = Box::new(crate::resilient_llm::ResilientLLM::new(final_provider, cfg));
         }
 
