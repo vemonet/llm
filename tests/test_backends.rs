@@ -118,6 +118,76 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
     }
 }
 
+
+#[rstest]
+#[case::openai(&BACKEND_CONFIGS[0])]
+#[case::mistral(&BACKEND_CONFIGS[1])]
+#[case::google(&BACKEND_CONFIGS[2])]
+#[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
+#[tokio::test]
+async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
+    let api_key = match std::env::var(config.env_key) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test test_{}_chat ... ignored, {} not set",
+                config.backend_name, config.env_key
+            );
+            return;
+        }
+    };
+    let llm = LLMBuilder::new()
+        .backend(config.backend.clone())
+        .api_key(api_key)
+        .model(config.model)
+        .max_tokens(512)
+        .temperature(1.0)
+        .reasoning(true)
+        .reasoning_effort(llm::chat::ReasoningEffort::Low)
+        .stream(false)
+        .build()
+        .expect("Failed to build LLM");
+
+    let messages = vec![ChatMessage::user().content("What is France capital?").build()];
+    match llm.chat(&messages).await {
+        Ok(response) => {
+            assert!(
+                response.text().is_some() && !response.text().unwrap().is_empty(),
+                "Expected response message, got {:?}",
+                response.text()
+            );
+            assert!(
+                response.text().unwrap().to_lowercase().contains("paris"),
+                "Expected paris in response, got {:?}",
+                response.text()
+            );
+            assert!(
+                response.usage().is_some(),
+                "Expected usage information to be present"
+            );
+            let usage = response.usage().unwrap();
+            assert!(
+                usage.prompt_tokens > 0,
+                "Expected prompt tokens > 0, got {}",
+                usage.prompt_tokens
+            );
+            assert!(
+                usage.completion_tokens > 0,
+                "Expected completion tokens > 0, got {}",
+                usage.completion_tokens
+            );
+            assert!(
+                usage.total_tokens > 0,
+                "Expected total tokens > 0, got {}",
+                usage.total_tokens
+            );
+        }
+        Err(e) => panic!("Chat error for {}: {e}", config.backend_name),
+    }
+}
+
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
