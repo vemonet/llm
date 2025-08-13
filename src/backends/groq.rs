@@ -29,6 +29,20 @@ impl OpenAIProviderConfig for GroqConfig {
 
 pub type Groq = OpenAICompatibleProvider<GroqConfig>;
 
+// TODO: for groq usage goes in .x_groq.usage...
+// /// Streaming response structures
+// #[derive(Deserialize, Debug)]
+// pub struct GroqChatStreamChunk {
+//     pub choices: Vec<ChatStreamChoice>,
+//     pub x_groq: Option<GroqMetadata>,
+// }
+
+// /// Streaming response structures
+// #[derive(Deserialize, Debug)]
+// pub struct GroqMetadata {
+//     pub usage: Option<Usage>,
+// }
+
 impl Groq {
     /// Creates a new Groq client with the specified configuration.
     #[allow(clippy::too_many_arguments)]

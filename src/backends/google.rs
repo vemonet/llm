@@ -619,11 +619,9 @@ impl ChatProvider for Google {
                 if let Some(schema) = &json_schema.schema {
                     // If the schema has an "additionalProperties" field (as required by OpenAI), remove it as Google's API doesn't support it
                     let mut schema = schema.clone();
-
                     if let Some(obj) = schema.as_object_mut() {
                         obj.remove("additionalProperties");
                     }
-
                     (Some(GoogleResponseMimeType::Json), Some(schema))
                 } else {
                     (None, None)
@@ -631,7 +629,6 @@ impl ChatProvider for Google {
             } else {
                 (None, None)
             };
-
             Some(GoogleGenerationConfig {
                 max_output_tokens: self.max_tokens,
                 temperature: self.temperature,
@@ -647,7 +644,6 @@ impl ChatProvider for Google {
             generation_config,
             tools: None,
         };
-
         if log::log_enabled!(log::Level::Trace) {
             if let Ok(json) = serde_json::to_string(&req_body) {
                 log::trace!("Google Gemini request payload: {}", json);
@@ -661,15 +657,12 @@ impl ChatProvider for Google {
         );
 
         let mut request = self.client.post(&url).json(&req_body);
-
         if let Some(timeout) = self.timeout_seconds {
             request = request.timeout(std::time::Duration::from_secs(timeout));
         }
 
         let resp = request.send().await?;
-
         log::debug!("Google Gemini HTTP status: {}", resp.status());
-
         let resp = resp.error_for_status()?;
 
         // Get the raw response text for debugging

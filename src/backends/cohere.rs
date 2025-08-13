@@ -22,6 +22,8 @@ pub struct CohereConfig;
 impl OpenAIProviderConfig for CohereConfig {
     const PROVIDER_NAME: &'static str = "Cohere";
     const DEFAULT_BASE_URL: &'static str = "https://api.cohere.ai/compatibility/v1/";
+    // NOTE: upgrading to v2 (not OpenAI-compatible) is required to get usage in streaming responses
+    // const DEFAULT_BASE_URL: &'static str = "https://api.cohere.com/v2/chat/";
     const DEFAULT_MODEL: &'static str = "command-r7b-12-2024";
     const SUPPORTS_REASONING_EFFORT: bool = false;
     const SUPPORTS_STRUCTURED_OUTPUT: bool = true;

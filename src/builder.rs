@@ -656,7 +656,7 @@ impl LLMBuilder {
                         self.openai_web_search_user_location_approximate_country,
                         self.openai_web_search_user_location_approximate_city,
                         self.openai_web_search_user_location_approximate_region,
-                    ))
+                    )?)
                 }
             }
             LLMBackend::ElevenLabs => {
