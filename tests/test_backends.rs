@@ -17,8 +17,9 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::OpenAI,
         env_key: "OPENAI_API_KEY",
+        model: "gpt-5-nano", // Really bad at structured output
+        // model: "gpt-5-mini",
         // model: "gpt-4.1-nano",
-        model: "gpt-5-nano",
         backend_name: "openai",
     },
     BackendTestConfig {
@@ -84,7 +85,7 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
         .build()
         .expect("Failed to build LLM");
 
-    let messages = vec![ChatMessage::user().content("Hello.").build()];
+    let messages = vec![ChatMessage::user().content("Hello").build()];
     match llm.chat(&messages).await {
         Ok(response) => {
             assert!(
@@ -243,14 +244,20 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
         }
     "#;
     let schema: StructuredOutputFormat = serde_json::from_str(schema).unwrap();
+    // gpt-5-nano is really bad at structured output and fails most of the time
+    let llm_model = if config.backend_name == "openai" {
+        "gpt-5-mini"
+    } else {
+        config.model
+    };
     let llm = LLMBuilder::new()
         .backend(config.backend.clone())
         .api_key(api_key)
-        .model(config.model)
+        .model(llm_model)
         .temperature(1.0)
         .max_tokens(512)
         .stream(false)
-        .system("You are an AI assistant that can provide structured output to generate random students as example data. Respond in JSON format using the provided JSON schema.") // Set system description
+        .system("You are an AI assistant that can provide structured output to generate random students as example data. Respond in JSON format using the provided JSON schema.")
         .schema(schema) // Set JSON schema for structured output
         .build()
         .expect("Failed to build LLM");

@@ -404,26 +404,14 @@ impl ChatProvider for OpenAI {
         }
         // Parse the successful response
         let resp_text = response.text().await?;
-        if self.enable_web_search {
-            let json_resp: Result<OpenAIWebSearchChatResponse, serde_json::Error> =
-                serde_json::from_str(&resp_text);
-            match json_resp {
-                Ok(response) => Ok(Box::new(response)),
-                Err(e) => Err(LLMError::ResponseFormatError {
-                    message: format!("Failed to decode OpenAI web search API response: {e}"),
-                    raw_response: resp_text,
-                }),
-            }
-        } else {
-            let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
-                serde_json::from_str(&resp_text);
-            match json_resp {
-                Ok(response) => Ok(Box::new(response)),
-                Err(e) => Err(LLMError::ResponseFormatError {
-                    message: format!("Failed to decode OpenAI API response: {e}"),
-                    raw_response: resp_text,
-                }),
-            }
+        let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
+        match json_resp {
+            Ok(response) => Ok(Box::new(response)),
+            Err(e) => Err(LLMError::ResponseFormatError {
+                message: format!("Failed to decode OpenAI API response: {e}"),
+                raw_response: resp_text,
+            }),
         }
     }
 
