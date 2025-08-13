@@ -2,11 +2,10 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
-use crate::chat::{ChatRole, MessageType};
+use crate::chat::Usage;
 use crate::providers::openai_compatible::{
-    ImageUrlContent, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
-    OpenAIFunctionCall, OpenAIFunctionPayload, OpenAIMessageContent, OpenAIProviderConfig,
-    OpenAIResponseFormat,
+    create_struct_sse_stream, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
+    OpenAIProviderConfig, OpenAIResponseFormat, OpenAIStreamOptions,
 };
 use crate::{
     chat::{
@@ -19,12 +18,11 @@ use crate::{
     models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
-    LLMProvider,
+    LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use either::Either::{Left, Right};
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
@@ -56,12 +54,73 @@ pub struct OpenAI {
     pub web_search_user_location_approximate_region: Option<String>,
 }
 
+/// OpenAI-specific tool that can be either a function tool or a web search tool
 #[derive(Serialize, Debug)]
-pub struct OpenAIWebSearchOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub search_context_size: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_location: Option<UserLocation>,
+#[serde(untagged)]
+pub enum OpenAITool {
+    Function {
+        #[serde(rename = "type")]
+        tool_type: String,
+        function: crate::chat::FunctionTool,
+    },
+    WebSearch {
+        #[serde(rename = "type")]
+        tool_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        user_location: Option<UserLocation>,
+    },
+}
+
+/// Response for chat with web search
+#[derive(Deserialize, Debug)]
+pub struct OpenAIWebSearchChatResponse {
+    pub output: Vec<OpenAIWebSearchOutput>,
+    pub usage: Option<Usage>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenAIWebSearchOutput {
+    pub content: Option<Vec<OpenAIWebSearchContent>>,
+    pub usage: Option<Usage>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenAIWebSearchContent {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub text: String,
+}
+
+impl std::fmt::Display for OpenAIWebSearchChatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(text) = self.text() {
+            write!(f, "{text}")
+        } else {
+            write!(f, "No response content")
+        }
+    }
+}
+
+impl ChatResponse for OpenAIWebSearchChatResponse {
+    fn text(&self) -> Option<String> {
+        self.output
+            .last()
+            .and_then(|output| output.content.as_ref())
+            .and_then(|content| content.last())
+            .map(|content| content.text.clone())
+    }
+
+    fn tool_calls(&self) -> Option<Vec<ToolCall>> {
+        None // Web search responses don't contain tool calls
+    }
+
+    fn thinking(&self) -> Option<String> {
+        None
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage.clone()
+    }
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -81,11 +140,16 @@ pub struct ApproximateLocation {
 
 /// Request payload for OpenAI's chat API endpoint.
 #[derive(Serialize, Debug)]
-pub struct OpenAIAPIChatRequest {
-    pub model: String,
-    pub messages: Vec<OpenAIChatMessage>,
+pub struct OpenAIAPIChatRequest<'a> {
+    pub model: &'a str,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<OpenAIChatMessage<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    pub input: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
     pub stream: bool,
@@ -94,7 +158,7 @@ pub struct OpenAIAPIChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<Tool>>,
+    pub tools: Option<Vec<OpenAITool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -102,7 +166,7 @@ pub struct OpenAIAPIChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<OpenAIResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub web_search_options: Option<OpenAIWebSearchOptions>,
+    pub stream_options: Option<OpenAIStreamOptions>,
 }
 
 impl OpenAI {
@@ -150,10 +214,14 @@ impl OpenAI {
         web_search_user_location_approximate_country: Option<String>,
         web_search_user_location_approximate_city: Option<String>,
         web_search_user_location_approximate_region: Option<String>,
-    ) -> Self {
-        OpenAI {
+    ) -> Result<Self, LLMError> {
+        let api_key_str = api_key.into();
+        if api_key_str.is_empty() {
+            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
+        }
+        Ok(OpenAI {
             provider: <OpenAICompatibleProvider<OpenAIConfig>>::new(
-                api_key,
+                api_key_str,
                 base_url,
                 model,
                 max_tokens,
@@ -178,49 +246,7 @@ impl OpenAI {
             web_search_user_location_approximate_country,
             web_search_user_location_approximate_city,
             web_search_user_location_approximate_region,
-        }
-    }
-
-    /// Convert a ChatMessage to OpenAI-specific message format
-    fn chat_msg_to_openai_msg(&self, chat_msg: ChatMessage) -> OpenAIChatMessage {
-        OpenAIChatMessage {
-            role: match chat_msg.role {
-                ChatRole::User => "user".to_string(),
-                ChatRole::Assistant => "assistant".to_string(),
-            },
-            tool_call_id: None,
-            content: match &chat_msg.message_type {
-                MessageType::Text => Some(Right(chat_msg.content.clone())),
-                MessageType::Image(_) => unreachable!(),
-                MessageType::Pdf(_) => unimplemented!(),
-                MessageType::ImageURL(url) => Some(Left(vec![OpenAIMessageContent {
-                    message_type: Some("image_url".to_string()),
-                    text: None,
-                    image_url: Some(ImageUrlContent { url: url.clone() }),
-                    tool_output: None,
-                    tool_call_id: None,
-                }])),
-                MessageType::ToolUse(_) => None,
-                MessageType::ToolResult(_) => None,
-            },
-            tool_calls: match &chat_msg.message_type {
-                MessageType::ToolUse(calls) => {
-                    let owned_calls: Vec<OpenAIFunctionCall> = calls
-                        .iter()
-                        .map(|c| OpenAIFunctionCall {
-                            id: c.id.clone(),
-                            content_type: "function".to_string(),
-                            function: OpenAIFunctionPayload {
-                                name: c.function.name.clone(),
-                                arguments: c.function.arguments.clone(),
-                            },
-                        })
-                        .collect();
-                    Some(owned_calls)
-                }
-                _ => None,
-            },
-        }
+        })
     }
 }
 
@@ -297,117 +323,55 @@ impl ModelListResponse for OpenAIModelListResponse {
 // Delegate other provider traits to the internal provider
 #[async_trait]
 impl ChatProvider for OpenAI {
-    // async fn chat_with_tools(
-    //     &self,
-    //     messages: &[ChatMessage],
-    //     tools: Option<&[Tool]>,
-    // ) -> Result<Box<dyn ChatResponse>, LLMError> {
-    //     self.provider.chat_with_tools(messages, tools).await
-    // }
-
-    // Web search being ad hoc for each provider requires custom implementation
-    /// Chat with tools, including web search if enabled
+    /// Chat with tool calls enabled
     async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
-        // If web search is not enabled, delegate to the generic provider
-        if !self.enable_web_search {
-            return self.provider.chat_with_tools(messages, tools).await;
-        }
-        // Full web search implementation
-        if self.api_key().is_empty() {
-            return Err(LLMError::AuthError("Missing OpenAI API key".to_string()));
-        }
-        // Clone the messages to have an owned mutable vector.
-        let messages = messages.to_vec();
-        let mut openai_msgs: Vec<OpenAIChatMessage> = vec![];
-        for msg in messages {
-            if let MessageType::ToolResult(ref results) = msg.message_type {
-                for result in results {
-                    openai_msgs.push(
-                        // Clone strings to own them
-                        OpenAIChatMessage {
-                            role: "tool".to_string(),
-                            tool_call_id: Some(result.id.clone()),
-                            tool_calls: None,
-                            content: Some(Right(result.function.arguments.clone())),
-                        },
-                    );
-                }
-            } else {
-                openai_msgs.push(self.chat_msg_to_openai_msg(msg))
-            }
-        }
-        if let Some(system) = &self.provider.system {
-            openai_msgs.insert(
-                0,
-                OpenAIChatMessage {
-                    role: "system".to_string(),
-                    content: Some(Left(vec![OpenAIMessageContent {
-                        message_type: Some("text".to_string()),
-                        text: Some(system.clone()),
-                        image_url: None,
-                        tool_call_id: None,
-                        tool_output: None,
-                    }])),
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-            );
-        }
+        // Use the common prepare_messages method from the OpenAI-compatible provider
+        let openai_msgs = self.provider.prepare_messages(messages);
         let response_format: Option<OpenAIResponseFormat> =
             self.provider.json_schema.clone().map(|s| s.into());
-        let request_tools = tools
+        // Convert regular tools to OpenAI format
+        let tool_calls = tools
             .map(|t| t.to_vec())
             .or_else(|| self.provider.tools.clone());
-        let request_tool_choice = if request_tools.is_some() {
+        let mut openai_tools: Vec<OpenAITool> = Vec::new();
+        // Add regular function tools
+        if let Some(tools) = &tool_calls {
+            for tool in tools {
+                openai_tools.push(OpenAITool::Function {
+                    tool_type: tool.tool_type.clone(),
+                    function: tool.function.clone(),
+                });
+            }
+        }
+        let final_tools = if openai_tools.is_empty() {
+            None
+        } else {
+            Some(openai_tools)
+        };
+        let request_tool_choice = if final_tools.is_some() {
             self.provider.tool_choice.clone()
         } else {
             None
         };
-        let web_search_options = if self.enable_web_search {
-            let loc_type_opt = self
-                .web_search_user_location_type
-                .as_ref()
-                .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
-            let country = self.web_search_user_location_approximate_country.as_ref();
-            let city = self.web_search_user_location_approximate_city.as_ref();
-            let region = self.web_search_user_location_approximate_region.as_ref();
-            let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
-                Some(ApproximateLocation {
-                    country: country.cloned().unwrap_or_default(),
-                    city: city.cloned().unwrap_or_default(),
-                    region: region.cloned().unwrap_or_default(),
-                })
-            } else {
-                None
-            };
-            let user_location = loc_type_opt.map(|loc_type| UserLocation {
-                location_type: loc_type.clone(),
-                approximate,
-            });
-            Some(OpenAIWebSearchOptions {
-                search_context_size: self.web_search_context_size.clone(),
-                user_location,
-            })
-        } else {
-            None
-        };
         let body = OpenAIAPIChatRequest {
-            model: self.provider.model.clone(),
+            model: self.provider.model.as_str(),
             messages: openai_msgs,
-            max_tokens: self.provider.max_tokens,
+            input: None,
+            max_completion_tokens: self.provider.max_tokens,
+            max_output_tokens: None,
             temperature: self.provider.temperature,
             stream: self.provider.stream,
             top_p: self.provider.top_p,
             top_k: self.provider.top_k,
-            tools: request_tools,
+            tools: final_tools,
             tool_choice: request_tool_choice,
             reasoning_effort: self.provider.reasoning_effort.clone(),
             response_format,
-            web_search_options,
+            stream_options: None,
         };
         let url = self
             .provider
@@ -440,25 +404,85 @@ impl ChatProvider for OpenAI {
         }
         // Parse the successful response
         let resp_text = response.text().await?;
-        let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
-            serde_json::from_str(&resp_text);
-        match json_resp {
-            Ok(response) => Ok(Box::new(response)),
-            Err(e) => Err(LLMError::ResponseFormatError {
-                message: format!("Failed to decode OpenAI API response: {e}"),
-                raw_response: resp_text,
-            }),
+        if self.enable_web_search {
+            let json_resp: Result<OpenAIWebSearchChatResponse, serde_json::Error> =
+                serde_json::from_str(&resp_text);
+            match json_resp {
+                Ok(response) => Ok(Box::new(response)),
+                Err(e) => Err(LLMError::ResponseFormatError {
+                    message: format!("Failed to decode OpenAI web search API response: {e}"),
+                    raw_response: resp_text,
+                }),
+            }
+        } else {
+            let json_resp: Result<OpenAIChatResponse, serde_json::Error> =
+                serde_json::from_str(&resp_text);
+            match json_resp {
+                Ok(response) => Ok(Box::new(response)),
+                Err(e) => Err(LLMError::ResponseFormatError {
+                    message: format!("Failed to decode OpenAI API response: {e}"),
+                    raw_response: resp_text,
+                }),
+            }
         }
     }
 
+    async fn chat_with_web_search(&self, input: String) -> Result<Box<dyn ChatResponse>, LLMError> {
+        // Build web search tool configuration
+        let loc_type_opt = self
+            .web_search_user_location_type
+            .as_ref()
+            .filter(|t| matches!(t.as_str(), "exact" | "approximate"));
+        let country = self.web_search_user_location_approximate_country.as_ref();
+        let city = self.web_search_user_location_approximate_city.as_ref();
+        let region = self.web_search_user_location_approximate_region.as_ref();
+        let approximate = if [country, city, region].iter().any(|v| v.is_some()) {
+            Some(ApproximateLocation {
+                country: country.cloned().unwrap_or_default(),
+                city: city.cloned().unwrap_or_default(),
+                region: region.cloned().unwrap_or_default(),
+            })
+        } else {
+            None
+        };
+        let user_location = loc_type_opt.map(|loc_type| UserLocation {
+            location_type: loc_type.clone(),
+            approximate,
+        });
+        let web_search_tool = OpenAITool::WebSearch {
+            tool_type: "web_search_preview".to_string(),
+            user_location,
+        };
+        self.chat_with_hosted_tools(input, vec![web_search_tool])
+            .await
+    }
+
+    /// Stream chat responses as a stream of strings
     async fn chat_stream(
         &self,
         messages: &[ChatMessage],
     ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
     {
-        self.provider.chat_stream(messages).await
+        let struct_stream = self.chat_stream_struct(messages).await?;
+        let content_stream = struct_stream.filter_map(|result| async move {
+            match result {
+                Ok(stream_response) => {
+                    if let Some(choice) = stream_response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            if !content.is_empty() {
+                                return Some(Ok(content.clone()));
+                            }
+                        }
+                    }
+                    None
+                }
+                Err(e) => Some(Err(e)),
+            }
+        });
+        Ok(Box::pin(content_stream))
     }
 
+    /// Stream chat responses as `ChatMessage` structured objects, including usage information
     async fn chat_stream_struct(
         &self,
         messages: &[ChatMessage],
@@ -466,7 +490,59 @@ impl ChatProvider for OpenAI {
         std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>>,
         LLMError,
     > {
-        self.provider.chat_stream_struct(messages).await
+        let openai_msgs = self.provider.prepare_messages(messages);
+        // Convert regular tools to OpenAI format for streaming
+        let openai_tools: Option<Vec<OpenAITool>> = self.provider.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .map(|tool| OpenAITool::Function {
+                    tool_type: tool.tool_type.clone(),
+                    function: tool.function.clone(),
+                })
+                .collect()
+        });
+        let body = OpenAIAPIChatRequest {
+            model: &self.provider.model,
+            messages: openai_msgs,
+            input: None,
+            max_completion_tokens: self.provider.max_tokens,
+            max_output_tokens: None,
+            temperature: self.provider.temperature,
+            stream: true,
+            top_p: self.provider.top_p,
+            top_k: self.provider.top_k,
+            tools: openai_tools,
+            tool_choice: self.provider.tool_choice.clone(),
+            reasoning_effort: self.provider.reasoning_effort.clone(),
+            response_format: None,
+            stream_options: Some(OpenAIStreamOptions {
+                include_usage: true,
+            }),
+        };
+        let url = self
+            .provider
+            .base_url
+            .join("chat/completions")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+        let mut request = self
+            .provider
+            .client
+            .post(url)
+            .bearer_auth(&self.provider.api_key)
+            .json(&body);
+        if let Some(timeout) = self.provider.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI API returned error status: {status}"),
+                raw_response: error_text,
+            });
+        }
+        Ok(create_struct_sse_stream(response))
     }
 }
 
@@ -529,10 +605,6 @@ impl TextToSpeechProvider for OpenAI {
 #[async_trait]
 impl EmbeddingProvider for OpenAI {
     async fn embed(&self, input: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
-        if self.api_key().is_empty() {
-            return Err(LLMError::AuthError("Missing OpenAI API key".into()));
-        }
-
         let body = OpenAIEmbeddingRequest {
             model: self.model().to_string(),
             input,
@@ -610,5 +682,83 @@ impl OpenAI {
 
     pub fn tools(&self) -> Option<&[Tool]> {
         self.provider.tools.as_deref()
+    }
+
+    /// Chat with OpenAI-hosted tools using the `/responses` endpoint
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The input message
+    /// * `hosted_tools` - List of OpenAI hosted tools to use
+    ///
+    /// # Returns
+    ///
+    /// The provider's response text or an error
+    pub async fn chat_with_hosted_tools(
+        &self,
+        input: String,
+        hosted_tools: Vec<OpenAITool>,
+    ) -> Result<Box<dyn ChatResponse>, LLMError> {
+        let body = OpenAIAPIChatRequest {
+            model: self.provider.model.as_str(),
+            messages: Vec::new(), // Empty for hosted tools
+            input: Some(input),
+            max_completion_tokens: None,
+            max_output_tokens: self.provider.max_tokens,
+            temperature: self.provider.temperature,
+            stream: self.provider.stream,
+            top_p: self.provider.top_p,
+            top_k: self.provider.top_k,
+            tools: Some(hosted_tools),
+            tool_choice: self.provider.tool_choice.clone(),
+            reasoning_effort: self.provider.reasoning_effort.clone(),
+            response_format: None, // Hosted tools don't use structured output
+            stream_options: None,
+        };
+
+        let url = self
+            .provider
+            .base_url
+            .join("responses") // Use responses endpoint for hosted tools
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        let mut request = self
+            .provider
+            .client
+            .post(url)
+            .bearer_auth(&self.provider.api_key)
+            .json(&body);
+
+        if log::log_enabled!(log::Level::Trace) {
+            if let Ok(json) = serde_json::to_string(&body) {
+                log::trace!("OpenAI hosted tools request payload: {}", json);
+            }
+        }
+
+        if let Some(timeout) = self.provider.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let response = request.send().await?;
+        log::debug!("OpenAI hosted tools HTTP status: {}", response.status());
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(LLMError::ResponseFormatError {
+                message: format!("OpenAI hosted tools API returned error status: {status}"),
+                raw_response: error_text,
+            });
+        }
+        let resp_text = response.text().await?;
+        let json_resp: Result<OpenAIWebSearchChatResponse, serde_json::Error> =
+            serde_json::from_str(&resp_text);
+        match json_resp {
+            Ok(response) => Ok(Box::new(response)),
+            Err(e) => Err(LLMError::ResponseFormatError {
+                message: format!("Failed to decode OpenAI hosted tools API response: {e}"),
+                raw_response: resp_text,
+            }),
+        }
     }
 }
