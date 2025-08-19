@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use llm::{
+    agent::McpAgent,
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
     chat::{ChatMessage, StructuredOutputFormat},
 };
@@ -17,8 +18,7 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::OpenAI,
         env_key: "OPENAI_API_KEY",
-        model: "gpt-5-nano", // Really bad at structured output
-        // model: "gpt-5-mini",
+        model: "gpt-5-nano",
         // model: "gpt-4.1-nano",
         backend_name: "openai",
     },
@@ -806,4 +806,63 @@ async fn test_chat_with_web_search_openai() {
         }
         Err(e) => panic!("Chat error for OpenAI web search: {e}"),
     }
+}
+
+#[cfg(feature = "agent")]
+#[rstest]
+#[tokio::test]
+async fn test_mcp_agent_openai() {
+    use llm::agent::McpAgentBuilder;
+
+    let api_key = match std::env::var("OPENAI_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("test test_mcp_agent_openai ... ignored, OPENAI_API_KEY not set");
+            return;
+        }
+    };
+    // Build LLM backend
+    let llm_builder = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .api_key(api_key)
+        .model("gpt-4")
+        .temperature(0.1)
+        .max_tokens(1024);
+
+    // Create MCP agent with HTTP transport
+    let agent_result = McpAgentBuilder::new()
+        .mcp_url("http://0.0.0.0:8000/mcp")
+        .llm(llm_builder)
+        .client_name("Test MCP Agent")
+        .client_version("1.0.0")
+        .build()
+        .await;
+    let agent = match agent_result {
+        Ok(agent) => agent,
+        Err(e) => {
+            eprintln!("test test_mcp_agent_openai ... ignored, MCP server not available: {e}");
+            return;
+        }
+    };
+
+    // Test MCP tools chat (will use tools if available)
+    let tool_messages = vec![ChatMessage::user()
+        .content("Find dataset about insulin in the EU")
+        .build()];
+
+    match agent.chat_with_mcp_tools(&tool_messages).await {
+        Ok(response) => {
+            println!("MCP tools chat: {:?}", response.messages);
+            println!("MCP tools chat: {:?}", response.tool_executions);
+            println!("MCP tools chat: {}", response.final_response);
+        }
+        Err(e) => {
+            // Tools might not be available, which is okay for this test
+            eprintln!("MCP tools chat failed (expected if no tools available): {e}");
+            assert!(false);
+        }
+    }
+    // Test agent metadata
+    assert_eq!(agent.client_name(), "Test MCP Agent");
+    assert_eq!(agent.client_version(), "1.0.0");
 }

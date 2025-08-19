@@ -47,7 +47,7 @@ mistral = []
 cli = ["full", "dep:clap", "dep:rustyline", "dep:colored", "dep:spinners"]
 api = ["dep:axum", "dep:tower-http", "dep:uuid"]
 elevenlabs = []
-agent = []
+agent = ["dep:rmcp"]
 rodio = ["dep:rodio"]
 logging = ["dep:env_logger"]
 
@@ -75,6 +75,18 @@ log = "0.4"
 env_logger = { version = "0.11", optional = true }
 chrono = {version = "0.4", default-features = false, features = ["serde"]}
 rand = "0.8"
+# rmcp = { version = "0.5", features = ["client", "transport-streamable-http-client", "transport-stdio-client"], optional = true }
+rmcp = { version = "0.3", optional = true, features = [
+    # "server",
+    # "transport-streamable-http-server",
+    # "transport-sse-server",
+    "client",
+    "reqwest",
+    "transport-streamable-http-client",
+    "transport-child-process",
+    "tower",
+    # "auth"
+] }
 
 [[bin]]
 name = "llm"
