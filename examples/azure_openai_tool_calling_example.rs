@@ -22,7 +22,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("gpt-4o-mini") // Use GPT-4o-mini model
         .max_tokens(512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .function(
             FunctionBuilder::new("weather_function")
                 .description("Use this tool to get the weather in a specific city")

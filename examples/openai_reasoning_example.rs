@@ -14,7 +14,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend(LLMBackend::OpenAI) // Use OpenAI as the LLM provider
         .api_key(api_key) // Set the API key
         .model("o1-preview") // Use GPT-3.5 Turbo model
-        .stream(false) // Disable streaming responses
         .reasoning_effort(ReasoningEffort::High) // Enable reasoning effort
         .build()
         .expect("Failed to build LLM (OpenAI)");

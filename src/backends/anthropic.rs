@@ -36,7 +36,6 @@ pub struct Anthropic {
     pub temperature: f32,
     pub timeout_seconds: u64,
     pub system: String,
-    pub stream: bool,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
@@ -292,7 +291,6 @@ impl Anthropic {
     /// * `temperature` - Sampling temperature (defaults to 0.7)
     /// * `timeout_seconds` - Request timeout in seconds (defaults to 30)
     /// * `system` - System prompt (defaults to "You are a helpful assistant.")
-    /// * `stream` - Whether to stream responses (defaults to false)
     /// *
     /// * `thinking_budget_tokens` - Budget tokens for thinking (optional)
     #[allow(clippy::too_many_arguments)]
@@ -303,7 +301,6 @@ impl Anthropic {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         tools: Option<Vec<Tool>>,
@@ -322,7 +319,6 @@ impl Anthropic {
             temperature: temperature.unwrap_or(0.7),
             system: system.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
             timeout_seconds: timeout_seconds.unwrap_or(30),
-            stream: stream.unwrap_or(false),
             top_p,
             top_k,
             tools,
@@ -486,7 +482,7 @@ impl ChatProvider for Anthropic {
             max_tokens: Some(self.max_tokens),
             temperature: Some(self.temperature),
             system: Some(&self.system),
-            stream: Some(self.stream),
+            stream: Some(false),
             top_p: self.top_p,
             top_k: self.top_k,
             tools: anthropic_tools,

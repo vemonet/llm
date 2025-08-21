@@ -18,7 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("claude-3-haiku-20240307")
         .max_tokens(1000)
         .temperature(0.7)
-        .stream(true) // Enable streaming responses
         .build()
         .expect("Failed to build LLM (Anthropic)");
 

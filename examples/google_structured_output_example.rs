@@ -39,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("gemini-2.0-flash-exp") // Use Gemini Pro model
         .max_tokens(8512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         // Optional: Set system prompt
         .system("You are a helpful AI assistant. Please generate a random student using the provided JSON schema.")
         // Set JSON schema for structured output

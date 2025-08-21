@@ -78,8 +78,6 @@ pub struct Google {
     pub system: Option<String>,
     /// Request timeout in seconds
     pub timeout_seconds: Option<u64>,
-    /// Whether to stream responses
-    pub stream: Option<bool>,
     /// Top-p sampling parameter
     pub top_p: Option<f32>,
     /// Top-k sampling parameter
@@ -492,7 +490,6 @@ impl Google {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         json_schema: Option<StructuredOutputFormat>,
@@ -509,7 +506,6 @@ impl Google {
             temperature,
             system,
             timeout_seconds,
-            stream,
             top_p,
             top_k,
             json_schema,

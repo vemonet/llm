@@ -15,7 +15,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .api_key(api_key) // Set the API key
         .model("gpt-4o-search-preview") // Use gpt-4o-search-preview Turbo model
         .max_tokens(512) // Limit response length
-        .stream(false) // Disable streaming responses
         .openai_enable_web_search(true) // Enable web search
         .openai_web_search_context_size("low") // Set search context
         .openai_web_search_user_location_type("approximate") // Set search context type

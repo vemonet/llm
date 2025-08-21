@@ -16,7 +16,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("llama3.2:latest")
         .max_tokens(1000) // Set maximum response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .build()
         .expect("Failed to build LLM (Ollama)");
 

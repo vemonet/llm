@@ -18,7 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("gemini-2.0-flash")
         .max_tokens(1000)
         .temperature(0.7)
-        .stream(true) // Enable streaming responses
         .build()
         .expect("Failed to build LLM (Google)");
 

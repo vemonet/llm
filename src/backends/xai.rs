@@ -40,8 +40,6 @@ pub struct XAI {
     pub system: Option<String>,
     /// Request timeout duration in seconds
     pub timeout_seconds: Option<u64>,
-    /// Whether to enable streaming responses
-    pub stream: Option<bool>,
     /// Top-p sampling parameter for controlling response diversity
     pub top_p: Option<f32>,
     /// Top-k sampling parameter for controlling response diversity
@@ -258,7 +256,6 @@ impl XAI {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         embedding_encoding_format: Option<String>,
@@ -282,7 +279,6 @@ impl XAI {
             temperature,
             system,
             timeout_seconds,
-            stream,
             top_p,
             top_k,
             embedding_encoding_format,
@@ -364,7 +360,7 @@ impl ChatProvider for XAI {
             messages: xai_msgs,
             max_tokens: self.max_tokens,
             temperature: self.temperature,
-            stream: self.stream.unwrap_or(false),
+            stream: false,
             top_p: self.top_p,
             top_k: self.top_k,
             response_format,

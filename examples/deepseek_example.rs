@@ -17,7 +17,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("deepseek-reasoner") // Use DeepSeek Chat model
         .timeout_seconds(1200)
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .build()
         .expect("Failed to build LLM (DeepSeek)");
 

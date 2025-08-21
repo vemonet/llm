@@ -18,7 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("grok-2-latest")
         .max_tokens(1000)
         .temperature(0.7)
-        .stream(true) // Enable streaming responses
         .build()
         .expect("Failed to build LLM (X.AI)");
 

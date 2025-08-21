@@ -121,8 +121,6 @@ pub struct LLMBuilder {
     system: Option<String>,
     /// Request timeout duration in seconds
     timeout_seconds: Option<u64>,
-    /// Whether to enable streaming responses
-    stream: Option<bool>,
     /// Top-p (nucleus) sampling parameter
     top_p: Option<f32>,
     /// Top-k sampling parameter
@@ -266,9 +264,15 @@ impl LLMBuilder {
         self
     }
 
-    /// Enables or disables streaming responses.
-    pub fn stream(mut self, stream: bool) -> Self {
-        self.stream = Some(stream);
+    /// Enables or disables streaming responses, stub kept for compatibility.
+    ///
+    /// # Deprecation
+    /// This method is deprecated and will be removed in a future release.
+    /// Streaming is defined by the function called (e.g. `chat_stream`).
+    #[deprecated(
+        note = "This method is deprecated and will be removed in a future release. Streaming is defined by the function used (e.g. `chat_stream`)"
+    )]
+    pub fn stream(self, _stream: bool) -> Self {
         self
     }
 
@@ -601,12 +605,11 @@ impl LLMBuilder {
     /// - Required configuration like API keys are missing
     pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
         log::debug!(
-            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
+            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
             self.backend,
             self.model,
             self.tools.as_ref().map(|v| v.len()).unwrap_or(0),
             self.tool_choice,
-            self.stream,
             self.temperature,
             self.openai_enable_web_search,
             self.openai_web_search_context_size,
@@ -640,7 +643,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,
@@ -696,7 +698,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         tools,
@@ -725,7 +726,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.json_schema,
@@ -752,7 +752,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                     );
                     Box::new(deepseek)
                 }
@@ -776,7 +775,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,
@@ -806,7 +804,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                     );
@@ -832,7 +829,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.json_schema,
@@ -861,7 +857,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.tools,
@@ -894,7 +889,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         tools,
@@ -927,7 +921,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         tools,
@@ -974,7 +967,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,

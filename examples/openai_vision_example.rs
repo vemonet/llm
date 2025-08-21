@@ -18,7 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("gpt-4o") // Use GPT-3.5 Turbo model
         .max_tokens(1024) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .build()
         .expect("Failed to build LLM (OpenAI)");
 

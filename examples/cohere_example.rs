@@ -17,7 +17,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .system("Answer like a pirate.") // System instruction (sent with 'developer' role)
         .max_tokens(200) // Limit response length
         .temperature(0.7) // Set response creativity
-        .stream(false) // Disable streaming for this example
         .build()
         .expect("Failed to build LLM (Cohere)");
 

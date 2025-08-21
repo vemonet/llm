@@ -81,7 +81,6 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
         .max_tokens(512)
         .temperature(1.0)
         // Somehow with gpt-5 'temperature' does not support 0.7 with this model. Only the default (1) value is supported
-        .stream(false)
         .build()
         .expect("Failed to build LLM");
 
@@ -145,7 +144,6 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
         .temperature(1.0)
         .reasoning(true)
         .reasoning_effort(llm::chat::ReasoningEffort::Low)
-        .stream(false)
         .build()
         .expect("Failed to build LLM");
 
@@ -214,7 +212,6 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
         .model(config.model)
         .max_tokens(512)
         .temperature(1.0)
-        .stream(false)
         .function(
             FunctionBuilder::new("weather_function")
                 .description("Use this tool to get the weather in a specific city")
@@ -327,7 +324,6 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
         .model(llm_model)
         .temperature(1.0)
         .max_tokens(512)
-        .stream(false)
         .system("You are an AI assistant that can provide structured output to generate random students as example data. Respond in JSON format using the provided JSON schema.")
         .schema(schema) // Set JSON schema for structured output
         .build()
@@ -439,7 +435,6 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
         .model(config.model)
         .max_tokens(512)
         .temperature(1.0)
-        .stream(true)
         .build()
         .expect("Failed to build LLM");
 
@@ -591,9 +586,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     );
 
     // Test no tool calls in streaming mode
-    let messages = vec![ChatMessage::user()
-        .content("hello")
-        .build()];    // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
+    let messages = vec![ChatMessage::user().content("hello").build()]; // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
@@ -643,7 +636,6 @@ async fn test_chat_stream(#[case] config: &BackendTestConfig) {
         .model(config.model)
         .max_tokens(512)
         .temperature(1.0)
-        .stream(true)
         .build()
         .expect("Failed to build LLM");
     let messages = vec![ChatMessage::user().content("Hello.").build()];
@@ -747,7 +739,6 @@ async fn test_chat_openrouter() {
         .model("google/gemma-3n-e2b-it:free")
         .max_tokens(512)
         .temperature(0.7)
-        .stream(false)
         .build()
         .expect("Failed to build LLM");
 
@@ -797,7 +788,6 @@ async fn test_chat_with_web_search_openai() {
         .model("gpt-5-nano")
         .max_tokens(5000)
         // .temperature(0.7)
-        .stream(false)
         .openai_enable_web_search(true)
         .build()
         .expect("Failed to build LLM");

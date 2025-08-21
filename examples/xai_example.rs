@@ -16,7 +16,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("grok-2-latest") // Use Grok-2 model
         .max_tokens(512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .build()
         .expect("Failed to build LLM (xAI)");
 
