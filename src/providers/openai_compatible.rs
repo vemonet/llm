@@ -4,6 +4,7 @@
 //! across multiple providers like OpenAI, Mistral, XAI, Groq, DeepSeek, etc.
 
 use crate::error::LLMError;
+use crate::FunctionCall;
 use crate::{
     chat::ChatResponse,
     chat::{
@@ -83,23 +84,9 @@ pub struct OpenAIChatMessage<'a> {
     )]
     pub content: Option<Either<Vec<OpenAIMessageContent<'a>>, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<OpenAIFunctionCall<'a>>>,
+    pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct OpenAIFunctionPayload {
-    pub name: String,
-    pub arguments: String,
-}
-
-#[derive(Serialize, Debug)]
-pub struct OpenAIFunctionCall<'a> {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub content_type: &'a str,
-    pub function: OpenAIFunctionPayload,
 }
 
 #[derive(Serialize, Debug)]
@@ -206,6 +193,8 @@ pub struct ChatStreamChoice {
 #[derive(Deserialize, Debug)]
 pub struct ChatStreamDelta {
     pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl From<StructuredOutputFormat> for OpenAIResponseFormat {
@@ -585,12 +574,12 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
         },
         tool_calls: match &chat_msg.message_type {
             MessageType::ToolUse(calls) => {
-                let owned_calls: Vec<OpenAIFunctionCall> = calls
+                let owned_calls: Vec<ToolCall> = calls
                     .iter()
-                    .map(|c| OpenAIFunctionCall {
+                    .map(|c| ToolCall {
                         id: c.id.clone(),
-                        content_type: "function",
-                        function: OpenAIFunctionPayload {
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
                             name: c.function.name.clone(),
                             arguments: c.function.arguments.clone(),
                         },
@@ -603,79 +592,113 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
     }
 }
 
+// TODO: use scan instead of Arc Mutex?
 /// Creates a structured SSE stream that returns `StreamResponse` objects
+///
+/// Buffer required because some providers can send the JSON for a tool in 2 different chunks
 pub fn create_struct_sse_stream(
     response: reqwest::Response,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
-    let stream = response
-        .bytes_stream()
-        .map(move |chunk| match chunk {
-            Ok(bytes) => {
-                let text = String::from_utf8_lossy(&bytes);
-                parse_sse_chunk(&text)
-            }
-            Err(e) => Err(LLMError::HttpError(e.to_string())),
-        })
-        .filter_map(|result| async move {
-            match result {
-                Ok(Some(response)) => Some(Ok(response)),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            }
-        });
-    Box::pin(stream)
-}
-
-/// Parse SSE chunk and convert to `StreamResponse` format
-pub fn parse_sse_chunk(chunk: &str) -> Result<Option<StreamResponse>, LLMError> {
-    let mut collected_content = String::new();
-    for line in chunk.lines() {
-        let line = line.trim();
-        if let Some(data) = line.strip_prefix("data: ") {
-            if data == "[DONE]" {
-                if collected_content.is_empty() {
-                    return Ok(None);
-                } else {
-                    return Ok(Some(StreamResponse {
-                        choices: vec![StreamChoice {
-                            delta: StreamDelta {
-                                content: Some(collected_content),
-                            },
-                        }],
-                        usage: None,
-                    }));
-                }
-            }
-            match serde_json::from_str::<ChatStreamChunk>(data) {
-                Ok(response) => {
-                    if let Some(usage) = response.usage {
-                        return Ok(Some(StreamResponse {
-                            choices: vec![StreamChoice {
-                                delta: StreamDelta { content: None },
-                            }],
-                            usage: Some(usage),
-                        }));
-                    }
-                    if let Some(choice) = response.choices.first() {
-                        if let Some(content) = &choice.delta.content {
-                            collected_content.push_str(content);
-                        }
-                    }
-                }
-                Err(_) => continue,
+    // NOTE: we need a buffer to accumulate JSON lines that are split across multiple SSE chunks
+    // which happens with tool calls for Mistral and Groq (at least)
+    struct SSEStreamParser {
+        json_buffer: String,
+        collected_content: String,
+        collected_tool_calls: Option<Vec<ToolCall>>,
+        usage: Option<Usage>,
+    }
+    impl SSEStreamParser {
+        fn new() -> Self {
+            Self {
+                json_buffer: String::new(),
+                collected_content: String::new(),
+                collected_tool_calls: None,
+                usage: None,
             }
         }
+        fn parse_line(&mut self, line: &str) -> Option<Result<StreamResponse, LLMError>> {
+            let line = line.trim();
+            if let Some(data) = line.strip_prefix("data: ") {
+                if data == "[DONE]" {
+                    let content = self.collected_content.clone();
+                    let tool_calls = self.collected_tool_calls.clone();
+                    if content.is_empty() && tool_calls.is_none() {
+                        return None;
+                    } else {
+                        // Send StreamResponse when DONE is received
+                        return Some(Ok(StreamResponse {
+                            choices: vec![StreamChoice {
+                                delta: StreamDelta {
+                                    content: if content.is_empty() {
+                                        None
+                                    } else {
+                                        Some(content)
+                                    },
+                                    tool_calls,
+                                },
+                            }],
+                            usage: self.usage.clone(),
+                        }));
+                    }
+                }
+                self.json_buffer.push_str(data);
+                if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
+                    if let Some(choice) = response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            self.collected_content.push_str(content);
+                        }
+                        if let Some(tool_calls) = &choice.delta.tool_calls {
+                            self.collected_tool_calls = Some(tool_calls.clone());
+                        }
+                    }
+                    if let Some(resp_usage) = response.usage {
+                        self.usage = Some(resp_usage);
+                    }
+                    self.json_buffer.clear();
+                }
+            } else if !line.is_empty() {
+                self.json_buffer.push_str(line);
+                if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
+                    if let Some(choice) = response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            self.collected_content.push_str(content);
+                        }
+                        if let Some(tool_calls) = &choice.delta.tool_calls {
+                            self.collected_tool_calls = Some(tool_calls.clone());
+                        }
+                    }
+                    if let Some(resp_usage) = response.usage {
+                        self.usage = Some(resp_usage);
+                    }
+                    self.json_buffer.clear();
+                }
+            }
+            None
+        }
     }
-    if collected_content.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(StreamResponse {
-            choices: vec![StreamChoice {
-                delta: StreamDelta {
-                    content: Some(collected_content),
-                },
-            }],
-            usage: None,
-        }))
-    }
+
+    use std::sync::{Arc, Mutex};
+    let bytes_stream = response.bytes_stream();
+    let parser = Arc::new(Mutex::new(SSEStreamParser::new()));
+
+    let stream = bytes_stream.filter_map({
+        move |chunk| {
+            let parser = Arc::clone(&parser);
+            async move {
+                match chunk {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        for line in text.lines() {
+                            if let Some(result) = parser.lock().unwrap().parse_line(line) {
+                                return Some(result);
+                            }
+                        }
+                        None
+                    }
+                    Err(e) => Some(Err(LLMError::HttpError(e.to_string()))),
+                }
+            }
+        }
+    });
+    Box::pin(stream)
 }

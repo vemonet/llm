@@ -56,6 +56,9 @@ pub struct StreamDelta {
     /// The incremental content, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    /// The incremental tool calls, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 /// Breakdown of completion tokens.

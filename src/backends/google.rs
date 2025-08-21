@@ -1146,7 +1146,10 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<crate::chat::StreamRespo
                     if content.is_some() || usage.is_some() {
                         return Ok(Some(crate::chat::StreamResponse {
                             choices: vec![crate::chat::StreamChoice {
-                                delta: crate::chat::StreamDelta { content },
+                                delta: crate::chat::StreamDelta {
+                                    content,
+                                    tool_calls: None,
+                                },
                             }],
                             usage,
                         }));

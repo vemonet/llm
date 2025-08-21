@@ -118,7 +118,6 @@ async fn test_chat(#[case] config: &BackendTestConfig) {
     }
 }
 
-
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
@@ -150,7 +149,9 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
         .build()
         .expect("Failed to build LLM");
 
-    let messages = vec![ChatMessage::user().content("What is France capital?").build()];
+    let messages = vec![ChatMessage::user()
+        .content("What is France capital?")
+        .build()];
     match llm.chat(&messages).await {
         Ok(response) => {
             assert!(
@@ -487,6 +488,131 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
             } else {
                 panic!("Expected usage data in response");
             }
+        }
+        Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
+    }
+}
+
+#[rstest]
+// #[case::openai(&BACKEND_CONFIGS[0])]
+#[case::mistral(&BACKEND_CONFIGS[1])]
+#[case::groq(&BACKEND_CONFIGS[3])]
+#[tokio::test]
+async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
+    let api_key = match std::env::var(config.env_key) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test test_{}_chat_stream_struct ... ignored, {} not set",
+                config.backend_name, config.env_key
+            );
+            return;
+        }
+    };
+    let llm = LLMBuilder::new()
+        .backend(config.backend.clone())
+        .api_key(api_key)
+        .model(config.model)
+        .function(
+            FunctionBuilder::new("weather_function")
+                .description("Use this tool to get the weather in a specific city")
+                .param(
+                    ParamBuilder::new("city")
+                        .type_of("string")
+                        .description("The city to get the weather for"),
+                )
+                .required(vec!["city".to_string()]),
+        )
+        .build()
+        .expect("Failed to build LLM");
+
+    // Test tool calls in streaming mode
+    let messages = vec![ChatMessage::user()
+        .content("What's the weather in Paris?")
+        .build()];
+    let mut got_tool_calls = false;
+    // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
+    match llm.chat_stream_struct(&messages).await {
+        Ok(mut stream) => {
+            let mut complete_text = String::new();
+            // NOTE: groq and cohere do not return usage in stream responses
+            let mut usage_data = None;
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(stream_response) => {
+                        if let Some(choice) = stream_response.choices.first() {
+                            if let Some(tc) = &choice.delta.tool_calls {
+                                got_tool_calls = !tc.is_empty();
+                            }
+                        }
+                        if let Some(choice) = stream_response.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                complete_text.push_str(content);
+                            }
+                        }
+                        if let Some(usage) = stream_response.usage {
+                            usage_data = Some(usage);
+                        }
+                    }
+                    Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
+                }
+            }
+            assert!(
+                complete_text.is_empty(),
+                "Expected response message, got empty text"
+            );
+            if config.backend_name == "groq" || config.backend_name == "cohere" {
+                // Groq and Cohere do not return usage in streamed chat responses
+                assert!(
+                    usage_data.is_none(),
+                    "Expected no usage data for Groq/Cohere"
+                );
+            } else if let Some(usage) = usage_data {
+                assert!(
+                    usage.prompt_tokens > 0,
+                    "Expected prompt tokens > 0, got {}",
+                    usage.prompt_tokens
+                );
+                assert!(
+                    usage.total_tokens > 0,
+                    "Expected total tokens > 0, got {}",
+                    usage.total_tokens
+                );
+            } else {
+                panic!("Expected usage data in response");
+            }
+        }
+        Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
+    }
+    assert!(
+        got_tool_calls,
+        "Expected tool calls in response, got none for {}",
+        config.backend_name
+    );
+
+    // Test no tool calls in streaming mode
+    let messages = vec![ChatMessage::user()
+        .content("hello")
+        .build()];    // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
+    match llm.chat_stream_struct(&messages).await {
+        Ok(mut stream) => {
+            let mut complete_text = String::new();
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(stream_response) => {
+                        if let Some(choice) = stream_response.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                complete_text.push_str(content);
+                            }
+                        }
+                    }
+                    Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
+                }
+            }
+            assert!(
+                !complete_text.is_empty(),
+                "Expected response message, got empty text"
+            );
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
