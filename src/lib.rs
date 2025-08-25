@@ -113,7 +113,7 @@ pub trait LLMProvider:
 #[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
 pub struct ToolCall {
     /// The ID of the tool call.
-    pub id: String,
+    pub id: Option<String>,
     /// The type of the tool call (defaults to "function" if not provided).
     #[serde(rename = "type", default = "default_call_type")]
     pub call_type: String,
@@ -130,7 +130,8 @@ fn default_call_type() -> String {
 #[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
 pub struct FunctionCall {
     /// The name of the function to call.
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// The arguments to pass to the function, typically serialized as a JSON string.
     pub arguments: String,
 }
@@ -140,7 +141,7 @@ impl std::fmt::Display for ToolCall {
         write!(
             f,
             "{{\n  \"id\": \"{}\",\n  \"type\": \"{}\",\n  \"function\": {}\n}}",
-            self.id, self.call_type, self.function
+            self.id.as_deref().unwrap_or(""), self.call_type, self.function
         )
     }
 }
@@ -150,7 +151,7 @@ impl std::fmt::Display for FunctionCall {
         write!(
             f,
             "{{\n  \"name\": \"{}\",\n  \"arguments\": {}\n}}",
-            self.name, self.arguments
+            self.name.as_deref().unwrap_or(""), self.arguments
         )
     }
 }

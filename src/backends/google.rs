@@ -245,10 +245,10 @@ impl ChatResponse for GoogleChatResponse {
                 .iter()
                 .filter_map(|part| {
                     part.function_call.as_ref().map(|f| ToolCall {
-                        id: format!("call_{}", f.name),
+                        id: Some(format!("call_{}", f.name)),
                         call_type: "function".to_string(),
                         function: FunctionCall {
-                            name: f.name.clone(),
+                            name: Some(f.name.clone()),
                             arguments: serde_json::to_string(&f.args).unwrap_or_default(),
                         },
                     })
@@ -265,10 +265,10 @@ impl ChatResponse for GoogleChatResponse {
                 Some(
                     fc.iter()
                         .map(|f| ToolCall {
-                            id: format!("call_{}", f.name),
+                            id: Some(format!("call_{}", f.name)),
                             call_type: "function".to_string(),
                             function: FunctionCall {
-                                name: f.name.clone(),
+                                name: Some(f.name.clone()),
                                 arguments: serde_json::to_string(&f.args).unwrap_or_default(),
                             },
                         })
@@ -277,10 +277,10 @@ impl ChatResponse for GoogleChatResponse {
             } else {
                 c.content.function_call.as_ref().map(|f| {
                     vec![ToolCall {
-                        id: format!("call_{}", f.name),
+                        id: Some(format!("call_{}", f.name)),
                         call_type: "function".to_string(),
                         function: FunctionCall {
-                            name: f.name.clone(),
+                            name: Some(f.name.clone()),
                             arguments: serde_json::to_string(&f.args).unwrap_or_default(),
                         },
                     }]
@@ -572,7 +572,7 @@ impl ChatProvider for Google {
                         .iter()
                         .map(|call| {
                             GoogleContentPart::FunctionCall(GoogleFunctionCall {
-                                name: call.function.name.clone(),
+                                name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                 args: serde_json::from_str(&call.function.arguments)
                                     .unwrap_or(serde_json::Value::Null),
                             })
@@ -580,15 +580,14 @@ impl ChatProvider for Google {
                         .collect(),
                     MessageType::ToolResult(result) => result
                         .iter()
-                        .map(|result| {
+                        .map(|call| {
                             let parsed_args =
-                                serde_json::from_str::<Value>(&result.function.arguments)
+                                serde_json::from_str::<Value>(&call.function.arguments)
                                     .unwrap_or(serde_json::Value::Null);
-
                             GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
-                                name: result.function.name.clone(),
+                                name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                 response: GoogleFunctionResponseContent {
-                                    name: result.function.name.clone(),
+                                    name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                     content: parsed_args,
                                 },
                             })
@@ -740,7 +739,7 @@ impl ChatProvider for Google {
                         .iter()
                         .map(|call| {
                             GoogleContentPart::FunctionCall(GoogleFunctionCall {
-                                name: call.function.name.clone(),
+                                name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                 args: serde_json::from_str(&call.function.arguments)
                                     .unwrap_or(serde_json::Value::Null),
                             })
@@ -748,15 +747,15 @@ impl ChatProvider for Google {
                         .collect(),
                     MessageType::ToolResult(result) => result
                         .iter()
-                        .map(|result| {
+                        .map(|call| {
                             let parsed_args =
-                                serde_json::from_str::<Value>(&result.function.arguments)
+                                serde_json::from_str::<Value>(&call.function.arguments)
                                     .unwrap_or(serde_json::Value::Null);
 
                             GoogleContentPart::FunctionResponse(GoogleFunctionResponse {
-                                name: result.function.name.clone(),
+                                name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                 response: GoogleFunctionResponseContent {
-                                    name: result.function.name.clone(),
+                                    name: call.function.name.as_deref().unwrap_or_default().to_string(),
                                     content: parsed_args,
                                 },
                             })

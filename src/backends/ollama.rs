@@ -139,10 +139,10 @@ impl ChatResponse for OllamaResponse {
             msg.tool_calls.as_ref().map(|tcs| {
                 tcs.iter()
                     .map(|tc| ToolCall {
-                        id: format!("call_{}", tc.function.name),
+                        id: Some(format!("call_{}", tc.function.name)),
                         call_type: "function".to_string(),
                         function: FunctionCall {
-                            name: tc.function.name.clone(),
+                            name: Some(tc.function.name.clone()),
                             arguments: serde_json::to_string(&tc.function.arguments)
                                 .unwrap_or_default(),
                         },

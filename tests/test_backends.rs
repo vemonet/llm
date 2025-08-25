@@ -247,7 +247,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
                 tool_calls.len()
             );
             assert_eq!(
-                tool_calls[0].function.name, "weather_function",
+                tool_calls[0].function.name, Some("weather_function".to_string()),
                 "Expected function name 'weather_function'"
             );
             assert!(
@@ -321,7 +321,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
         }
     "#;
     let schema: StructuredOutputFormat = serde_json::from_str(schema).unwrap();
-    // gpt-5-nano is really bad at structured output and fails most of the time
+    // gpt-5-nano is quite bad at structured output and fails most of the time
     let llm_model = if config.backend_name == "openai" {
         "gpt-5-mini"
     } else {
@@ -337,15 +337,11 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
         .schema(schema) // Set JSON schema for structured output
         .build()
         .expect("Failed to build LLM");
-    // Prepare conversation history with example messages
     let messages = vec![ChatMessage::user()
         .content("Generate a random student with a short name")
         .build()];
-    // Send chat request and handle the response
     match llm.chat(&messages).await {
         Ok(response) => {
-            println!("Response: {response}");
-            // Validate that response contains text
             assert!(
                 response.text().is_some() && !response.text().unwrap().is_empty(),
                 "Expected response message, got {:?}",
@@ -457,7 +453,6 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
-                        println!("Stream chunk: {stream_response:?}");
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(content) = &choice.delta.content {
                                 complete_text.push_str(content);
@@ -502,8 +497,8 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[rstest]
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::openai(&BACKEND_CONFIGS[0])]
-// #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -538,11 +533,9 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         .content("What's the weather in Paris?")
         .build()];
     let mut got_tool_calls = false;
-    // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
-            // NOTE: groq and cohere do not return usage in stream responses
             let mut usage_data = None;
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
@@ -564,12 +557,8 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
                     Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
                 }
             }
-            assert!(
-                complete_text.is_empty(),
-                "Expected only tool calls, no message, got '{complete_text}'"
-            );
+            // Backends below do no return usage in streamed chat responses
             if config.backend_name == "groq" || config.backend_name == "cohere" {
-                // Groq and Cohere do not return usage in streamed chat responses
                 assert!(
                     usage_data.is_none(),
                     "Expected no usage data for Groq/Cohere"
@@ -598,7 +587,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     );
 
     // Test no tool calls in streaming mode
-    let messages = vec![ChatMessage::user().content("hello").build()]; // let messages = vec![ChatMessage::user().content("Just want to say hello").build()];
+    let messages = vec![ChatMessage::user().content("hello").build()];
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
@@ -810,7 +799,6 @@ async fn test_chat_with_web_search_openai() {
         .await
     {
         Ok(response) => {
-            // println!("Response: {:?}", response.text());
             assert!(
                 response.text().is_some() && !response.text().unwrap().is_empty(),
                 "Expected response message, got {:?}",

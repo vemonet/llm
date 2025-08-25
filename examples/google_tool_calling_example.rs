@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tool_calls) = response.tool_calls() {
         println!("Tool calls requested:");
         for call in &tool_calls {
-            println!("Function: {}", call.function.name);
+            println!("Function: {:?}", call.function.name);
             println!("Arguments: {}", call.function.arguments);
 
             let result = process_tool_call(call)?;
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn process_tool_call(
     tool_call: &ToolCall,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    match tool_call.function.name.as_str() {
+    match tool_call.function.name.as_deref().unwrap_or_default() {
         "schedule_meeting" => {
             let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
 

@@ -4,7 +4,7 @@
 
 use crate::chat::Usage;
 use crate::providers::openai_compatible::{
-    create_struct_sse_stream, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
+    create_sse_stream, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
     OpenAIProviderConfig, OpenAIResponseFormat, OpenAIStreamOptions,
 };
 use crate::{
@@ -528,7 +528,7 @@ impl ChatProvider for OpenAI {
                 raw_response: error_text,
             });
         }
-        Ok(create_struct_sse_stream(response))
+        Ok(create_sse_stream(response))
     }
 }
 

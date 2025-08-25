@@ -112,7 +112,7 @@ struct AzureOpenAIFunctionCall<'a> {
 impl<'a> From<&'a FunctionCall> for AzureOpenAIFunctionCall<'a> {
     fn from(value: &'a FunctionCall) -> Self {
         Self {
-            name: &value.name,
+            name: value.name.as_deref().unwrap_or("") ,
             arguments: &value.arguments,
         }
     }
@@ -129,7 +129,7 @@ struct AzureOpenAIToolCall<'a> {
 impl<'a> From<&'a ToolCall> for AzureOpenAIToolCall<'a> {
     fn from(value: &'a ToolCall) -> Self {
         Self {
-            id: &value.id,
+            id: value.id.as_deref().unwrap_or(""),
             content_type: "function",
             function: AzureOpenAIFunctionCall::from(&value.function),
         }
@@ -413,7 +413,7 @@ impl ChatProvider for AzureOpenAI {
                         // Clone strings to own them
                         AzureOpenAIChatMessage {
                             role: "tool",
-                            tool_call_id: Some(result.id.clone()),
+                            tool_call_id: result.id.clone(),
                             tool_calls: None,
                             content: Some(Right(result.function.arguments.clone())),
                         },

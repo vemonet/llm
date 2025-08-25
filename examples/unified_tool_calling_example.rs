@@ -160,7 +160,7 @@ async fn run_simple_scenario(llm: &Box<dyn LLMProvider>) -> Result<(), Box<dyn E
         println!("\nModel is using tools: {}", tool_calls.len());
 
         for call in &tool_calls {
-            println!("Tool call: {}", call.function.name);
+            println!("Tool call: {:?}", call.function.name);
             println!("Arguments: {}\n", call.function.arguments);
 
             // Process the tool call
@@ -315,7 +315,7 @@ async fn test_tool_choice(
     if let Some(tool_calls) = response.tool_calls() {
         println!("Tools called:");
         for call in tool_calls {
-            println!("- {}", call.function.name);
+            println!("- {:?}", call.function.name);
         }
     } else {
         println!("No tools called");
@@ -354,7 +354,7 @@ async fn await_tool_response(
         let mut tool_results = Vec::new();
 
         for call in &tool_calls {
-            println!("Tool call: {}", call.function.name);
+            println!("Tool call: {:?}", call.function.name);
             println!("Arguments: {}", call.function.arguments);
 
             // Process the tool call
@@ -405,7 +405,7 @@ fn process_tool_call(tool_call: &ToolCall) -> Result<Value, Box<dyn Error>> {
     let args: Value = serde_json::from_str(&tool_call.function.arguments)?;
 
     // Generate a response based on the tool type
-    match tool_call.function.name.as_str() {
+    match tool_call.function.name.as_deref().unwrap_or_default() {
         "get_weather" => {
             let location = args["location"].as_str().unwrap_or("unknown location");
 

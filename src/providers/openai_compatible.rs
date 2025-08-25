@@ -181,6 +181,7 @@ pub struct OpenAIStreamOptions {
 #[derive(Deserialize, Debug)]
 pub struct ChatStreamChunk {
     pub choices: Vec<ChatStreamChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
 }
 
@@ -191,6 +192,7 @@ pub struct ChatStreamChoice {
 
 #[derive(Deserialize, Debug)]
 pub struct ChatStreamDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
@@ -323,7 +325,7 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
                         .iter()
                         .map(|result| OpenAIChatMessage {
                             role: "tool",
-                            tool_call_id: Some(result.id.clone()),
+                            tool_call_id: result.id.clone(),
                             tool_calls: None,
                             content: Some(Right(result.function.arguments.clone())),
                         })
@@ -543,7 +545,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 raw_response: error_text,
             });
         }
-        Ok(create_struct_sse_stream(response))
+        Ok(create_sse_stream(response))
     }
 }
 
@@ -593,7 +595,7 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
 /// Creates a structured SSE stream that returns `StreamResponse` objects
 ///
 /// Buffer required because some providers can send the JSON for a tool in 2 different chunks
-pub fn create_struct_sse_stream(
+pub fn create_sse_stream(
     response: reqwest::Response,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
     // NOTE: we need a buffer to accumulate JSON lines that are split across multiple SSE chunks
@@ -614,10 +616,9 @@ pub fn create_struct_sse_stream(
         fn parse_line(&mut self, line: &str) -> Vec<Result<StreamResponse, LLMError>> {
             let mut results = Vec::new();
             let line = line.trim();
-            println!("SSE line: {line}");
             if let Some(data) = line.strip_prefix("data: ") {
                 if data == "[DONE]" {
-                    // Only emit a final usage if present
+                    // Only emit a final response with usage if present
                     if let Some(usage) = self.usage.clone() {
                         results.push(Ok(StreamResponse {
                             choices: vec![StreamChoice {
@@ -655,7 +656,7 @@ pub fn create_struct_sse_stream(
                                         tool_calls,
                                     },
                                 }],
-                                usage: self.usage.clone(),
+                                usage: None,
                             }));
                         }
                     }
@@ -685,7 +686,7 @@ pub fn create_struct_sse_stream(
                                         tool_calls,
                                     },
                                 }],
-                                usage: self.usage.clone(),
+                                usage: None,
                             }));
                         }
                     }

@@ -237,10 +237,10 @@ impl ChatResponse for AnthropicCompleteResponse {
             .filter_map(|c| {
                 if c.content_type == Some("tool_use".to_string()) {
                     Some(ToolCall {
-                        id: c.id.clone().unwrap_or_default(),
+                        id: c.id.clone(),
                         call_type: "function".to_string(),
                         function: FunctionCall {
-                            name: c.name.clone().unwrap_or_default(),
+                            name: c.name.clone(),
                             arguments: serde_json::to_string(
                                 &c.input.clone().unwrap_or(serde_json::Value::Null),
                             )
@@ -406,12 +406,12 @@ impl ChatProvider for Anthropic {
                             text: None,
                             image_url: None,
                             source: None,
-                            tool_use_id: Some(c.id.clone()),
+                            tool_use_id: c.id.clone(),
                             tool_input: Some(
                                 serde_json::from_str(&c.function.arguments)
                                     .unwrap_or(c.function.arguments.clone().into()),
                             ),
-                            tool_name: Some(c.function.name.clone()),
+                            tool_name: c.function.name.clone(),
                             tool_result_id: None,
                             tool_output: None,
                         })
@@ -426,7 +426,7 @@ impl ChatProvider for Anthropic {
                             tool_use_id: None,
                             tool_input: None,
                             tool_name: None,
-                            tool_result_id: Some(r.id.clone()),
+                            tool_result_id: r.id.clone(),
                             tool_output: Some(r.function.arguments.clone()),
                         })
                         .collect(),

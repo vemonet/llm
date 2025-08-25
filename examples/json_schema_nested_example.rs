@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tool_calls) = response.tool_calls() {
         println!("Complex nested schema handled successfully!");
         for call in &tool_calls {
-            println!("Function: {}", call.function.name);
+            println!("Function: {:?}", call.function.name);
             let args: serde_json::Value = serde_json::from_str(&call.function.arguments)?;
             println!("Nested arguments: {}", serde_json::to_string_pretty(&args)?);
 
@@ -153,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn process_tool_call(
     tool_call: &ToolCall,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    match tool_call.function.name.as_str() {
+    match tool_call.function.name.as_deref().unwrap_or_default() {
         "create_event" => {
             let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
 
