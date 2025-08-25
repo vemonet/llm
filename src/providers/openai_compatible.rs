@@ -601,17 +601,20 @@ pub fn create_struct_sse_stream(
     struct SSEStreamParser {
         json_buffer: String,
         usage: Option<Usage>,
+        seen_first_json: bool,
     }
     impl SSEStreamParser {
         fn new() -> Self {
             Self {
                 json_buffer: String::new(),
                 usage: None,
+                seen_first_json: false,
             }
         }
         fn parse_line(&mut self, line: &str) -> Vec<Result<StreamResponse, LLMError>> {
             let mut results = Vec::new();
             let line = line.trim();
+            println!("SSE line: {line}");
             if let Some(data) = line.strip_prefix("data: ") {
                 if data == "[DONE]" {
                     // Only emit a final usage if present
@@ -627,6 +630,13 @@ pub fn create_struct_sse_stream(
                         }));
                     }
                     return results;
+                }
+                // Ignore initial non-JSON lines until first '{' is seen, needed for some providers that are streaming non-JSON preamble
+                if !self.seen_first_json && !data.trim_start().starts_with('{') {
+                    return results;
+                }
+                if data.trim_start().starts_with('{') {
+                    self.seen_first_json = true;
                 }
                 self.json_buffer.push_str(data);
                 if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
@@ -652,6 +662,12 @@ pub fn create_struct_sse_stream(
                     self.json_buffer.clear();
                 }
             } else if !line.is_empty() {
+                if !self.seen_first_json && !line.trim_start().starts_with('{') {
+                    return results;
+                }
+                if line.trim_start().starts_with('{') {
+                    self.seen_first_json = true;
+                }
                 // Handle continuation lines without "data: " prefix
                 self.json_buffer.push_str(line);
                 if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
@@ -661,7 +677,6 @@ pub fn create_struct_sse_stream(
                     for choice in &response.choices {
                         let content = choice.delta.content.clone();
                         let tool_calls = choice.delta.tool_calls.clone();
-                        // if content.as_ref().map(|c| !c.is_empty()).unwrap_or(false) || tool_calls.is_some() {
                         if content.is_some() || tool_calls.is_some() {
                             results.push(Ok(StreamResponse {
                                 choices: vec![StreamChoice {
@@ -679,6 +694,10 @@ pub fn create_struct_sse_stream(
             }
             results
         }
+        // TODO: OpenRouter and OpenAI are streaming tool calls differently
+        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":"call_b74c498319114af884d3924c","index":0,"type":"function","function":{"name":"weather_function","arguments":""}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":null,"index":0,"type":"function","function":{"name":null,"arguments":"{\"city"}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":null,"index":0,"type":"function","function":{"name":null,"arguments":"\":"}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
     }
 
     use std::sync::{Arc, Mutex};

@@ -53,6 +53,12 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "claude-3-5-haiku-20241022",
         backend_name: "anthropic",
     },
+    BackendTestConfig {
+        backend: LLMBackend::OpenRouter,
+        env_key: "OPENROUTER_API_KEY",
+        model: "moonshotai/kimi-k2:free",
+        backend_name: "openrouter",
+    },
 ];
 
 #[rstest]
@@ -62,6 +68,7 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -194,6 +201,7 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -274,6 +282,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -417,6 +426,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
 // #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -447,6 +457,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
+                        println!("Stream chunk: {stream_response:?}");
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(content) = &choice.delta.content {
                                 complete_text.push_str(content);
@@ -489,9 +500,10 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 }
 
 #[rstest]
-// #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
+// #[case::openai(&BACKEND_CONFIGS[0])]
+// #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -554,7 +566,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
             }
             assert!(
                 complete_text.is_empty(),
-                "Expected response message, got empty text"
+                "Expected only tool calls, no message, got '{complete_text}'"
             );
             if config.backend_name == "groq" || config.backend_name == "cohere" {
                 // Groq and Cohere do not return usage in streamed chat responses
@@ -618,6 +630,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -724,7 +737,7 @@ async fn test_embedding(#[case] config: &BackendTestConfig) {
 /// to query OpenAI-compatible providers like OpenRouter
 #[rstest]
 #[tokio::test]
-async fn test_chat_openrouter() {
+async fn test_chat_custom_url_openrouter() {
     let api_key = match std::env::var("OPENROUTER_API_KEY") {
         Ok(key) => key,
         Err(_) => {

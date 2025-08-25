@@ -167,6 +167,10 @@ fn get_api_key(backend: &LLMBackend, args: &CliArgs) -> Option<String> {
                 .get("MISTRAL_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("MISTRAL_API_KEY").ok()),
+            LLMBackend::OpenRouter => store
+                .get("OPENROUTER_API_KEY")
+                .cloned()
+                .or_else(|| std::env::var("OPENROUTER_API_KEY").ok()),
         }
     })
 }

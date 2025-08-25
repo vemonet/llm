@@ -47,6 +47,8 @@ pub enum LLMBackend {
     Cohere,
     /// Mistral API provider
     Mistral,
+    /// OpenRouter API provider
+    OpenRouter,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -868,6 +870,39 @@ impl LLMBuilder {
                         self.enable_parallel_tool_use,
                     );
                     Box::new(groq)
+                }
+            }
+            LLMBackend::OpenRouter => {
+                #[cfg(not(feature = "openrouter"))]
+                return Err(LLMError::InvalidRequest(
+                    "OpenRouter feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "openrouter")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for OpenRouter".to_string())
+                    })?;
+
+                    let openrouter = crate::backends::openrouter::OpenRouter::with_config(
+                        api_key,
+                        self.base_url,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.top_p,
+                        self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        self.enable_parallel_tool_use,
+                    );
+                    Box::new(openrouter)
                 }
             }
             LLMBackend::Cohere => {
