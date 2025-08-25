@@ -25,7 +25,6 @@
 //!     Some(0.7), // Temperature
 //!     None, // Default timeout
 //!     None, // No system prompt
-//!     None, // No streaming
 //!     None, // Default top_p
 //!     None, // Default top_k
 //!     None, // No JSON schema
