@@ -3,15 +3,17 @@
 //! This module provides a generic base for OpenAI-compatible APIs that can be reused
 //! across multiple providers like OpenAI, Mistral, XAI, Groq, DeepSeek, etc.
 
+use crate::chat::{StreamChoice, StreamDelta};
 use crate::error::LLMError;
 use crate::FunctionCall;
 use crate::{
     chat::ChatResponse,
     chat::{
-        ChatMessage, ChatProvider, ChatRole, MessageType, StreamChoice, StreamDelta,
+        ChatMessage, ChatProvider, ChatRole, MessageType,
         StreamResponse, StructuredOutputFormat, Tool, ToolChoice, Usage,
     },
     ToolCall,
+    default_call_type,
 };
 use async_trait::async_trait;
 use either::*;
@@ -179,21 +181,44 @@ pub struct OpenAIStreamOptions {
 
 /// Streaming response structures
 #[derive(Deserialize, Debug)]
-pub struct ChatStreamChunk {
-    pub choices: Vec<ChatStreamChoice>,
+pub struct StreamChunk {
+    pub choices: Vec<OpenAIStreamChoice>,
     pub usage: Option<Usage>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct ChatStreamChoice {
-    pub delta: ChatStreamDelta,
+pub struct OpenAIStreamChoice {
+    pub delta: OpenAIStreamDelta,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct ChatStreamDelta {
+pub struct OpenAIStreamDelta {
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
+    pub tool_calls: Option<Vec<StreamToolCall>>,
+}
+
+/// Tool call represents a function call that an LLM wants to make.
+/// This is a standardized structure used across all providers.
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
+pub struct StreamToolCall {
+    /// The ID of the tool call.
+    pub id: Option<String>,
+    /// The type of the tool call (defaults to "function" if not provided).
+    #[serde(rename = "type", default = "default_call_type")]
+    pub call_type: String,
+    /// The function to call.
+    pub function: StreamFunctionCall,
+}
+
+/// FunctionCall contains details about which function to call and with what arguments.
+#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq)]
+pub struct StreamFunctionCall {
+    /// The name of the function to call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The arguments to pass to the function, typically serialized as a JSON string.
+    pub arguments: String,
 }
 
 impl From<StructuredOutputFormat> for OpenAIResponseFormat {
@@ -543,7 +568,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 raw_response: error_text,
             });
         }
-        Ok(create_struct_sse_stream(response))
+        Ok(create_sse_stream(response))
     }
 }
 
@@ -593,7 +618,7 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
 /// Creates a structured SSE stream that returns `StreamResponse` objects
 ///
 /// Buffer required because some providers can send the JSON for a tool in 2 different chunks
-pub fn create_struct_sse_stream(
+pub fn create_sse_stream(
     response: reqwest::Response,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
     // NOTE: we need a buffer to accumulate JSON lines that are split across multiple SSE chunks
@@ -614,10 +639,9 @@ pub fn create_struct_sse_stream(
         fn parse_line(&mut self, line: &str) -> Vec<Result<StreamResponse, LLMError>> {
             let mut results = Vec::new();
             let line = line.trim();
-            println!("SSE line: {line}");
             if let Some(data) = line.strip_prefix("data: ") {
                 if data == "[DONE]" {
-                    // Only emit a final usage if present
+                    // Only emit a final chunk with usage if present
                     if let Some(usage) = self.usage.clone() {
                         results.push(Ok(StreamResponse {
                             choices: vec![StreamChoice {
@@ -639,13 +663,29 @@ pub fn create_struct_sse_stream(
                     self.seen_first_json = true;
                 }
                 self.json_buffer.push_str(data);
-                if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
+                if let Ok(response) = serde_json::from_str::<StreamChunk>(&self.json_buffer) {
                     if let Some(resp_usage) = response.usage {
                         self.usage = Some(resp_usage);
                     }
                     for choice in &response.choices {
                         let content = choice.delta.content.clone();
-                        let tool_calls = choice.delta.tool_calls.clone();
+                        let tool_calls = choice
+                            .delta
+                            .tool_calls
+                            .clone()
+                            .map(|calls| {
+                                calls
+                                    .into_iter()
+                                    .map(|c| ToolCall {
+                                        id: c.id.unwrap_or_default(),
+                                        call_type: c.call_type,
+                                        function: FunctionCall {
+                                            name: c.function.name.unwrap_or_default(),
+                                            arguments: c.function.arguments,
+                                        },
+                                    })
+                                    .collect()
+                            });
                         // Emit each token or tool call as soon as it arrives
                         if (content.is_some()) || tool_calls.is_some() {
                             results.push(Ok(StreamResponse {
@@ -655,7 +695,7 @@ pub fn create_struct_sse_stream(
                                         tool_calls,
                                     },
                                 }],
-                                usage: self.usage.clone(),
+                                usage: None,
                             }));
                         }
                     }
@@ -670,13 +710,29 @@ pub fn create_struct_sse_stream(
                 }
                 // Handle continuation lines without "data: " prefix
                 self.json_buffer.push_str(line);
-                if let Ok(response) = serde_json::from_str::<ChatStreamChunk>(&self.json_buffer) {
+                if let Ok(response) = serde_json::from_str::<StreamChunk>(&self.json_buffer) {
                     if let Some(resp_usage) = response.usage {
                         self.usage = Some(resp_usage);
                     }
                     for choice in &response.choices {
                         let content = choice.delta.content.clone();
-                        let tool_calls = choice.delta.tool_calls.clone();
+                        let tool_calls = choice
+                            .delta
+                            .tool_calls
+                            .clone()
+                            .map(|calls| {
+                                calls
+                                    .into_iter()
+                                    .map(|c| ToolCall {
+                                        id: c.id.unwrap_or_default(),
+                                        call_type: c.call_type,
+                                        function: FunctionCall {
+                                            name: c.function.name.unwrap_or_default(),
+                                            arguments: c.function.arguments,
+                                        },
+                                    })
+                                    .collect()
+                            });
                         if content.is_some() || tool_calls.is_some() {
                             results.push(Ok(StreamResponse {
                                 choices: vec![StreamChoice {
@@ -685,7 +741,7 @@ pub fn create_struct_sse_stream(
                                         tool_calls,
                                     },
                                 }],
-                                usage: self.usage.clone(),
+                                usage: None,
                             }));
                         }
                     }

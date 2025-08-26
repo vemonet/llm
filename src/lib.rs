@@ -122,7 +122,7 @@ pub struct ToolCall {
 }
 
 /// Default value for call_type field in ToolCall
-fn default_call_type() -> String {
+pub fn default_call_type() -> String {
     "function".to_string()
 }
 
