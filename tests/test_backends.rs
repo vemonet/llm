@@ -344,7 +344,6 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
     // Send chat request and handle the response
     match llm.chat(&messages).await {
         Ok(response) => {
-            println!("Response: {response}");
             // Validate that response contains text
             assert!(
                 response.text().is_some() && !response.text().unwrap().is_empty(),
@@ -384,7 +383,6 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
                         "Expected 'is_student' to be a boolean, got: {:?}",
                         json["is_student"]
                     );
-                    println!("Successfully parsed JSON: {json}");
                 }
                 Err(e) => panic!(
                     "Failed to parse response as JSON for {}: {e}. Response: {response_text}",
@@ -457,7 +455,6 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
-                        println!("Stream chunk: {stream_response:?}");
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(content) = &choice.delta.content {
                                 complete_text.push_str(content);
@@ -500,10 +497,10 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 }
 
 #[rstest]
+#[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
-#[case::openai(&BACKEND_CONFIGS[0])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -545,6 +542,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
+                        println!("Stream chunk: {stream_response:?}");
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(tc) = &choice.delta.tool_calls {
                                 got_tool_calls = !tc.is_empty();
@@ -599,6 +597,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(stream_response) => {
+                        println!("Stream chunk: {stream_response:?}");
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(content) = &choice.delta.content {
                                 complete_text.push_str(content);

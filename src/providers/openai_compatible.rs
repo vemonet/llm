@@ -9,11 +9,10 @@ use crate::FunctionCall;
 use crate::{
     chat::ChatResponse,
     chat::{
-        ChatMessage, ChatProvider, ChatRole, MessageType,
-        StreamResponse, StructuredOutputFormat, Tool, ToolChoice, Usage,
+        ChatMessage, ChatProvider, ChatRole, MessageType, StreamResponse, StructuredOutputFormat,
+        Tool, ToolChoice, Usage,
     },
-    ToolCall,
-    default_call_type,
+    default_call_type, ToolCall,
 };
 use async_trait::async_trait;
 use either::*;
@@ -614,175 +613,111 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
     }
 }
 
-// TODO: use scan instead of Arc Mutex?
 /// Creates a structured SSE stream that returns `StreamResponse` objects
 ///
-/// Buffer required because some providers can send the JSON for a tool in 2 different chunks
+/// Buffer required to accumulate JSON payload lines that are split across multiple SSE chunks
 pub fn create_sse_stream(
     response: reqwest::Response,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
-    // NOTE: we need a buffer to accumulate JSON lines that are split across multiple SSE chunks
-    // which happens with tool calls for Mistral and Groq (at least)
     struct SSEStreamParser {
-        json_buffer: String,
+        event_buffer: String,
         usage: Option<Usage>,
-        seen_first_json: bool,
+        results: Vec<Result<StreamResponse, LLMError>>,
     }
     impl SSEStreamParser {
         fn new() -> Self {
             Self {
-                json_buffer: String::new(),
+                event_buffer: String::new(),
                 usage: None,
-                seen_first_json: false,
+                results: Vec::new(),
             }
         }
-        fn parse_line(&mut self, line: &str) -> Vec<Result<StreamResponse, LLMError>> {
-            let mut results = Vec::new();
-            let line = line.trim();
-            if let Some(data) = line.strip_prefix("data: ") {
-                if data == "[DONE]" {
-                    // Only emit a final chunk with usage if present
-                    if let Some(usage) = self.usage.clone() {
-                        results.push(Ok(StreamResponse {
+        /// Parse the accumulated event_buffer as one SSE event
+        fn parse_event(&mut self) {
+            let mut data_payload = String::new();
+            for line in self.event_buffer.lines() {
+                if let Some(data) = line.strip_prefix("data: ") {
+                    if data == "[DONE]" {
+                        if let Some(usage) = self.usage.clone() {
+                            self.results.push(Ok(StreamResponse {
+                                choices: vec![StreamChoice {
+                                    delta: StreamDelta {
+                                        content: None,
+                                        tool_calls: None,
+                                    },
+                                }],
+                                usage: Some(usage),
+                            }));
+                        }
+                        return;
+                    }
+                    data_payload.push_str(data);
+                } else {
+                    data_payload.push_str(line);
+                }
+            }
+            if data_payload.is_empty() {
+                return;
+            }
+            if let Ok(response) = serde_json::from_str::<StreamChunk>(&data_payload) {
+                if let Some(resp_usage) = response.usage.clone() {
+                    self.usage = Some(resp_usage);
+                }
+                for choice in &response.choices {
+                    let content = choice.delta.content.clone();
+                    // Map StreamToolCall (some fields are optional) to ToolCall
+                    let tool_calls = choice.delta.tool_calls.clone().map(|calls| {
+                        calls
+                            .into_iter()
+                            .map(|c| ToolCall {
+                                id: c.id.unwrap_or_default(),
+                                call_type: c.call_type,
+                                function: FunctionCall {
+                                    name: c.function.name.unwrap_or_default(),
+                                    arguments: c.function.arguments,
+                                },
+                            })
+                            .collect()
+                    });
+                    if content.is_some() || tool_calls.is_some() {
+                        self.results.push(Ok(StreamResponse {
                             choices: vec![StreamChoice {
                                 delta: StreamDelta {
-                                    content: None,
-                                    tool_calls: None,
+                                    content,
+                                    tool_calls,
                                 },
                             }],
-                            usage: Some(usage),
+                            usage: None,
                         }));
                     }
-                    return results;
-                }
-                // Ignore initial non-JSON lines until first '{' is seen, needed for some providers that are streaming non-JSON preamble
-                if !self.seen_first_json && !data.trim_start().starts_with('{') {
-                    return results;
-                }
-                if data.trim_start().starts_with('{') {
-                    self.seen_first_json = true;
-                }
-                self.json_buffer.push_str(data);
-                if let Ok(response) = serde_json::from_str::<StreamChunk>(&self.json_buffer) {
-                    if let Some(resp_usage) = response.usage {
-                        self.usage = Some(resp_usage);
-                    }
-                    for choice in &response.choices {
-                        let content = choice.delta.content.clone();
-                        let tool_calls = choice
-                            .delta
-                            .tool_calls
-                            .clone()
-                            .map(|calls| {
-                                calls
-                                    .into_iter()
-                                    .map(|c| ToolCall {
-                                        id: c.id.unwrap_or_default(),
-                                        call_type: c.call_type,
-                                        function: FunctionCall {
-                                            name: c.function.name.unwrap_or_default(),
-                                            arguments: c.function.arguments,
-                                        },
-                                    })
-                                    .collect()
-                            });
-                        // Emit each token or tool call as soon as it arrives
-                        if (content.is_some()) || tool_calls.is_some() {
-                            results.push(Ok(StreamResponse {
-                                choices: vec![StreamChoice {
-                                    delta: StreamDelta {
-                                        content,
-                                        tool_calls,
-                                    },
-                                }],
-                                usage: None,
-                            }));
-                        }
-                    }
-                    self.json_buffer.clear();
-                }
-            } else if !line.is_empty() {
-                if !self.seen_first_json && !line.trim_start().starts_with('{') {
-                    return results;
-                }
-                if line.trim_start().starts_with('{') {
-                    self.seen_first_json = true;
-                }
-                // Handle continuation lines without "data: " prefix
-                self.json_buffer.push_str(line);
-                if let Ok(response) = serde_json::from_str::<StreamChunk>(&self.json_buffer) {
-                    if let Some(resp_usage) = response.usage {
-                        self.usage = Some(resp_usage);
-                    }
-                    for choice in &response.choices {
-                        let content = choice.delta.content.clone();
-                        let tool_calls = choice
-                            .delta
-                            .tool_calls
-                            .clone()
-                            .map(|calls| {
-                                calls
-                                    .into_iter()
-                                    .map(|c| ToolCall {
-                                        id: c.id.unwrap_or_default(),
-                                        call_type: c.call_type,
-                                        function: FunctionCall {
-                                            name: c.function.name.unwrap_or_default(),
-                                            arguments: c.function.arguments,
-                                        },
-                                    })
-                                    .collect()
-                            });
-                        if content.is_some() || tool_calls.is_some() {
-                            results.push(Ok(StreamResponse {
-                                choices: vec![StreamChoice {
-                                    delta: StreamDelta {
-                                        content,
-                                        tool_calls,
-                                    },
-                                }],
-                                usage: None,
-                            }));
-                        }
-                    }
-                    self.json_buffer.clear();
                 }
             }
-            results
         }
-        // TODO: OpenRouter and OpenAI are streaming tool calls differently
-        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":"call_b74c498319114af884d3924c","index":0,"type":"function","function":{"name":"weather_function","arguments":""}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
-        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":null,"index":0,"type":"function","function":{"name":null,"arguments":"{\"city"}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
-        // data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"id":null,"index":0,"type":"function","function":{"name":null,"arguments":"\":"}}]},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
     }
 
-    use std::sync::{Arc, Mutex};
     let bytes_stream = response.bytes_stream();
-    let parser = Arc::new(Mutex::new(SSEStreamParser::new()));
-
-    let stream = bytes_stream.filter_map({
-        move |chunk| {
-            let parser = Arc::clone(&parser);
-            async move {
-                match chunk {
-                    Ok(bytes) => {
-                        let text = String::from_utf8_lossy(&bytes);
-                        let mut results = Vec::new();
-                        for line in text.lines() {
-                            let mut parsed = parser.lock().unwrap().parse_line(line);
-                            results.append(&mut parsed);
+    let stream = bytes_stream
+        .scan(SSEStreamParser::new(), |parser, chunk| {
+            let results = match chunk {
+                Ok(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    for line in text.lines() {
+                        let line = line.trim_end();
+                        if line.is_empty() {
+                            // Blank line: end of event, parse accumulated event_buffer
+                            parser.parse_event();
+                            parser.event_buffer.clear();
+                        } else {
+                            parser.event_buffer.push_str(line);
+                            parser.event_buffer.push('\n');
                         }
-                        // Emit each token/tool call as a separate stream item
-                        if !results.is_empty() {
-                            // Only emit one item per poll, so pop the first
-                            return Some(results.remove(0));
-                        }
-                        None
                     }
-                    Err(e) => Some(Err(LLMError::HttpError(e.to_string()))),
+                    parser.results.drain(..).collect::<Vec<_>>()
                 }
-            }
-        }
-    });
+                Err(e) => vec![Err(LLMError::HttpError(e.to_string()))],
+            };
+            futures::future::ready(Some(results))
+        })
+        .flat_map(futures::stream::iter);
     Box::pin(stream)
 }
