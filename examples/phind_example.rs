@@ -12,7 +12,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("Phind-70B") // Use Phind-70B model
         .max_tokens(512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .build()
         .expect("Failed to build LLM (Phind)");
 
@@ -31,8 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send chat request and handle the response
     match llm.chat(&messages).await {
-        Ok(text) => println!("Chat response:\n{}", text),
-        Err(e) => eprintln!("Chat error: {}", e),
+        Ok(text) => println!("Chat response:\n{text}"),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())

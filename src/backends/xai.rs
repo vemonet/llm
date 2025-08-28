@@ -40,8 +40,6 @@ pub struct XAI {
     pub system: Option<String>,
     /// Request timeout duration in seconds
     pub timeout_seconds: Option<u64>,
-    /// Whether to enable streaming responses
-    pub stream: Option<bool>,
     /// Top-p sampling parameter for controlling response diversity
     pub top_p: Option<f32>,
     /// Top-k sampling parameter for controlling response diversity
@@ -258,7 +256,6 @@ impl XAI {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         embedding_encoding_format: Option<String>,
@@ -282,7 +279,6 @@ impl XAI {
             temperature,
             system,
             timeout_seconds,
-            stream,
             top_p,
             top_k,
             embedding_encoding_format,
@@ -348,20 +344,23 @@ impl ChatProvider for XAI {
         let search_parameters = XaiSearchParameters {
             mode: self.xai_search_mode.clone(),
             sources: Some(vec![XaiSearchSource {
-                source_type: self.xai_search_source_type.clone().unwrap_or("web".to_string()),
+                source_type: self
+                    .xai_search_source_type
+                    .clone()
+                    .unwrap_or("web".to_string()),
                 excluded_websites: self.xai_search_excluded_websites.clone(),
             }]),
-            max_search_results: self.xai_search_max_results.clone(),
+            max_search_results: self.xai_search_max_results,
             from_date: self.xai_search_from_date.clone(),
             to_date: self.xai_search_to_date.clone(),
         };
-        
+
         let body = XAIChatRequest {
             model: &self.model,
             messages: xai_msgs,
             max_tokens: self.max_tokens,
             temperature: self.temperature,
-            stream: self.stream.unwrap_or(false),
+            stream: false,
             top_p: self.top_p,
             top_k: self.top_k,
             response_format,
@@ -425,7 +424,8 @@ impl ChatProvider for XAI {
     async fn chat_stream(
         &self,
         messages: &[ChatMessage],
-    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError> {
+    ) -> Result<std::pin::Pin<Box<dyn Stream<Item = Result<String, LLMError>> + Send>>, LLMError>
+    {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
         }
@@ -479,12 +479,15 @@ impl ChatProvider for XAI {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("X.AI API returned error status: {}", status),
+                message: format!("X.AI API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
 
-        Ok(crate::chat::create_sse_stream(response, parse_xai_sse_chunk))
+        Ok(crate::chat::create_sse_stream(
+            response,
+            parse_xai_sse_chunk,
+        ))
     }
 }
 
@@ -574,14 +577,12 @@ impl LLMProvider for XAI {}
 fn parse_xai_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     for line in chunk.lines() {
         let line = line.trim();
-        
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-            
+
+        if let Some(data) = line.strip_prefix("data: ") {
             if data == "[DONE]" {
                 return Ok(None);
             }
-            
+
             match serde_json::from_str::<XAIStreamResponse>(data) {
                 Ok(response) => {
                     if let Some(choice) = response.choices.first() {
@@ -595,6 +596,6 @@ fn parse_xai_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
             }
         }
     }
-    
+
     Ok(None)
 }

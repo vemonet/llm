@@ -39,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("llama3.1:latest")
         .max_tokens(1000) // Set maximum response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         .schema(schema) // Set JSON schema for structured output
         .system("You are a helpful AI assistant. Please generate a random student using the provided JSON schema.")
         .build()
@@ -52,8 +51,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send chat request and handle the response
     match llm.chat(&messages).await {
-        Ok(text) => println!("Ollama chat response:\n{}", text),
-        Err(e) => eprintln!("Chat error: {}", e),
+        Ok(text) => println!("Ollama chat response:\n{text}"),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())

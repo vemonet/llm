@@ -27,7 +27,6 @@ pub struct DeepSeek {
     pub temperature: Option<f32>,
     pub system: Option<String>,
     pub timeout_seconds: Option<u64>,
-    pub stream: Option<bool>,
     client: Client,
 }
 
@@ -53,7 +52,7 @@ struct DeepSeekChatResponse {
 
 impl std::fmt::Display for DeepSeekChatResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -90,7 +89,6 @@ impl DeepSeek {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
     ) -> Self {
         let mut builder = Client::builder();
         if let Some(sec) = timeout_seconds {
@@ -103,7 +101,6 @@ impl DeepSeek {
             temperature,
             system,
             timeout_seconds,
-            stream,
             client: builder.build().expect("Failed to build reqwest Client"),
         }
     }
@@ -150,7 +147,7 @@ impl ChatProvider for DeepSeek {
             model: &self.model,
             messages: deepseek_msgs,
             temperature: self.temperature,
-            stream: self.stream.unwrap_or(false),
+            stream: false,
         };
 
         if log::log_enabled!(log::Level::Trace) {

@@ -121,7 +121,7 @@ impl std::fmt::Display for OllamaResponse {
             }
         }
 
-        write!(f, "{}", text)
+        write!(f, "{text}")
     }
 }
 
@@ -310,7 +310,6 @@ impl Ollama {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         json_schema: Option<StructuredOutputFormat>,
@@ -371,7 +370,7 @@ impl Ollama {
         OllamaChatRequest {
             model: self.model.clone(),
             messages: chat_messages,
-            stream: stream,
+            stream,
             options: Some(OllamaOptions {
                 top_p: self.top_p,
                 top_k: self.top_k,

@@ -18,16 +18,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("grok-2-latest")
         .max_tokens(1000)
         .temperature(0.7)
-        .stream(true) // Enable streaming responses
         .build()
         .expect("Failed to build LLM (X.AI)");
 
     // Prepare conversation with a prompt that will generate a longer response
-    let messages = vec![
-        ChatMessage::user()
-            .content("Write a long story about a robot learning to paint. Make it creative and engaging.")
-            .build(),
-    ];
+    let messages = vec![ChatMessage::user()
+        .content(
+            "Write a long story about a robot learning to paint. Make it creative and engaging.",
+        )
+        .build()];
 
     println!("Starting streaming chat with X.AI...\n");
 
@@ -35,14 +34,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(mut stream) => {
             let stdout = io::stdout();
             let mut handle = stdout.lock();
-            
+
             while let Some(Ok(token)) = stream.next().await {
                 handle.write_all(token.as_bytes()).unwrap();
                 handle.flush().unwrap();
             }
             println!("\n\nStreaming completed.");
         }
-        Err(e) => eprintln!("Chat error: {}", e),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())

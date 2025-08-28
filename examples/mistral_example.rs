@@ -12,7 +12,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("mistral-small-latest") // default model
         .max_tokens(512)
         .temperature(0.7)
-        .stream(false)
         .build()
         .expect("Failed to build LLM (Mistral)");
     // Prepare conversation

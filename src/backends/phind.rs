@@ -33,8 +33,6 @@ pub struct Phind {
     pub system: Option<String>,
     /// Request timeout in seconds
     pub timeout_seconds: Option<u64>,
-    /// Whether to stream responses
-    pub stream: Option<bool>,
     /// Top-p sampling parameter
     pub top_p: Option<f32>,
     /// Top-k sampling parameter
@@ -75,7 +73,6 @@ impl Phind {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
     ) -> Self {
@@ -89,7 +86,6 @@ impl Phind {
             temperature,
             system,
             timeout_seconds,
-            stream,
             top_p,
             top_k,
             api_base_url: "https://https.extension.phind.com/agent/".to_string(),
@@ -161,8 +157,7 @@ impl Phind {
                     .to_string();
 
                 Err(LLMError::ProviderError(format!(
-                    "APIError {}: {}",
-                    status, error_message
+                    "APIError {status}: {error_message}"
                 )))
             }
         }

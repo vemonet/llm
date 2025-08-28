@@ -18,7 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("qwen2.5vl:7b") // Use Gemini Pro model
         .max_tokens(8512) // Limit response length
         .temperature(0.7) // Control response randomness (0.0-1.0)
-        .stream(false) // Disable streaming responses
         // Optional: Set system prompt
         .system("You are a helpful AI assistant specialized in programming.")
         .build()
@@ -41,9 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 print!("{}", delta.unwrap_or("".to_owned()));
                 io::stdout().flush().expect("failed to flush");
             }
-            println!("") //Print a newline
+            println!() //Print a newline
         }
-        Err(e) => eprintln!("Chat error: {}", e),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())

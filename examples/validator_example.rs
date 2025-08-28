@@ -16,7 +16,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .api_key(api_key) // Set API credentials
         .max_tokens(512) // Limit response length
         .temperature(0.7) // Control response randomness
-        .stream(false) // Disable streaming responses
         .validator(|resp| {
             // Add JSON validation
             serde_json::from_str::<serde_json::Value>(resp)
@@ -34,8 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send chat request and handle the response
     match llm.chat(&messages).await {
-        Ok(text) => println!("{}", text),
-        Err(e) => eprintln!("Chat error: {}", e),
+        Ok(text) => println!("{text}"),
+        Err(e) => eprintln!("Chat error: {e}"),
     }
 
     Ok(())

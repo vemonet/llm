@@ -47,6 +47,8 @@ pub enum LLMBackend {
     Cohere,
     /// Mistral API provider
     Mistral,
+    /// OpenRouter API provider
+    OpenRouter,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -121,8 +123,6 @@ pub struct LLMBuilder {
     system: Option<String>,
     /// Request timeout duration in seconds
     timeout_seconds: Option<u64>,
-    /// Whether to enable streaming responses
-    stream: Option<bool>,
     /// Top-p (nucleus) sampling parameter
     top_p: Option<f32>,
     /// Top-k sampling parameter
@@ -266,9 +266,15 @@ impl LLMBuilder {
         self
     }
 
-    /// Enables or disables streaming responses.
-    pub fn stream(mut self, stream: bool) -> Self {
-        self.stream = Some(stream);
+    /// Enables or disables streaming responses, stub kept for compatibility.
+    ///
+    /// # Deprecation
+    /// This method is deprecated and will be removed in a future release.
+    /// Streaming is defined by the function called (e.g. `chat_stream`).
+    #[deprecated(
+        note = "This method is deprecated and will be removed in a future release. Streaming is defined by the function used (e.g. `chat_stream`)"
+    )]
+    pub fn stream(self, _stream: bool) -> Self {
         self
     }
 
@@ -601,12 +607,11 @@ impl LLMBuilder {
     /// - Required configuration like API keys are missing
     pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
         log::debug!(
-            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
+            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
             self.backend,
             self.model,
             self.tools.as_ref().map(|v| v.len()).unwrap_or(0),
             self.tool_choice,
-            self.stream,
             self.temperature,
             self.openai_enable_web_search,
             self.openai_web_search_context_size,
@@ -627,7 +632,6 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "OpenAI feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "openai")]
                 {
                     let key = self.api_key.ok_or_else(|| {
@@ -641,7 +645,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,
@@ -657,7 +660,7 @@ impl LLMBuilder {
                         self.openai_web_search_user_location_approximate_country,
                         self.openai_web_search_user_location_approximate_city,
                         self.openai_web_search_user_location_approximate_region,
-                    ))
+                    )?)
                 }
             }
             LLMBackend::ElevenLabs => {
@@ -665,13 +668,11 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "ElevenLabs feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "elevenlabs")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for ElevenLabs".to_string())
                     })?;
-
                     let elevenlabs = crate::backends::elevenlabs::ElevenLabs::new(
                         api_key,
                         self.model.unwrap_or("eleven_multilingual_v2".to_string()),
@@ -687,13 +688,11 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "Anthropic feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "anthropic")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
                     })?;
-
                     let anthro = crate::backends::anthropic::Anthropic::new(
                         api_key,
                         self.model,
@@ -701,7 +700,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         tools,
@@ -709,7 +707,6 @@ impl LLMBuilder {
                         self.reasoning,
                         self.reasoning_budget_tokens,
                     );
-
                     Box::new(anthro)
                 }
             }
@@ -718,7 +715,6 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "Ollama feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "ollama")]
                 {
                     let url = self
@@ -732,7 +728,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.json_schema,
@@ -752,7 +747,6 @@ impl LLMBuilder {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
                     })?;
-
                     let deepseek = crate::backends::deepseek::DeepSeek::new(
                         api_key,
                         self.model,
@@ -760,9 +754,7 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                     );
-
                     Box::new(deepseek)
                 }
             }
@@ -785,7 +777,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,
@@ -815,7 +806,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                     );
@@ -841,7 +831,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.json_schema,
@@ -862,18 +851,58 @@ impl LLMBuilder {
                         LLMError::InvalidRequest("No API key provided for Groq".to_string())
                     })?;
 
-                    let groq = crate::backends::groq::Groq::new(
+                    let groq = crate::backends::groq::Groq::with_config(
                         api_key,
+                        self.base_url,
                         self.model,
                         self.max_tokens,
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        self.enable_parallel_tool_use,
                     );
                     Box::new(groq)
+                }
+            }
+            LLMBackend::OpenRouter => {
+                #[cfg(not(feature = "openrouter"))]
+                return Err(LLMError::InvalidRequest(
+                    "OpenRouter feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "openrouter")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest("No API key provided for OpenRouter".to_string())
+                    })?;
+
+                    let openrouter = crate::backends::openrouter::OpenRouter::with_config(
+                        api_key,
+                        self.base_url,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.top_p,
+                        self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        self.enable_parallel_tool_use,
+                    );
+                    Box::new(openrouter)
                 }
             }
             LLMBackend::Cohere => {
@@ -885,9 +914,8 @@ impl LLMBuilder {
                 #[cfg(feature = "cohere")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Google".to_string())
+                        LLMError::InvalidRequest("No API key provided for Cohere".to_string())
                     })?;
-
                     let cohere = crate::backends::cohere::Cohere::new(
                         api_key,
                         self.base_url,
@@ -896,15 +924,16 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         self.tool_choice,
                         self.reasoning_effort,
                         self.json_schema,
+                        None,
+                        self.enable_parallel_tool_use,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                     );
                     Box::new(cohere)
                 }
@@ -919,7 +948,7 @@ impl LLMBuilder {
                     let api_key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Mistral".to_string())
                     })?;
-                    let mistral = crate::backends::mistral::Mistral::new(
+                    let mistral = crate::backends::mistral::Mistral::with_config(
                         api_key,
                         self.base_url,
                         self.model,
@@ -927,13 +956,12 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
                         tools,
                         tool_choice,
+                        self.embedding_encoding_format,
+                        self.embedding_dimensions,
                         self.reasoning_effort,
                         self.json_schema,
                         self.enable_parallel_tool_use,
@@ -946,29 +974,24 @@ impl LLMBuilder {
                 return Err(LLMError::InvalidRequest(
                     "OpenAI feature not enabled".to_string(),
                 ));
-
                 #[cfg(feature = "azure_openai")]
                 {
                     let endpoint = self.base_url.ok_or_else(|| {
                         LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
                     })?;
-
                     let key = self.api_key.ok_or_else(|| {
                         LLMError::InvalidRequest("No API key provided for Azure OpenAI".to_string())
                     })?;
-
                     let api_version = self.api_version.ok_or_else(|| {
                         LLMError::InvalidRequest(
                             "No API version provided for Azure OpenAI".to_string(),
                         )
                     })?;
-
                     let deployment = self.deployment_id.ok_or_else(|| {
                         LLMError::InvalidRequest(
                             "No deployment ID provided for Azure OpenAI".into(),
                         )
                     })?;
-
                     Box::new(crate::backends::azure_openai::AzureOpenAI::new(
                         key,
                         api_version,
@@ -979,7 +1002,6 @@ impl LLMBuilder {
                         self.temperature,
                         self.timeout_seconds,
                         self.system,
-                        self.stream,
                         self.top_p,
                         self.top_k,
                         self.embedding_encoding_format,
@@ -1007,10 +1029,18 @@ impl LLMBuilder {
         // Wrap with resilience retry/backoff if enabled
         if self.resilient_enable.unwrap_or(false) {
             let mut cfg = crate::resilient_llm::ResilienceConfig::defaults();
-            if let Some(attempts) = self.resilient_attempts { cfg.max_attempts = attempts; }
-            if let Some(base) = self.resilient_base_delay_ms { cfg.base_delay_ms = base; }
-            if let Some(maxd) = self.resilient_max_delay_ms { cfg.max_delay_ms = maxd; }
-            if let Some(j) = self.resilient_jitter { cfg.jitter = j; }
+            if let Some(attempts) = self.resilient_attempts {
+                cfg.max_attempts = attempts;
+            }
+            if let Some(base) = self.resilient_base_delay_ms {
+                cfg.base_delay_ms = base;
+            }
+            if let Some(maxd) = self.resilient_max_delay_ms {
+                cfg.max_delay_ms = maxd;
+            }
+            if let Some(j) = self.resilient_jitter {
+                cfg.jitter = j;
+            }
             final_provider = Box::new(crate::resilient_llm::ResilientLLM::new(final_provider, cfg));
         }
 
@@ -1026,7 +1056,6 @@ impl LLMBuilder {
                 None,
             ));
         }
-
         Ok(final_provider)
     }
 
@@ -1036,7 +1065,7 @@ impl LLMBuilder {
             Some(ToolChoice::Tool(ref name)) => {
                 match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
                     Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
-                    _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+                    _ => Err(LLMError::ToolConfigError(format!("Tool({name}) cannot be tool choice: no tool with name {name} found.  Did you forget to add it with .function?"))),
                 }
             }
             Some(_) if self.tools.is_none() => Err(LLMError::ToolConfigError(
@@ -1163,7 +1192,6 @@ impl FunctionBuilder {
                 let (name, prop) = param.build();
                 properties.insert(name, prop);
             }
-
             serde_json::to_value(ParametersSchema {
                 schema_type: "object".to_string(),
                 properties,
@@ -1171,7 +1199,6 @@ impl FunctionBuilder {
             })
             .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()))
         };
-
         Tool {
             tool_type: "function".to_string(),
             function: FunctionTool {

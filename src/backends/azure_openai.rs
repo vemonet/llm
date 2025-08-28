@@ -35,7 +35,6 @@ pub struct AzureOpenAI {
     pub temperature: Option<f32>,
     pub system: Option<String>,
     pub timeout_seconds: Option<u64>,
-    pub stream: Option<bool>,
     pub top_p: Option<f32>,
     pub top_k: Option<u32>,
     pub tools: Option<Vec<Tool>>,
@@ -296,14 +295,14 @@ impl std::fmt::Display for AzureOpenAIChatResponse {
         ) {
             (Some(content), Some(tool_calls)) => {
                 for tool_call in tool_calls {
-                    write!(f, "{}", tool_call)?;
+                    write!(f, "{tool_call}")?;
                 }
-                write!(f, "{}", content)
+                write!(f, "{content}")
             }
-            (Some(content), None) => write!(f, "{}", content),
+            (Some(content), None) => write!(f, "{content}"),
             (None, Some(tool_calls)) => {
                 for tool_call in tool_calls {
-                    write!(f, "{}", tool_call)?;
+                    write!(f, "{tool_call}")?;
                 }
                 Ok(())
             }
@@ -343,7 +342,6 @@ impl AzureOpenAI {
         temperature: Option<f32>,
         timeout_seconds: Option<u64>,
         system: Option<String>,
-        stream: Option<bool>,
         top_p: Option<f32>,
         top_k: Option<u32>,
         embedding_encoding_format: Option<String>,
@@ -371,7 +369,6 @@ impl AzureOpenAI {
             temperature,
             system,
             timeout_seconds,
-            stream,
             top_p,
             top_k,
             tools,
@@ -461,7 +458,7 @@ impl ChatProvider for AzureOpenAI {
             messages: openai_msgs,
             max_tokens: self.max_tokens,
             temperature: self.temperature,
-            stream: self.stream.unwrap_or(false),
+            stream: false,
             top_p: self.top_p,
             top_k: self.top_k,
             tools: request_tools,
@@ -504,7 +501,7 @@ impl ChatProvider for AzureOpenAI {
             let status = response.status();
             let error_text = response.text().await?;
             return Err(LLMError::ResponseFormatError {
-                message: format!("OpenAI API returned error status: {}", status),
+                message: format!("OpenAI API returned error status: {status}"),
                 raw_response: error_text,
             });
         }
@@ -517,7 +514,7 @@ impl ChatProvider for AzureOpenAI {
         match json_resp {
             Ok(response) => Ok(Box::new(response)),
             Err(e) => Err(LLMError::ResponseFormatError {
-                message: format!("Failed to decode Azure OpenAI API response: {}", e),
+                message: format!("Failed to decode Azure OpenAI API response: {e}"),
                 raw_response: resp_text,
             }),
         }

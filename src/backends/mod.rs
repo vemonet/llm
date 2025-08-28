@@ -22,6 +22,9 @@ pub mod google;
 #[cfg(feature = "groq")]
 pub mod groq;
 
+#[cfg(feature = "openrouter")]
+pub mod openrouter;
+
 #[cfg(feature = "azure_openai")]
 pub mod azure_openai;
 
