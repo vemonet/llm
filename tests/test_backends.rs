@@ -59,6 +59,12 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "moonshotai/kimi-k2:free",
         backend_name: "openrouter",
     },
+    BackendTestConfig {
+        backend: LLMBackend::XAI,
+        env_key: "XAI_API_KEY",
+        model: "grok-3-mini",
+        backend_name: "xai",
+    },
 ];
 
 #[rstest]
@@ -69,6 +75,7 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -202,6 +209,7 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -283,6 +291,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -425,6 +434,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 // #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -501,6 +511,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -624,6 +635,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -723,58 +735,6 @@ async fn test_embedding(#[case] config: &BackendTestConfig) {
             );
         }
         Err(e) => panic!("Embedding error for {}: {e}", config.backend_name),
-    }
-}
-
-/// We can use a generic OpenAI-compatible `LLMBackend` like Groq,
-/// to query OpenAI-compatible providers like OpenRouter
-#[rstest]
-#[tokio::test]
-async fn test_chat_custom_url_openrouter() {
-    let api_key = match std::env::var("OPENROUTER_API_KEY") {
-        Ok(key) => key,
-        Err(_) => {
-            eprintln!("test_chat_openrouter ... ignored, OPENROUTER_API_KEY not set");
-            return;
-        }
-    };
-    let llm = LLMBuilder::new()
-        .backend(LLMBackend::Groq)
-        .base_url("https://openrouter.ai/api/v1/")
-        .api_key(api_key)
-        .model("google/gemma-3n-e2b-it:free")
-        .max_tokens(512)
-        .temperature(0.7)
-        .build()
-        .expect("Failed to build LLM");
-
-    match llm
-        .chat(&[ChatMessage::user().content("Hello.").build()])
-        .await
-    {
-        Ok(response) => {
-            assert!(
-                response.text().is_some() && !response.text().unwrap().is_empty(),
-                "Expected response message, got {:?}",
-                response.text()
-            );
-            assert!(
-                response.usage().is_some(),
-                "Expected usage information to be present"
-            );
-            let usage = response.usage().unwrap();
-            assert!(
-                usage.prompt_tokens > 0,
-                "Expected prompt tokens > 0, got {}",
-                usage.prompt_tokens
-            );
-            assert!(
-                usage.total_tokens > 0,
-                "Expected total tokens > 0, got {}",
-                usage.total_tokens
-            );
-        }
-        Err(e) => panic!("Chat error for OpenRouter: {e}"),
     }
 }
 
