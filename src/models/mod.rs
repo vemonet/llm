@@ -47,20 +47,36 @@ impl ModelListRawEntry for StandardModelEntry {
     }
 }
 
-/// Standard model list response structure used by OpenAI-compatible providers
+/// Inner structure for model list response data (serializable)
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct StandardModelListResponse {
+pub struct StandardModelListResponseInner {
     pub data: Vec<StandardModelEntry>,
 }
 
-impl StandardModelListResponse {
-    pub fn new(data: Vec<StandardModelEntry>) -> Self {
-        Self { data }
-    }
+/// Standard model list response structure used by OpenAI-compatible providers
+#[derive(Clone, Debug)]
+pub struct StandardModelListResponse {
+    pub inner: StandardModelListResponseInner,
+    pub backend: LLMBackend,
 }
 
-// Note: Each provider will implement ModelListResponse for StandardModelListResponse
-// with their specific backend type
+impl ModelListResponse for StandardModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.inner.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.inner
+            .data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        self.backend.clone()
+    }
+}
 
 /// Trait for providers that support listing and retrieving model information.
 #[async_trait]

@@ -546,7 +546,7 @@ impl ModelListRawEntry for OllamaModelEntry {
 
     fn get_created_at(&self) -> DateTime<Utc> {
         // Ollama doesn't provide creation dates
-        DateTime::<Utc>::UNIX_EPOCH.into()
+        DateTime::<Utc>::UNIX_EPOCH
     }
 
     fn get_raw(&self) -> Value {

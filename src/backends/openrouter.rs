@@ -8,14 +8,13 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
 };
 use async_trait::async_trait;
-use serde::Deserialize;
 
 /// OpenRouter configuration for the generic provider
 pub struct OpenRouterConfig;
@@ -110,32 +109,6 @@ impl SpeechToTextProvider for OpenRouter {
 #[async_trait]
 impl TextToSpeechProvider for OpenRouter {}
 
-// Use the standard model entry type
-pub type OpenRouterModelEntry = crate::models::StandardModelEntry;
-
-// Wrapper for OpenRouter model list response
-#[derive(Clone, Debug, Deserialize)]
-pub struct OpenRouterModelListResponse {
-    pub data: Vec<OpenRouterModelEntry>,
-}
-
-impl ModelListResponse for OpenRouterModelListResponse {
-    fn get_models(&self) -> Vec<String> {
-        self.data.iter().map(|e| e.id.clone()).collect()
-    }
-
-    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
-        self.data
-            .iter()
-            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
-            .collect()
-    }
-
-    fn get_backend(&self) -> LLMBackend {
-        LLMBackend::OpenRouter
-    }
-}
-
 #[async_trait]
 impl ModelsProvider for OpenRouter {
     async fn list_models(
@@ -158,7 +131,10 @@ impl ModelsProvider for OpenRouter {
             .await?
             .error_for_status()?;
 
-        let result: OpenRouterModelListResponse = resp.json().await?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::OpenRouter,
+        };
         Ok(Box::new(result))
     }
 }

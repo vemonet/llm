@@ -10,7 +10,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -224,32 +224,6 @@ impl SpeechToTextProvider for DeepSeek {
     }
 }
 
-// Use the standard model entry type
-pub type DeepSeekModelEntry = crate::models::StandardModelEntry;
-
-// Wrapper for DeepSeek model list response
-#[derive(Clone, Debug, Deserialize)]
-pub struct DeepSeekModelListResponse {
-    pub data: Vec<DeepSeekModelEntry>,
-}
-
-impl ModelListResponse for DeepSeekModelListResponse {
-    fn get_models(&self) -> Vec<String> {
-        self.data.iter().map(|e| e.id.clone()).collect()
-    }
-
-    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
-        self.data
-            .iter()
-            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
-            .collect()
-    }
-
-    fn get_backend(&self) -> LLMBackend {
-        LLMBackend::DeepSeek
-    }
-}
-
 #[async_trait]
 impl ModelsProvider for DeepSeek {
     async fn list_models(
@@ -268,7 +242,10 @@ impl ModelsProvider for DeepSeek {
             .await?
             .error_for_status()?;
 
-        let result: DeepSeekModelListResponse = resp.json().await?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::DeepSeek,
+        };
         Ok(Box::new(result))
     }
 }

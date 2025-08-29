@@ -1186,7 +1186,7 @@ impl ModelListRawEntry for GoogleModelEntry {
 
     fn get_created_at(&self) -> DateTime<Utc> {
         // Google doesn't provide creation dates in their models API
-        DateTime::<Utc>::UNIX_EPOCH.into()
+        DateTime::<Utc>::UNIX_EPOCH
     }
 
     fn get_raw(&self) -> Value {

@@ -10,7 +10,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -559,32 +559,6 @@ impl SpeechToTextProvider for XAI {
 #[async_trait]
 impl TextToSpeechProvider for XAI {}
 
-// Use the standard model entry type
-pub type XAIModelEntry = crate::models::StandardModelEntry;
-
-// Wrapper for XAI model list response
-#[derive(Clone, Debug, Deserialize)]
-pub struct XAIModelListResponse {
-    pub data: Vec<XAIModelEntry>,
-}
-
-impl ModelListResponse for XAIModelListResponse {
-    fn get_models(&self) -> Vec<String> {
-        self.data.iter().map(|e| e.id.clone()).collect()
-    }
-
-    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
-        self.data
-            .iter()
-            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
-            .collect()
-    }
-
-    fn get_backend(&self) -> LLMBackend {
-        LLMBackend::XAI
-    }
-}
-
 #[async_trait]
 impl ModelsProvider for XAI {
     async fn list_models(
@@ -605,7 +579,10 @@ impl ModelsProvider for XAI {
         }
 
         let resp = request.send().await?.error_for_status()?;
-        let result: XAIModelListResponse = resp.json().await?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::XAI,
+        };
         Ok(Box::new(result))
     }
 }

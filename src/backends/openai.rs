@@ -2,6 +2,7 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
+use crate::builder::LLMBackend;
 use crate::chat::Usage;
 use crate::providers::openai_compatible::{
     create_sse_stream, OpenAIChatMessage, OpenAIChatResponse, OpenAICompatibleProvider,
@@ -15,7 +16,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider, ToolCall,
@@ -266,34 +267,6 @@ struct OpenAIEmbeddingData {
 #[derive(Deserialize, Debug)]
 struct OpenAIEmbeddingResponse {
     data: Vec<OpenAIEmbeddingData>,
-}
-
-// Use the standard model entry type
-pub type OpenAIModelEntry = crate::models::StandardModelEntry;
-
-// Wrapper for OpenAI model list response
-#[derive(Clone, Debug, Deserialize)]
-pub struct OpenAIModelListResponse {
-    pub data: Vec<OpenAIModelEntry>,
-}
-
-use crate::builder::LLMBackend;
-
-impl ModelListResponse for OpenAIModelListResponse {
-    fn get_models(&self) -> Vec<String> {
-        self.data.iter().map(|e| e.id.clone()).collect()
-    }
-
-    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
-        self.data
-            .iter()
-            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
-            .collect()
-    }
-
-    fn get_backend(&self) -> LLMBackend {
-        LLMBackend::OpenAI
-    }
 }
 
 // Delegate other provider traits to the internal provider
@@ -615,7 +588,10 @@ impl ModelsProvider for OpenAI {
             .await?
             .error_for_status()?;
 
-        let result = resp.json::<OpenAIModelListResponse>().await?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::OpenAI,
+        };
         Ok(Box::new(result))
     }
 }
