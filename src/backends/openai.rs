@@ -21,10 +21,8 @@ use crate::{
     LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::time::Duration;
 
 /// OpenAI configuration for the generic provider
@@ -270,30 +268,10 @@ struct OpenAIEmbeddingResponse {
     data: Vec<OpenAIEmbeddingData>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct OpenAIModelEntry {
-    pub id: String,
-    pub created: Option<u64>,
-    #[serde(flatten)]
-    pub extra: Value,
-}
+// Use the standard model entry type
+pub type OpenAIModelEntry = crate::models::StandardModelEntry;
 
-impl ModelListRawEntry for OpenAIModelEntry {
-    fn get_id(&self) -> String {
-        self.id.clone()
-    }
-
-    fn get_created_at(&self) -> DateTime<Utc> {
-        self.created
-            .map(|t| chrono::DateTime::from_timestamp(t as i64, 0).unwrap_or_default())
-            .unwrap_or_default()
-    }
-
-    fn get_raw(&self) -> Value {
-        self.extra.clone()
-    }
-}
-
+// Wrapper for OpenAI model list response
 #[derive(Clone, Debug, Deserialize)]
 pub struct OpenAIModelListResponse {
     pub data: Vec<OpenAIModelEntry>,

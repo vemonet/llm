@@ -5,6 +5,7 @@
 use std::pin::Pin;
 
 use crate::{
+    builder::LLMBackend,
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat,
         Tool,
@@ -12,13 +13,14 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{self, Engine};
+use chrono::{DateTime, Utc};
 use futures::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -518,8 +520,85 @@ impl SpeechToTextProvider for Ollama {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct OllamaModelEntry {
+    pub name: String,
+    pub size: Option<u64>,
+    pub digest: Option<String>,
+    pub details: Option<OllamaModelDetails>,
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct OllamaModelDetails {
+    pub format: Option<String>,
+    pub family: Option<String>,
+    pub families: Option<Vec<String>>,
+    pub parameter_size: Option<String>,
+    pub quantization_level: Option<String>,
+}
+
+impl ModelListRawEntry for OllamaModelEntry {
+    fn get_id(&self) -> String {
+        self.name.clone()
+    }
+
+    fn get_created_at(&self) -> DateTime<Utc> {
+        // Ollama doesn't provide creation dates
+        DateTime::<Utc>::UNIX_EPOCH.into()
+    }
+
+    fn get_raw(&self) -> Value {
+        self.extra.clone()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct OllamaModelListResponse {
+    pub models: Vec<OllamaModelEntry>,
+}
+
+impl ModelListResponse for OllamaModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.models.iter().map(|m| m.name.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.models
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::Ollama
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for Ollama {}
+impl ModelsProvider for Ollama {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.base_url.is_empty() {
+            return Err(LLMError::InvalidRequest("Missing base_url".to_string()));
+        }
+
+        let url = format!("{}/api/tags", self.base_url);
+
+        let mut request = self.client.get(&url);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let result: OllamaModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}
 
 impl crate::LLMProvider for Ollama {
     fn tools(&self) -> Option<&[Tool]> {

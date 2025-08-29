@@ -3,17 +3,19 @@
 //! This module provides integration with Groq's LLM models through their API.
 
 use crate::{
+    builder::LLMBackend,
     chat::{StructuredOutputFormat, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
 };
 use async_trait::async_trait;
+use serde::Deserialize;
 
 /// Groq configuration for the generic provider
 pub struct GroqConfig;
@@ -122,5 +124,53 @@ impl SpeechToTextProvider for Groq {
 #[async_trait]
 impl TextToSpeechProvider for Groq {}
 
+// Use the standard model entry type
+pub type GroqModelEntry = crate::models::StandardModelEntry;
+
+// Wrapper for Groq model list response
+#[derive(Clone, Debug, Deserialize)]
+pub struct GroqModelListResponse {
+    pub data: Vec<GroqModelEntry>,
+}
+
+impl ModelListResponse for GroqModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::Groq
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for Groq {}
+impl ModelsProvider for Groq {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Groq API key".to_string()));
+        }
+
+        let url = format!("{}/models", GroqConfig::DEFAULT_BASE_URL);
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result: GroqModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}

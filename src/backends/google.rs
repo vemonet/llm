@@ -41,6 +41,7 @@
 //! ```
 
 use crate::{
+    builder::LLMBackend,
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat,
         Tool, Usage,
@@ -48,13 +49,14 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use chrono::{DateTime, Utc};
 use futures::{stream::Stream, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -1161,5 +1163,77 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<crate::chat::StreamRespo
 #[async_trait]
 impl TextToSpeechProvider for Google {}
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct GoogleModelEntry {
+    pub name: String,
+    pub version: String,
+    pub display_name: String,
+    pub description: String,
+    pub input_token_limit: Option<u32>,
+    pub output_token_limit: Option<u32>,
+    pub supported_generation_methods: Vec<String>,
+    pub temperature: Option<f32>,
+    pub top_p: Option<f32>,
+    pub top_k: Option<u32>,
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+impl ModelListRawEntry for GoogleModelEntry {
+    fn get_id(&self) -> String {
+        self.name.clone()
+    }
+
+    fn get_created_at(&self) -> DateTime<Utc> {
+        // Google doesn't provide creation dates in their models API
+        DateTime::<Utc>::UNIX_EPOCH.into()
+    }
+
+    fn get_raw(&self) -> Value {
+        self.extra.clone()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct GoogleModelListResponse {
+    pub models: Vec<GoogleModelEntry>,
+}
+
+impl ModelListResponse for GoogleModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.models.iter().map(|m| m.name.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.models
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::Google
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for Google {}
+impl ModelsProvider for Google {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Google API key".to_string()));
+        }
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+            self.api_key
+        );
+
+        let resp = self.client.get(&url).send().await?.error_for_status()?;
+
+        let result: GoogleModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}

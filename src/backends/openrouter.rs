@@ -3,17 +3,19 @@
 //! This module provides integration with OpenRouter's LLM models through their API.
 
 use crate::{
+    builder::LLMBackend,
     chat::{StructuredOutputFormat, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
 };
 use async_trait::async_trait;
+use serde::Deserialize;
 
 /// OpenRouter configuration for the generic provider
 pub struct OpenRouterConfig;
@@ -108,5 +110,55 @@ impl SpeechToTextProvider for OpenRouter {
 #[async_trait]
 impl TextToSpeechProvider for OpenRouter {}
 
+// Use the standard model entry type
+pub type OpenRouterModelEntry = crate::models::StandardModelEntry;
+
+// Wrapper for OpenRouter model list response
+#[derive(Clone, Debug, Deserialize)]
+pub struct OpenRouterModelListResponse {
+    pub data: Vec<OpenRouterModelEntry>,
+}
+
+impl ModelListResponse for OpenRouterModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::OpenRouter
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for OpenRouter {}
+impl ModelsProvider for OpenRouter {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError(
+                "Missing OpenRouter API key".to_string(),
+            ));
+        }
+
+        let url = format!("{}/models", OpenRouterConfig::DEFAULT_BASE_URL);
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result: OpenRouterModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}

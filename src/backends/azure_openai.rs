@@ -2,6 +2,12 @@
 //!
 //! This module provides integration with Azure OpenAI's GPT models through their API.
 
+use crate::{
+    builder::LLMBackend,
+    chat::{ChatResponse, ToolChoice},
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse},
+    FunctionCall, ToolCall,
+};
 #[cfg(feature = "azure_openai")]
 use crate::{
     chat::Tool,
@@ -13,10 +19,6 @@ use crate::{
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
-};
-use crate::{
-    chat::{ChatResponse, ToolChoice},
-    FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use either::*;
@@ -605,5 +607,60 @@ impl TextToSpeechProvider for AzureOpenAI {
     }
 }
 
+// Use the standard model entry type
+pub type AzureOpenAIModelEntry = crate::models::StandardModelEntry;
+
+// Wrapper for Azure OpenAI model list response
+#[derive(Clone, Debug, Deserialize)]
+pub struct AzureOpenAIModelListResponse {
+    pub data: Vec<AzureOpenAIModelEntry>,
+}
+
+impl ModelListResponse for AzureOpenAIModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::AzureOpenAI
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for AzureOpenAI {}
+impl ModelsProvider for AzureOpenAI {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError(
+                "Missing Azure OpenAI API key".to_string(),
+            ));
+        }
+
+        let mut url = self
+            .base_url
+            .join("models")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        url.query_pairs_mut()
+            .append_pair("api-version", &self.api_version);
+
+        let mut request = self.client.get(url).header("api-key", &self.api_key);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let result: AzureOpenAIModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}

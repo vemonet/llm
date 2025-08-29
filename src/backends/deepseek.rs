@@ -5,11 +5,12 @@
 use crate::chat::{ChatResponse, Tool};
 #[cfg(feature = "deepseek")]
 use crate::{
+    builder::LLMBackend,
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -223,8 +224,54 @@ impl SpeechToTextProvider for DeepSeek {
     }
 }
 
+// Use the standard model entry type
+pub type DeepSeekModelEntry = crate::models::StandardModelEntry;
+
+// Wrapper for DeepSeek model list response
+#[derive(Clone, Debug, Deserialize)]
+pub struct DeepSeekModelListResponse {
+    pub data: Vec<DeepSeekModelEntry>,
+}
+
+impl ModelListResponse for DeepSeekModelListResponse {
+    fn get_models(&self) -> Vec<String> {
+        self.data.iter().map(|e| e.id.clone()).collect()
+    }
+
+    fn get_models_raw(&self) -> Vec<Box<dyn ModelListRawEntry>> {
+        self.data
+            .iter()
+            .map(|e| Box::new(e.clone()) as Box<dyn ModelListRawEntry>)
+            .collect()
+    }
+
+    fn get_backend(&self) -> LLMBackend {
+        LLMBackend::DeepSeek
+    }
+}
+
 #[async_trait]
-impl ModelsProvider for DeepSeek {}
+impl ModelsProvider for DeepSeek {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
+        }
+
+        let resp = self
+            .client
+            .get("https://api.deepseek.com/v1/models")
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result: DeepSeekModelListResponse = resp.json().await?;
+        Ok(Box::new(result))
+    }
+}
 
 impl LLMProvider for DeepSeek {}
 
