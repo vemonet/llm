@@ -5,7 +5,7 @@
 
 #[cfg(feature = "xai")]
 use crate::{
-    chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool, Usage},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -14,10 +14,7 @@ use crate::{
     tts::TextToSpeechProvider,
     LLMProvider,
 };
-use crate::{
-    chat::{ChatResponse, Tool},
-    ToolCall,
-};
+use crate::ToolCall;
 use async_trait::async_trait;
 use futures::stream::Stream;
 use reqwest::Client;
@@ -133,6 +130,8 @@ struct XAIChatRequest<'a> {
 struct XAIChatResponse {
     /// Array of generated responses
     choices: Vec<XAIChatChoice>,
+    /// Usage metadata for the request
+    usage: Option<Usage>,
 }
 
 impl std::fmt::Display for XAIChatResponse {
@@ -148,6 +147,10 @@ impl ChatResponse for XAIChatResponse {
 
     fn tool_calls(&self) -> Option<Vec<ToolCall>> {
         None
+    }
+
+    fn usage(&self) -> Option<Usage> {
+        self.usage.clone()
     }
 }
 
