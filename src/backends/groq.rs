@@ -63,6 +63,7 @@ impl Groq {
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         parallel_tool_calls: Option<bool>,
+        normalize_response: Option<bool>,
     ) -> Self {
         OpenAICompatibleProvider::<GroqConfig>::new(
             api_key,
@@ -80,6 +81,7 @@ impl Groq {
             json_schema,
             None, // voice - not supported by Groq
             parallel_tool_calls,
+            normalize_response,
             None, // embedding_encoding_format - not supported by Groq
             None, // embedding_dimensions - not supported by Groq
         )

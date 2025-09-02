@@ -53,6 +53,7 @@ impl Cohere {
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         parallel_tool_calls: Option<bool>,
+        normalize_response: Option<bool>,
     ) -> Self {
         <OpenAICompatibleProvider<CohereConfig>>::new(
             api_key,
@@ -70,6 +71,7 @@ impl Cohere {
             json_schema,
             None, // voice - not supported by Cohere
             parallel_tool_calls,
+            normalize_response,
             embedding_encoding_format,
             embedding_dimensions,
         )

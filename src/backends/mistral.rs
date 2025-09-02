@@ -51,6 +51,7 @@ impl Mistral {
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         parallel_tool_calls: Option<bool>,
+        normalize_response: Option<bool>,
     ) -> Self {
         <OpenAICompatibleProvider<MistralConfig>>::new(
             api_key,
@@ -68,6 +69,7 @@ impl Mistral {
             json_schema,
             None, // voice - not supported by Mistral
             parallel_tool_calls,
+            normalize_response,
             embedding_encoding_format,
             embedding_dimensions,
         )
