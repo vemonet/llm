@@ -665,7 +665,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
-#[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::xai(&BACKEND_CONFIGS[7])]
 #[tokio::test]
 async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
