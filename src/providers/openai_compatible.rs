@@ -43,6 +43,7 @@ pub struct OpenAICompatibleProvider<T: OpenAIProviderConfig> {
     pub parallel_tool_calls: bool,
     pub embedding_encoding_format: Option<String>,
     pub embedding_dimensions: Option<u32>,
+    pub normalize_response: bool,
     pub client: Client,
     _phantom: PhantomData<T>,
 }
@@ -306,6 +307,7 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
         json_schema: Option<StructuredOutputFormat>,
         voice: Option<String>,
         parallel_tool_calls: Option<bool>,
+        normalize_response: Option<bool>,
         embedding_encoding_format: Option<String>,
         embedding_dimensions: Option<u32>,
     ) -> Self {
@@ -330,6 +332,7 @@ impl<T: OpenAIProviderConfig> OpenAICompatibleProvider<T> {
             json_schema,
             voice,
             parallel_tool_calls: parallel_tool_calls.unwrap_or(false),
+            normalize_response: normalize_response.unwrap_or(true),
             embedding_encoding_format,
             embedding_dimensions,
             client: builder.build().expect("Failed to build reqwest Client"),
@@ -567,7 +570,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
                 raw_response: error_text,
             });
         }
-        Ok(create_sse_stream(response))
+        Ok(create_sse_stream(response, self.normalize_response))
     }
 }
 
@@ -618,26 +621,63 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
 /// Buffer required to accumulate JSON payload lines that are split across multiple SSE chunks
 pub fn create_sse_stream(
     response: reqwest::Response,
+    normalize_response: bool,
 ) -> std::pin::Pin<Box<dyn Stream<Item = Result<StreamResponse, LLMError>> + Send>> {
     struct SSEStreamParser {
         event_buffer: String,
+        tool_buffer: ToolCall,
         usage: Option<Usage>,
         results: Vec<Result<StreamResponse, LLMError>>,
+        normalize_response: bool,
     }
     impl SSEStreamParser {
-        fn new() -> Self {
+        fn new(normalize_response: bool) -> Self {
             Self {
                 event_buffer: String::new(),
                 usage: None,
                 results: Vec::new(),
+                tool_buffer: ToolCall {
+                    id: String::new(),
+                    call_type: "function".to_string(),
+                    function: FunctionCall {
+                        name: String::new(),
+                        arguments: String::new(),
+                    },
+                },
+                normalize_response,
             }
         }
+
+        /// Push the current `tool_buffer` as a `StreamResponse` and reset it
+        fn push_tool_call(&mut self) {
+            if self.normalize_response && !self.tool_buffer.function.name.is_empty() {
+                self.results.push(Ok(StreamResponse {
+                    choices: vec![StreamChoice {
+                        delta: StreamDelta {
+                            content: None,
+                            tool_calls: Some(vec![self.tool_buffer.clone()]),
+                        },
+                    }],
+                    usage: None,
+                }));
+            }
+            self.tool_buffer = ToolCall {
+                id: String::new(),
+                call_type: "function".to_string(),
+                function: FunctionCall {
+                    name: String::new(),
+                    arguments: String::new(),
+                },
+            };
+        }
+
         /// Parse the accumulated event_buffer as one SSE event
         fn parse_event(&mut self) {
             let mut data_payload = String::new();
             for line in self.event_buffer.lines() {
                 if let Some(data) = line.strip_prefix("data: ") {
                     if data == "[DONE]" {
+                        self.push_tool_call();
                         if let Some(usage) = self.usage.clone() {
                             self.results.push(Ok(StreamResponse {
                                 choices: vec![StreamChoice {
@@ -666,29 +706,56 @@ pub fn create_sse_stream(
                 for choice in &response.choices {
                     let content = choice.delta.content.clone();
                     // Map StreamToolCall (some fields are optional) to ToolCall
-                    let tool_calls = choice.delta.tool_calls.clone().map(|calls| {
-                        calls
-                            .into_iter()
-                            .map(|c| ToolCall {
-                                id: c.id.unwrap_or_default(),
-                                call_type: c.call_type,
-                                function: FunctionCall {
-                                    name: c.function.name.unwrap_or_default(),
-                                    arguments: c.function.arguments,
-                                },
-                            })
-                            .collect()
-                    });
+                    let tool_calls: Option<Vec<ToolCall>> =
+                        choice.delta.tool_calls.clone().map(|calls| {
+                            calls
+                                .into_iter()
+                                .map(|c| ToolCall {
+                                    id: c.id.unwrap_or_default(),
+                                    call_type: c.call_type,
+                                    function: FunctionCall {
+                                        name: c.function.name.unwrap_or_default(),
+                                        arguments: c.function.arguments,
+                                    },
+                                })
+                                .collect::<Vec<ToolCall>>()
+                        });
                     if content.is_some() || tool_calls.is_some() {
-                        self.results.push(Ok(StreamResponse {
-                            choices: vec![StreamChoice {
-                                delta: StreamDelta {
-                                    content,
-                                    tool_calls,
-                                },
-                            }],
-                            usage: None,
-                        }));
+                        if self.normalize_response && tool_calls.is_some() {
+                            // If normalize_response is enabled, accumulate tool call outputs
+                            if let Some(calls) = &tool_calls {
+                                for call in calls {
+                                    // println!("Accumulating tool call: {:?}", call);
+                                    if !call.function.name.is_empty() {
+                                        self.push_tool_call();
+                                        self.tool_buffer.function.name = call.function.name.clone();
+                                    }
+                                    if !call.function.arguments.is_empty() {
+                                        self.tool_buffer
+                                            .function
+                                            .arguments
+                                            .push_str(&call.function.arguments);
+                                    }
+                                    if !call.id.is_empty() {
+                                        self.tool_buffer.id = call.id.clone();
+                                    }
+                                    if !call.call_type.is_empty() {
+                                        self.tool_buffer.call_type = call.call_type.clone();
+                                    }
+                                }
+                            }
+                        } else {
+                            self.push_tool_call();
+                            self.results.push(Ok(StreamResponse {
+                                choices: vec![StreamChoice {
+                                    delta: StreamDelta {
+                                        content,
+                                        tool_calls,
+                                    },
+                                }],
+                                usage: None,
+                            }));
+                        }
                     }
                 }
             }
@@ -697,7 +764,7 @@ pub fn create_sse_stream(
 
     let bytes_stream = response.bytes_stream();
     let stream = bytes_stream
-        .scan(SSEStreamParser::new(), |parser, chunk| {
+        .scan(SSEStreamParser::new(normalize_response), |parser, chunk| {
             let results = match chunk {
                 Ok(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);

@@ -204,6 +204,7 @@ impl OpenAI {
         embedding_dimensions: Option<u32>,
         tools: Option<Vec<Tool>>,
         tool_choice: Option<ToolChoice>,
+        normalize_response: Option<bool>,
         reasoning_effort: Option<String>,
         json_schema: Option<StructuredOutputFormat>,
         voice: Option<String>,
@@ -235,6 +236,7 @@ impl OpenAI {
                 json_schema,
                 voice,
                 None, // parallel_tool_calls
+                normalize_response,
                 embedding_encoding_format,
                 embedding_dimensions,
             ),
@@ -528,7 +530,10 @@ impl ChatProvider for OpenAI {
                 raw_response: error_text,
             });
         }
-        Ok(create_sse_stream(response))
+        Ok(create_sse_stream(
+            response,
+            self.provider.normalize_response,
+        ))
     }
 }
 

@@ -141,6 +141,8 @@ pub struct LLMBuilder {
     tool_choice: Option<ToolChoice>,
     /// Enable parallel tool use
     enable_parallel_tool_use: Option<bool>,
+    /// Increase response consistency by normalizing output, e.g. for streaming tool calls
+    normalize_response: Option<bool>,
     /// Enable reasoning
     reasoning: Option<bool>,
     /// Enable reasoning effort
@@ -275,6 +277,12 @@ impl LLMBuilder {
         note = "This method is deprecated and will be removed in a future release. Streaming is defined by the function used (e.g. `chat_stream`)"
     )]
     pub fn stream(self, _stream: bool) -> Self {
+        self
+    }
+
+    /// Sets the request timeout in seconds.
+    pub fn normalize_response(mut self, normalize_response: bool) -> Self {
+        self.normalize_response = Some(normalize_response);
         self
     }
 
@@ -651,6 +659,7 @@ impl LLMBuilder {
                         self.embedding_dimensions,
                         tools,
                         tool_choice,
+                        self.normalize_response,
                         self.reasoning_effort,
                         self.json_schema,
                         self.voice,
@@ -868,6 +877,7 @@ impl LLMBuilder {
                         None, // reasoning_effort
                         self.json_schema,
                         self.enable_parallel_tool_use,
+                        self.normalize_response,
                     );
                     Box::new(groq)
                 }
@@ -901,6 +911,7 @@ impl LLMBuilder {
                         None, // reasoning_effort
                         self.json_schema,
                         self.enable_parallel_tool_use,
+                        self.normalize_response,
                     );
                     Box::new(openrouter)
                 }
@@ -932,6 +943,7 @@ impl LLMBuilder {
                         self.json_schema,
                         None,
                         self.enable_parallel_tool_use,
+                        self.normalize_response,
                         self.embedding_encoding_format,
                         self.embedding_dimensions,
                     );
@@ -965,6 +977,7 @@ impl LLMBuilder {
                         self.reasoning_effort,
                         self.json_schema,
                         self.enable_parallel_tool_use,
+                        self.normalize_response,
                     );
                     Box::new(mistral)
                 }
