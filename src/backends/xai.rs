@@ -5,11 +5,12 @@
 
 #[cfg(feature = "xai")]
 use crate::{
+    builder::LLMBackend,
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool, Usage},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -562,7 +563,32 @@ impl SpeechToTextProvider for XAI {
 impl TextToSpeechProvider for XAI {}
 
 #[async_trait]
-impl ModelsProvider for XAI {}
+impl ModelsProvider for XAI {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
+        }
+
+        let mut request = self
+            .client
+            .get("https://api.x.ai/v1/models")
+            .bearer_auth(&self.api_key);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::XAI,
+        };
+        Ok(Box::new(result))
+    }
+}
 
 impl LLMProvider for XAI {}
 

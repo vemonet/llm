@@ -2,6 +2,7 @@ use futures::StreamExt;
 use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
     chat::{ChatMessage, StructuredOutputFormat},
+    models::ModelListRequest,
 };
 use rstest::rstest;
 
@@ -891,5 +892,75 @@ async fn test_chat_with_web_search_openai() {
             );
         }
         Err(e) => panic!("Chat error for OpenAI web search: {e}"),
+    }
+}
+
+#[rstest]
+#[case::openai(&BACKEND_CONFIGS[0])]
+#[case::mistral(&BACKEND_CONFIGS[1])]
+#[case::google(&BACKEND_CONFIGS[2])]
+#[case::groq(&BACKEND_CONFIGS[3])]
+#[case::cohere(&BACKEND_CONFIGS[4])]
+#[case::anthropic(&BACKEND_CONFIGS[5])]
+#[case::openrouter(&BACKEND_CONFIGS[6])]
+#[case::xai(&BACKEND_CONFIGS[7])]
+#[tokio::test]
+async fn test_list_models(#[case] config: &BackendTestConfig) {
+    let api_key = match std::env::var(config.env_key) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!(
+                "test test_{}_list_models ... ignored, {} not set",
+                config.backend_name, config.env_key
+            );
+            return;
+        }
+    };
+
+    let llm = LLMBuilder::new()
+        .backend(config.backend.clone())
+        .api_key(api_key)
+        .build()
+        .expect("Failed to build LLM");
+
+    let request: Option<&ModelListRequest> = None;
+
+    match llm.list_models(request).await {
+        Ok(response) => {
+            // Verify that we get a non-empty list of models
+            let models = response.get_models();
+            assert!(
+                !models.is_empty(),
+                "Expected at least one model, got empty list for {}",
+                config.backend_name
+            );
+
+            // Verify that the backend matches what we expect
+            assert_eq!(
+                response.get_backend(),
+                config.backend,
+                "Expected backend {:?}, got {:?} for {}",
+                config.backend,
+                response.get_backend(),
+                config.backend_name
+            );
+
+            // Verify that model IDs are non-empty strings
+            for model_id in &models {
+                assert!(
+                    !model_id.is_empty(),
+                    "Expected non-empty model ID, got empty string for {}",
+                    config.backend_name
+                );
+            }
+
+            // Log the number of models found for debugging
+            println!(
+                "Found {} models for {} backend",
+                models.len(),
+                config.backend_name
+            );
+        }
+        Err(e) => panic!("List models error for {}: {e}", config.backend_name),
     }
 }

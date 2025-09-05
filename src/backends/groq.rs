@@ -3,11 +3,12 @@
 //! This module provides integration with Groq's LLM models through their API.
 
 use crate::{
+    builder::LLMBackend,
     chat::{StructuredOutputFormat, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
@@ -125,4 +126,29 @@ impl SpeechToTextProvider for Groq {
 impl TextToSpeechProvider for Groq {}
 
 #[async_trait]
-impl ModelsProvider for Groq {}
+impl ModelsProvider for Groq {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Groq API key".to_string()));
+        }
+
+        let url = format!("{}/models", GroqConfig::DEFAULT_BASE_URL);
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::Groq,
+        };
+        Ok(Box::new(result))
+    }
+}

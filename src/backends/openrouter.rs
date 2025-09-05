@@ -3,11 +3,12 @@
 //! This module provides integration with OpenRouter's LLM models through their API.
 
 use crate::{
+    builder::LLMBackend,
     chat::{StructuredOutputFormat, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
@@ -111,4 +112,31 @@ impl SpeechToTextProvider for OpenRouter {
 impl TextToSpeechProvider for OpenRouter {}
 
 #[async_trait]
-impl ModelsProvider for OpenRouter {}
+impl ModelsProvider for OpenRouter {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError(
+                "Missing OpenRouter API key".to_string(),
+            ));
+        }
+
+        let url = format!("{}/models", OpenRouterConfig::DEFAULT_BASE_URL);
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::OpenRouter,
+        };
+        Ok(Box::new(result))
+    }
+}

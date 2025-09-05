@@ -4,12 +4,13 @@
 
 #[cfg(feature = "azure_openai")]
 use crate::{
+    builder::LLMBackend,
     chat::Tool,
     chat::{ChatMessage, ChatProvider, ChatRole, MessageType, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -606,4 +607,36 @@ impl TextToSpeechProvider for AzureOpenAI {
 }
 
 #[async_trait]
-impl ModelsProvider for AzureOpenAI {}
+impl ModelsProvider for AzureOpenAI {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError(
+                "Missing Azure OpenAI API key".to_string(),
+            ));
+        }
+
+        let mut url = self
+            .base_url
+            .join("models")
+            .map_err(|e| LLMError::HttpError(e.to_string()))?;
+
+        url.query_pairs_mut()
+            .append_pair("api-version", &self.api_version);
+
+        let mut request = self.client.get(url).header("api-key", &self.api_key);
+
+        if let Some(timeout) = self.timeout_seconds {
+            request = request.timeout(std::time::Duration::from_secs(timeout));
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::AzureOpenAI,
+        };
+        Ok(Box::new(result))
+    }
+}

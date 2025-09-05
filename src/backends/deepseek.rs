@@ -5,11 +5,12 @@
 use crate::chat::{ChatResponse, Tool};
 #[cfg(feature = "deepseek")]
 use crate::{
+    builder::LLMBackend,
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    models::ModelsProvider,
+    models::{ModelListRequest, ModelListResponse, ModelsProvider, StandardModelListResponse},
     stt::SpeechToTextProvider,
     tts::TextToSpeechProvider,
     LLMProvider,
@@ -224,7 +225,30 @@ impl SpeechToTextProvider for DeepSeek {
 }
 
 #[async_trait]
-impl ModelsProvider for DeepSeek {}
+impl ModelsProvider for DeepSeek {
+    async fn list_models(
+        &self,
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing DeepSeek API key".to_string()));
+        }
+
+        let resp = self
+            .client
+            .get("https://api.deepseek.com/v1/models")
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::DeepSeek,
+        };
+        Ok(Box::new(result))
+    }
+}
 
 impl LLMProvider for DeepSeek {}
 
