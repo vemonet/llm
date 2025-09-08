@@ -100,6 +100,13 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "grok-3-mini",
         backend_name: "xai",
     },
+    BackendTestConfig {
+        backend: LLMBackend::HuggingFace,
+        env_key: "HF_TOKEN",
+        model: "moonshotai/Kimi-K2-Instruct-0905",
+        // model: "openai/gpt-oss-20b", // Does not manage to return the function call name in stream
+        backend_name: "huggingface",
+    },
 ];
 
 #[rstest]
@@ -111,6 +118,9 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
+// NOTE: HuggingFace tests commented out because monthly free credits too low to run all tests all the time
+// Will need to be done manually when needed
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -244,6 +254,7 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -325,6 +336,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -474,6 +486,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
 // #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -551,6 +564,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -666,6 +680,7 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -757,6 +772,7 @@ async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {

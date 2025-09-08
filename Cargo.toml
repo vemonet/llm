@@ -33,6 +33,7 @@ full = [
     "cohere",
     "mistral",
     "openrouter",
+    "huggingface",
 ]
 openai = []
 anthropic = []
@@ -46,6 +47,7 @@ azure_openai = []
 cohere = []
 mistral = []
 openrouter = []
+huggingface = []
 cli = ["full", "dep:clap", "dep:rustyline", "dep:colored", "dep:spinners"]
 api = ["dep:axum", "dep:tower-http", "dep:uuid"]
 elevenlabs = []

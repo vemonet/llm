@@ -36,3 +36,6 @@ pub mod cohere;
 
 #[cfg(feature = "mistral")]
 pub mod mistral;
+
+#[cfg(feature = "huggingface")]
+pub mod huggingface;
