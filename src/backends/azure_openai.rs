@@ -71,6 +71,7 @@ impl<'a> From<&'a ChatMessage> for AzureOpenAIChatMessage<'a> {
             role: match chat_msg.role {
                 ChatRole::User => "user",
                 ChatRole::Assistant => "assistant",
+                ChatRole::Tool => "tool",
             },
             tool_call_id: None,
             content: match &chat_msg.message_type {

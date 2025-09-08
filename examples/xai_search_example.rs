@@ -26,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role: ChatRole::User,
         message_type: MessageType::Text,
         content: "What are some recently discovered alternative DNA shapes?".to_string(),
+        tool_call_id: None,
     }];
 
     println!("=== Basic Search Example ===");
@@ -46,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role: ChatRole::User,
         message_type: MessageType::Text,
         content: "What were the major AI breakthroughs in 2022?".to_string(),
+        tool_call_id: None,
     }];
 
     println!("\n=== Date Range Search Example ===");
@@ -68,6 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role: ChatRole::User,
         message_type: MessageType::Text,
         content: "What are the latest developments in quantum computing?".to_string(),
+        tool_call_id: None,
     }];
 
     println!("\n=== Filtered Sources Search Example ===");

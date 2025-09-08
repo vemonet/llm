@@ -516,6 +516,18 @@ impl Google {
     }
 }
 
+/// Get Google message role based on `ChatMessage` type and role
+fn get_msg_role(msg: &ChatMessage) -> &'static str {
+    match &msg.message_type {
+        MessageType::ToolResult(_) => "function",
+        _ => match msg.role {
+            ChatRole::User => "user",
+            ChatRole::Assistant => "model",
+            ChatRole::Tool => "function",
+        },
+    }
+}
+
 #[async_trait]
 impl ChatProvider for Google {
     /// Sends a chat request to Google's Gemini API.
@@ -545,16 +557,8 @@ impl ChatProvider for Google {
         // Add conversation messages in pairs to maintain context
         for msg in messages {
             // For tool results, we need to use "function" role
-            let role = match &msg.message_type {
-                MessageType::ToolResult(_) => "function",
-                _ => match msg.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "model",
-                },
-            };
-
             chat_contents.push(GoogleChatContent {
-                role,
+                role: get_msg_role(msg),
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
                     MessageType::Image((image_mime, raw_bytes)) => {
@@ -713,16 +717,8 @@ impl ChatProvider for Google {
         // Add conversation messages in pairs to maintain context
         for msg in messages {
             // For tool results, we need to use "function" role
-            let role = match &msg.message_type {
-                MessageType::ToolResult(_) => "function",
-                _ => match msg.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "model",
-                },
-            };
-
             chat_contents.push(GoogleChatContent {
-                role,
+                role: get_msg_role(msg),
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
                     MessageType::Image((image_mime, raw_bytes)) => {
@@ -917,12 +913,8 @@ impl ChatProvider for Google {
             });
         }
         for msg in messages {
-            let role = match msg.role {
-                ChatRole::User => "user",
-                ChatRole::Assistant => "model",
-            };
             chat_contents.push(GoogleChatContent {
-                role,
+                role: get_msg_role(msg),
                 parts: match &msg.message_type {
                     MessageType::Text => vec![GoogleContentPart::Text(&msg.content)],
                     MessageType::Image((image_mime, raw_bytes)) => {

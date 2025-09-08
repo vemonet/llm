@@ -3,6 +3,7 @@ use llm::{
     builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
     chat::{ChatMessage, StructuredOutputFormat},
     models::ModelListRequest,
+    FunctionCall, ToolCall,
 };
 use rstest::rstest;
 
@@ -52,7 +53,7 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::OpenAI,
         env_key: "OPENAI_API_KEY",
-        model: "gpt-5-nano", // Really bad at structured output
+        model: "gpt-5-nano", // Quite bad at structured output
         // model: "gpt-5-mini",
         // model: "gpt-4.1-nano",
         backend_name: "openai",
@@ -91,7 +92,8 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
     BackendTestConfig {
         backend: LLMBackend::OpenRouter,
         env_key: "OPENROUTER_API_KEY",
-        model: "moonshotai/kimi-k2:free",
+        model: "openai/gpt-5",
+        // model: "moonshotai/kimi-k2:free",
         backend_name: "openrouter",
     },
     BackendTestConfig {
@@ -582,9 +584,10 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         .expect("Failed to build LLM");
 
     // Test tool calls in streaming mode
-    let messages = vec![ChatMessage::user()
+    let mut messages = vec![ChatMessage::user()
         .content("What's the weather in Paris?")
         .build()];
+    let mut tool_call_id = String::new();
     let mut tool_call_chunks = 0;
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
@@ -596,6 +599,9 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
                         if let Some(choice) = stream_response.choices.first() {
                             if let Some(tc) = &choice.delta.tool_calls {
                                 if !tc.is_empty() {
+                                    if tool_call_id.is_empty() {
+                                        tool_call_id = tc[0].id.clone();
+                                    }
                                     tool_call_chunks += 1;
                                 }
                             }
@@ -630,10 +636,35 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert!(tool_call_chunks > 0, "Expected at least 1 chunk with tool call, got {tool_call_chunks}");
+    assert!(
+        tool_call_chunks > 0,
+        "Expected at least 1 chunk with tool call, got {tool_call_chunks}"
+    );
 
     // Test no tool calls in streaming mode
-    let messages = vec![ChatMessage::user().content("hello").build()];
+    // let messages = vec![ChatMessage::user().content("hello").build()];
+    // messages.push(ChatMessage::tool().content("Grim as usual").tool_call_id(&tool_call_id).build());
+    // messages.push(ChatMessage::assistant().content("I will search for weather in Paris with a tool").build());
+
+    // Easy way to add a tool call message:
+    // let weather_tool_call = create_tool_call(&tool_call_id, "weather_function", r#"{"city": "Paris"}"#);
+    // messages.push(ChatMessage::assistant().tool_use(vec![weather_tool_call]).tool_call_id(&tool_call_id).build());
+    messages.push(ChatMessage::assistant().tool_use(vec![ToolCall {
+        id: tool_call_id.clone(),
+        call_type: "function".to_string(),
+        function: FunctionCall {
+            name: "weather_function".to_string(),
+            arguments: r#"{"city": "Paris"}"#.to_string(),
+        },
+    }]).tool_call_id(&tool_call_id).build());
+    // OpenAI require tool_call_id on tool messages:
+    // }]).tool_call_id(&tool_call_id).build());
+    // Mistral, Groq require no tool_call_id:
+    // }]).build());
+    // OpenRouter kimi k2 does not care
+
+    messages.push(ChatMessage::tool().content("Grim as usual").tool_call_id(&tool_call_id).build());
+    println!("Messages with tool call: {messages:#?}");
     match llm.chat_stream_struct(&messages).await {
         Ok(mut stream) => {
             let mut complete_text = String::new();
@@ -658,7 +689,6 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
 }
-
 
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
@@ -745,7 +775,10 @@ async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert_eq!(tool_call_chunks, 1, "Expected exactly 1 chunk with tool call, got {tool_call_chunks}");
+    assert_eq!(
+        tool_call_chunks, 1,
+        "Expected exactly 1 chunk with tool call, got {tool_call_chunks}"
+    );
 }
 
 #[rstest]

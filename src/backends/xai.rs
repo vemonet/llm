@@ -6,7 +6,7 @@
 #[cfg(feature = "xai")]
 use crate::{
     builder::LLMBackend,
-    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool, Usage},
+    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat, Tool, Usage},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -299,6 +299,18 @@ impl XAI {
     }
 }
 
+/// Convert `llm` crate `ChatMessage` to `XAIChatMessage`
+fn chat_message_to_xai_message(chat_msg: &ChatMessage) -> XAIChatMessage<'_> {
+    XAIChatMessage {
+        role: match chat_msg.role {
+            ChatRole::User => "user",
+            ChatRole::Assistant => "assistant",
+            ChatRole::Tool => "tool",
+        },
+        content: &chat_msg.content,
+    }
+}
+
 #[async_trait]
 impl ChatProvider for XAI {
     /// Sends a chat request to the X.AI API and returns the response.
@@ -315,16 +327,8 @@ impl ChatProvider for XAI {
             return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
         }
 
-        let mut xai_msgs: Vec<XAIChatMessage> = messages
-            .iter()
-            .map(|m| XAIChatMessage {
-                role: match m.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                content: &m.content,
-            })
-            .collect();
+        let mut xai_msgs: Vec<XAIChatMessage> =
+            messages.iter().map(chat_message_to_xai_message).collect();
 
         if let Some(system) = &self.system {
             xai_msgs.insert(
@@ -434,16 +438,8 @@ impl ChatProvider for XAI {
             return Err(LLMError::AuthError("Missing X.AI API key".to_string()));
         }
 
-        let mut xai_msgs: Vec<XAIChatMessage> = messages
-            .iter()
-            .map(|m| XAIChatMessage {
-                role: match m.role {
-                    ChatRole::User => "user",
-                    ChatRole::Assistant => "assistant",
-                },
-                content: &m.content,
-            })
-            .collect();
+        let mut xai_msgs: Vec<XAIChatMessage> =
+            messages.iter().map(chat_message_to_xai_message).collect();
 
         if let Some(system) = &self.system {
             xai_msgs.insert(

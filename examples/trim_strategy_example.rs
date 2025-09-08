@@ -43,6 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let role = match msg.role {
                     llm::chat::ChatRole::User => "User",
                     llm::chat::ChatRole::Assistant => "Assistant",
+                    llm::chat::ChatRole::Tool => "User",
                 };
                 println!("  {}: {} - '{}'", j + 1, role, msg.content);
             }

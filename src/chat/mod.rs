@@ -90,6 +90,10 @@ pub enum ChatRole {
     User,
     /// The AI assistant participant in the conversation
     Assistant,
+    /// A tool results providing additional context to the conversation
+    Tool,
+    // TODO: add message role for tool call
+    // ToolCall,
 }
 
 /// The supported MIME type of an image.
@@ -154,6 +158,8 @@ pub struct ChatMessage {
     pub message_type: MessageType,
     /// The text content of the message
     pub content: String,
+    /// The ID of the tool call if this message is a tool result
+    pub tool_call_id: Option<String>,
 }
 
 /// Represents a parameter in a function tool
@@ -467,6 +473,11 @@ impl ChatMessage {
     pub fn assistant() -> ChatMessageBuilder {
         ChatMessageBuilder::new(ChatRole::Assistant)
     }
+
+    /// Create a new builder for an assistant message
+    pub fn tool() -> ChatMessageBuilder {
+        ChatMessageBuilder::new(ChatRole::Tool)
+    }
 }
 
 /// Builder for ChatMessage
@@ -475,6 +486,7 @@ pub struct ChatMessageBuilder {
     role: ChatRole,
     message_type: MessageType,
     content: String,
+    tool_call_id: Option<String>,
 }
 
 impl ChatMessageBuilder {
@@ -484,6 +496,7 @@ impl ChatMessageBuilder {
             role,
             message_type: MessageType::default(),
             content: String::new(),
+            tool_call_id: None,
         }
     }
 
@@ -523,12 +536,19 @@ impl ChatMessageBuilder {
         self
     }
 
+    /// Set the tool call ID
+    pub fn tool_call_id(mut self, tool_call_id: impl Into<String>) -> Self {
+        self.tool_call_id = Some(tool_call_id.into());
+        self
+    }
+
     /// Build the ChatMessage
     pub fn build(self) -> ChatMessage {
         ChatMessage {
             role: self.role,
             message_type: self.message_type,
             content: self.content,
+            tool_call_id: self.tool_call_id,
         }
     }
 }

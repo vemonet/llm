@@ -231,6 +231,7 @@ impl<'a> MultiPromptChain<'a> {
                         role: ChatRole::User,
                         message_type: MessageType::Text,
                         content: prompt_text,
+                        tool_call_id: None,
                     }];
                     llm.chat(&messages).await?.text().unwrap_or_default()
                 }

@@ -79,6 +79,7 @@ impl<'a> From<&'a ChatMessage> for OllamaChatMessage<'a> {
             role: match msg.role {
                 ChatRole::User => "user",
                 ChatRole::Assistant => "assistant",
+                ChatRole::Tool => "tool",
             },
             content: &msg.content,
             images: match &msg.message_type {

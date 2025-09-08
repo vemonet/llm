@@ -98,7 +98,7 @@ pub struct OpenAIMessageContent<'a> {
     pub text: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<ImageUrlContent>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "tool_call_id")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "content")]
     pub tool_output: Option<&'a str>,
@@ -574,14 +574,15 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
     }
 }
 
-/// Create OpenAICompatibleChatMessage` that doesn't borrow from any temporary variables
+/// Convert `llm` crate `ChatMessage` to `OpenAIChatMessage`
 pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessage<'static> {
     OpenAIChatMessage {
         role: match chat_msg.role {
             ChatRole::User => "user",
             ChatRole::Assistant => "assistant",
+            ChatRole::Tool => "tool",
         },
-        tool_call_id: None,
+        tool_call_id: chat_msg.tool_call_id,
         content: match &chat_msg.message_type {
             MessageType::Text => Some(Right(chat_msg.content.clone())),
             MessageType::Image(_) => unreachable!(),

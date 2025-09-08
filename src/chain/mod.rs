@@ -134,6 +134,7 @@ impl<'a> PromptChain<'a> {
                         role: crate::chat::ChatRole::User,
                         message_type: crate::chat::MessageType::Text,
                         content: prompt,
+                        tool_call_id: None,
                     }];
                     self.llm.chat(&messages).await?
                 }

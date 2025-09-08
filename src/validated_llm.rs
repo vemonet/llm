@@ -136,6 +136,7 @@ impl ChatProvider for ValidatedLLM {
                             "Your previous output was invalid because: {err}\n\
                              Please try again and produce a valid response."
                         ),
+                        tool_call_id: None,
                     });
                 }
             }

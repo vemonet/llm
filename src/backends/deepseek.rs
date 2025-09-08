@@ -129,6 +129,7 @@ impl ChatProvider for DeepSeek {
                 role: match m.role {
                     ChatRole::User => "user",
                     ChatRole::Assistant => "assistant",
+                    ChatRole::Tool => "tool",
                 },
                 content: &m.content,
             })

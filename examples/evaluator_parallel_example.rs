@@ -42,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role: ChatRole::User,
         message_type: Default::default(),
         content: "Explique-moi la théorie de la relativité d'Einstein".to_string(),
+        tool_call_id: None,
     }];
 
     let results = evaluator.evaluate_chat_parallel(&messages).await?;
