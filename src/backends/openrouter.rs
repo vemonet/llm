@@ -123,7 +123,7 @@ impl ModelsProvider for OpenRouter {
             ));
         }
 
-        let url = format!("{}/models", OpenRouterConfig::DEFAULT_BASE_URL);
+        let url = format!("{}models", OpenRouterConfig::DEFAULT_BASE_URL);
 
         let resp = self
             .client
