@@ -205,21 +205,19 @@ jobs:
         with:
           platforms: linux/${{ matrix.target }}
 
-      - name: install uv
-        uses: astral-sh/setup-uv@v6
+      - if: matrix.os == 'linux'
+        run: sudo apt update && sudo apt install -y pkg-config libssl-dev
 
-      - run: sudo apt update && sudo apt install -y pkg-config libssl-dev
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.11'
-      #     architecture: ${{ matrix.python-architecture || 'x64' }}
-      # - run: pip install -U twine typing_extensions
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python-architecture || 'x64' }}
+      - run: pip install -U twine typing_extensions 'ruff==0.5.0'
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        env:
-          CFLAGS_aarch64_unknown_linux_gnu: -D__ARM_ARCH=8
-          # NOTE: ring linux aarch64 error: https://github.com/briansmith/ring/issues/1728
+        # env:  # NOTE: ring linux aarch64 error: https://github.com/briansmith/ring/issues/1728
+        #   CFLAGS_aarch64_unknown_linux_gnu: -D__ARM_ARCH=8
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
@@ -228,16 +226,16 @@ jobs:
           docker-options: -e CI
 
       - run: ${{ (matrix.os == 'windows' && 'dir') || 'ls -lh' }} dist/
-      - run: uvx twine check --strict dist/*
+      - run: twine check --strict dist/*
 
       - uses: actions/upload-artifact@v4
         with:
           name: llm_rs_wheel_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
           path: dist
 
-      - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/')
-        run: uvx twine upload dist/*
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      # - name: Publish to PyPI
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   run: twine upload dist/*
+      #   env:
+      #     TWINE_USERNAME: __token__
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
