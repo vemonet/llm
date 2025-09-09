@@ -111,7 +111,9 @@ jobs:
 
       - name: Add aarch64 linker
         if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin'
-        run: echo -e "\n\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config.toml
+        run: |
+          mkdir -p .cargo
+          echo -e "\n\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -205,6 +207,8 @@ jobs:
 
       - name: install uv
         uses: astral-sh/setup-uv@v6
+
+      - run: sudo apt update && sudo apt install -y pkg-config libssl-dev
       # - uses: actions/setup-python@v5
       #   with:
       #     python-version: '3.11'
