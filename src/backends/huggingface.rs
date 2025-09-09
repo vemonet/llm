@@ -16,7 +16,7 @@ use crate::{
 };
 use async_trait::async_trait;
 
-/// Groq configuration for the generic provider
+/// HuggingFace configuration for the generic provider
 pub struct HuggingFaceConfig;
 
 impl OpenAIProviderConfig for HuggingFaceConfig {
@@ -31,7 +31,7 @@ impl OpenAIProviderConfig for HuggingFaceConfig {
 pub type HuggingFace = OpenAICompatibleProvider<HuggingFaceConfig>;
 
 impl HuggingFace {
-    /// Creates a new Groq client with the specified configuration.
+    /// Creates a new HuggingFace client with the specified configuration.
     #[allow(clippy::too_many_arguments)]
     pub fn with_config(
         api_key: impl Into<String>,
@@ -66,11 +66,11 @@ impl HuggingFace {
             tool_choice,
             reasoning_effort,
             json_schema,
-            None, // voice - not supported by Groq
+            None, // voice
             parallel_tool_calls,
             normalize_response,
-            None, // embedding_encoding_format - not supported by Groq
-            None, // embedding_dimensions - not supported by Groq
+            None, // embedding_encoding_format
+            None, // embedding_dimensions
         )
     }
 }
@@ -85,7 +85,7 @@ impl LLMProvider for HuggingFace {
 impl CompletionProvider for HuggingFace {
     async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
-            text: "Groq completion not implemented.".into(),
+            text: "HuggingFace completion not implemented.".into(),
         })
     }
 }
@@ -103,7 +103,7 @@ impl EmbeddingProvider for HuggingFace {
 impl SpeechToTextProvider for HuggingFace {
     async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
         Err(LLMError::ProviderError(
-            "Groq does not implement speech to text endpoint yet.".into(),
+            "HuggingFace does not implement speech to text endpoint yet.".into(),
         ))
     }
 }
@@ -118,7 +118,7 @@ impl ModelsProvider for HuggingFace {
         _request: Option<&ModelListRequest>,
     ) -> Result<Box<dyn ModelListResponse>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError("Missing Groq API key".to_string()));
+            return Err(LLMError::AuthError("Missing HuggingFace API key".to_string()));
         }
 
         let url = format!("{}/models", HuggingFaceConfig::DEFAULT_BASE_URL);
@@ -133,7 +133,7 @@ impl ModelsProvider for HuggingFace {
 
         let result = StandardModelListResponse {
             inner: resp.json().await?,
-            backend: LLMBackend::Groq,
+            backend: LLMBackend::HuggingFace,
         };
         Ok(Box::new(result))
     }
