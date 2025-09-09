@@ -1,0 +1,40 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+requires-python = ">=3.8"
+name = "llm-rs"
+description = "A Rust library unifying multiple LLM backends."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Tristan Granier", email = "graniet75@gmail.com" },
+    { name = "Jared Kofron", email = "jared.kofron@gmail.com" },
+]
+maintainers = [
+    { name = "Tristan Granier", email = "graniet75@gmail.com" },
+    { name = "Vincent Emonet", email = "vincent.emonet@gmail.com" },
+]
+keywords = [
+    "LLM",
+    "RAG",
+    "AI",
+    "Chat",
+]
+classifiers = [
+	"Programming Language :: Rust",
+	"Programming Language :: Python :: Implementation :: CPython",
+	"Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/graniet/llm"
+Documentation = "https://github.com/graniet/llm"
+History = "https://github.com/graniet/llm/releases"
+Tracker = "https://github.com/graniet/llm/issues"
+Source = "https://github.com/graniet/llm"
+
+[tool.maturin]
+bindings = "bin"

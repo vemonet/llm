@@ -4,9 +4,10 @@ on:
   workflow_call:
   push:
     branches: [ main ]
-  # pull_request:
+    tags: [ "v*.*.*" ]
   pull_request_target:
     types: [labeled]
+  # pull_request:
 
 # NOTE: sending requests to LLM providers in tests might lead to potential abuses
 jobs:
@@ -15,12 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     # if: github.event_name != 'pull_request_target'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install ALSA development libraries
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - run: rustup update
+      - run: rustup update && cargo install cargo-deny
       # - run: cargo fmt -- --check
       - run: cargo clippy --all --all-targets --all-features
+      - run: cargo deny check
       - run: cargo test
       - run: cargo build --release
 
@@ -35,4 +37,203 @@ jobs:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      - run: cargo build --release
+
+
+  generate-changelog:
+    name: 🏔️ Generate changelog for the GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Generate a changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGES.md
+
+
+  publish_crate:
+    name: 🦀 Publish llm crate to crates.io
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup update
+      - run: cargo login $CRATES_IO_TOKEN
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      - run: cargo publish
+
+
+  build_binaries:
+    name: 📦️ Binaries for ${{ matrix.os }} (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            target: x86_64-unknown-linux-gnu
+          - os: linux
+            target: aarch64-unknown-linux-gnu
+          - os: macos
+            target: x86_64-apple-darwin
+          - os: macos
+            target: aarch64-apple-darwin
+          - os: windows
+            target: x86_64-pc-windows-msvc
+          - os: windows
+            target: aarch64-pc-windows-msvc
+
+    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Add cross-compilation target
+        run: rustup update && rustup target add ${{ matrix.target }}
+
+      - name: Install aarch64 linux dependencies
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt update && sudo apt install -y g++-aarch64-linux-gnu
+
+      - name: Add aarch64 linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin'
+        run: echo -e "\n\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/llm${{ matrix.os == 'windows' && '.exe' || '' }}
+
+      - if: startsWith(github.ref, 'refs/tags/')
+        name: Prepare for release
+        run: |
+          mv target/${{ matrix.target }}/release/llm${{ matrix.os == 'windows' && '.exe' || '' }} llm_${{ matrix.target }}${{ matrix.os == 'windows' && '.exe' || '' }}
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            llm_${{ matrix.target }}${{ matrix.os == 'windows' && '.exe' || '' }}
+
+
+  # Inspired by pydantic CI: https://github.com/pydantic/pydantic-core/blob/main/.github/workflows/ci.yml
+  build_wheels:
+    name: 🐍 Wheels for ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, macos, windows]
+        target: [x86_64, aarch64]
+        manylinux: [auto]
+        # interpreter: ["3.8 3.9 3.10 3.11 3.12 3.13"]
+        include:
+          # Using pypy when possible for performance, manylinux for various platforms, plus x86_64 pypy
+          - os: linux
+            manylinux: auto
+            target: i686
+          - os: linux
+            manylinux: auto
+            target: aarch64 # -bit ARM
+          - os: linux
+            manylinux: auto
+            target: armv7  # 32-bit ARM
+            interpreter: 3.8 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: ppc64le
+            interpreter: 3.8 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: s390x
+            interpreter: 3.8 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: x86_64
+          # musllinux
+          - os: linux
+            manylinux: musllinux_1_1
+            target: x86_64
+          - os: linux
+            manylinux: musllinux_1_1
+            target: aarch64
+          # MacOS
+          - os: macos
+            target: x86_64
+          - os: macos
+            target: aarch64
+          # Windows
+          # x86_64 pypy builds are not PGO optimized, i686 not supported by pypy, aarch64 only 3.11 and up, also not PGO optimized
+          # x86_64 pypy3.9 pypy3.10 failing due to ring
+          - os: windows
+            target: x86_64
+            interpreter: 3.8 3.9 3.10 3.11 3.12 3.13
+          - os: windows
+            target: i686
+            python-architecture: x86
+            interpreter: 3.8 3.9 3.10 3.11 3.12 3.13
+          - os: windows
+            target: aarch64
+            interpreter: 3.11 3.12 3.13
+
+    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.os == 'linux' && matrix.target == 'aarch64'
+        with:
+          platforms: linux/${{ matrix.target }}
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.11'
+      #     architecture: ${{ matrix.python-architecture || 'x64' }}
+      # - run: pip install -U twine typing_extensions
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        env:
+          CFLAGS_aarch64_unknown_linux_gnu: -D__ARM_ARCH=8
+          # NOTE: ring linux aarch64 error: https://github.com/briansmith/ring/issues/1728
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist --interpreter ${{ matrix.interpreter || '3.8 3.9 3.10 3.11 3.12 3.13 pypy3.9 pypy3.10 pypy3.11' }}
+          rust-toolchain: stable
+          docker-options: -e CI
+
+      - run: ${{ (matrix.os == 'windows' && 'dir') || 'ls -lh' }} dist/
+      - run: uvx twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llm_rs_wheel_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
+          path: dist
+
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags/')
+        run: uvx twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

@@ -10,6 +10,7 @@ Instructions to run the project in development.
 >
 > - [Rust](https://www.rust-lang.org/tools/install)
 > - You might need to install [`protobuf`](https://protobuf.dev/installation/), e.g. with `apt install protobuf-compiler` or `brew install protobuf`
+> - Optionally, [`uv`](https://docs.astral.sh/uv/getting-started/installation/) required if you want to build the python wheels
 >
 > Recommended VSCode extension: [`rust-analyzer`](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
@@ -17,6 +18,7 @@ Instructions to run the project in development.
 
 ```sh
 rustup update
+cargo install cargo-release cargo-deny git-cliff
 ```
 
 Create a `.cargo/config.toml` file with your API keys:
@@ -82,6 +84,12 @@ cargo build --release
 > ./target/release/llm --help
 > ```
 
+🐍 Bundle the CLI as python wheels in `target/wheels`:
+
+```sh
+uvx maturin build
+```
+
 ## 🧼 Format & lint
 
 Automatically format the codebase using `rustfmt`:
@@ -109,3 +117,40 @@ Build:
 ```sh
 cargo doc --open
 ```
+
+### ⛓️ Check supply chain
+
+Check the dependency supply chain: licenses (only accept dependencies with OSI or FSF approved licenses), and vulnerabilities (CVE advisories).
+
+```sh
+cargo deny check
+```
+
+Update dependencies in `Cargo.lock`:
+
+```sh
+cargo update
+```
+
+### 🏷️ Release
+
+Dry run:
+
+```sh
+cargo release patch
+```
+
+> Or `minor` / `major`
+
+Create release:
+
+```sh
+cargo release patch --execute
+```
+
+This will generate the `CHANGELOG.md` and create a git tag for the new version, push this tag to trigger a GitHub actions workflow that will:
+
+- Build and publish the rust crate to crates.io
+- Build CLI binaries for every common platform architecture (linux/macos/windows x86/arm)
+- Build python wheels for the CLI for common platform architecture, and publish the new version to PyPI
+- Create a GitHub release using the git cliff changelog of the new version
