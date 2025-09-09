@@ -172,9 +172,7 @@ impl ModelsProvider for Mistral {
         _request: Option<&ModelListRequest>,
     ) -> Result<Box<dyn ModelListResponse>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError(
-                "Missing Mistral API key".to_string(),
-            ));
+            return Err(LLMError::AuthError("Missing Mistral API key".to_string()));
         }
         let url = format!("{}models", MistralConfig::DEFAULT_BASE_URL);
         let resp = self

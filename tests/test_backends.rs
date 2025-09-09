@@ -406,10 +406,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
             );
             // Parse the response as JSON and validate structure
             let raw_response = response.text().unwrap();
-            let response_text = clean_response_text_for_backend(
-                &raw_response,
-                config.backend_name
-            );
+            let response_text = clean_response_text_for_backend(&raw_response, config.backend_name);
 
             match serde_json::from_str::<serde_json::Value>(&response_text) {
                 Ok(json) => {
@@ -445,8 +442,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
                 }
                 Err(e) => panic!(
                     "Failed to parse response as JSON for {}: {e}. Response: {}",
-                    config.backend_name,
-                    response_text
+                    config.backend_name, response_text
                 ),
             }
             assert!(
@@ -644,7 +640,10 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert!(tool_call_chunks > 0, "Expected at least 1 chunk with tool call, got {tool_call_chunks}");
+    assert!(
+        tool_call_chunks > 0,
+        "Expected at least 1 chunk with tool call, got {tool_call_chunks}"
+    );
 
     // Test no tool calls in streaming mode
     let messages = vec![ChatMessage::user().content("hello").build()];
@@ -672,7 +671,6 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
 }
-
 
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
@@ -760,7 +758,10 @@ async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert_eq!(tool_call_chunks, 1, "Expected exactly 1 chunk with tool call, got {tool_call_chunks}");
+    assert_eq!(
+        tool_call_chunks, 1,
+        "Expected exactly 1 chunk with tool call, got {tool_call_chunks}"
+    );
 }
 
 #[rstest]

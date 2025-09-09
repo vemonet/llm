@@ -118,7 +118,9 @@ impl ModelsProvider for HuggingFace {
         _request: Option<&ModelListRequest>,
     ) -> Result<Box<dyn ModelListResponse>, LLMError> {
         if self.api_key.is_empty() {
-            return Err(LLMError::AuthError("Missing HuggingFace API key".to_string()));
+            return Err(LLMError::AuthError(
+                "Missing HuggingFace API key".to_string(),
+            ));
         }
 
         let url = format!("{}/models", HuggingFaceConfig::DEFAULT_BASE_URL);

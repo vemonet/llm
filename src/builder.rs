@@ -963,7 +963,9 @@ impl LLMBuilder {
                 #[cfg(feature = "huggingface")]
                 {
                     let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for HuggingFace Inference Providers".to_string())
+                        LLMError::InvalidRequest(
+                            "No API key provided for HuggingFace Inference Providers".to_string(),
+                        )
                     })?;
 
                     let llm = crate::backends::huggingface::HuggingFace::with_config(
