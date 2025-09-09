@@ -1,6 +1,6 @@
-//! OpenRouter API client implementation for chat functionality.
+//! HuggingFace Inference Providers API client implementation for chat functionality.
 //!
-//! This module provides integration with OpenRouter's LLM models through their API.
+//! https://huggingface.co/docs/inference-providers
 
 use crate::{
     builder::LLMBackend,
@@ -16,22 +16,22 @@ use crate::{
 };
 use async_trait::async_trait;
 
-/// OpenRouter configuration for the generic provider
-pub struct OpenRouterConfig;
+/// HuggingFace configuration for the generic provider
+pub struct HuggingFaceConfig;
 
-impl OpenAIProviderConfig for OpenRouterConfig {
-    const PROVIDER_NAME: &'static str = "OpenRouter";
-    const DEFAULT_BASE_URL: &'static str = "https://openrouter.ai/api/v1/";
-    const DEFAULT_MODEL: &'static str = "moonshotai/kimi-k2:free";
+impl OpenAIProviderConfig for HuggingFaceConfig {
+    const PROVIDER_NAME: &'static str = "HuggingFace Inference Providers";
+    const DEFAULT_BASE_URL: &'static str = "https://router.huggingface.co/v1/";
+    const DEFAULT_MODEL: &'static str = "openai/gpt-oss-20b";
     const SUPPORTS_REASONING_EFFORT: bool = false;
     const SUPPORTS_STRUCTURED_OUTPUT: bool = true;
     const SUPPORTS_PARALLEL_TOOL_CALLS: bool = false;
 }
 
-pub type OpenRouter = OpenAICompatibleProvider<OpenRouterConfig>;
+pub type HuggingFace = OpenAICompatibleProvider<HuggingFaceConfig>;
 
-impl OpenRouter {
-    /// Creates a new OpenRouter client with the specified configuration.
+impl HuggingFace {
+    /// Creates a new HuggingFace client with the specified configuration.
     #[allow(clippy::too_many_arguments)]
     pub fn with_config(
         api_key: impl Into<String>,
@@ -52,7 +52,7 @@ impl OpenRouter {
         parallel_tool_calls: Option<bool>,
         normalize_response: Option<bool>,
     ) -> Self {
-        OpenAICompatibleProvider::<OpenRouterConfig>::new(
+        OpenAICompatibleProvider::<HuggingFaceConfig>::new(
             api_key,
             base_url,
             model,
@@ -66,32 +66,32 @@ impl OpenRouter {
             tool_choice,
             reasoning_effort,
             json_schema,
-            None, // voice - not supported by OpenRouter
+            None, // voice
             parallel_tool_calls,
             normalize_response,
-            None, // embedding_encoding_format - not supported by OpenRouter
-            None, // embedding_dimensions - not supported by OpenRouter
+            None, // embedding_encoding_format
+            None, // embedding_dimensions
         )
     }
 }
 
-impl LLMProvider for OpenRouter {
+impl LLMProvider for HuggingFace {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
     }
 }
 
 #[async_trait]
-impl CompletionProvider for OpenRouter {
+impl CompletionProvider for HuggingFace {
     async fn complete(&self, _req: &CompletionRequest) -> Result<CompletionResponse, LLMError> {
         Ok(CompletionResponse {
-            text: "OpenRouter completion not implemented.".into(),
+            text: "HuggingFace completion not implemented.".into(),
         })
     }
 }
 
 #[async_trait]
-impl EmbeddingProvider for OpenRouter {
+impl EmbeddingProvider for HuggingFace {
     async fn embed(&self, _text: Vec<String>) -> Result<Vec<Vec<f32>>, LLMError> {
         Err(LLMError::ProviderError(
             "Embedding not supported".to_string(),
@@ -100,30 +100,30 @@ impl EmbeddingProvider for OpenRouter {
 }
 
 #[async_trait]
-impl SpeechToTextProvider for OpenRouter {
+impl SpeechToTextProvider for HuggingFace {
     async fn transcribe(&self, _audio: Vec<u8>) -> Result<String, LLMError> {
         Err(LLMError::ProviderError(
-            "OpenRouter does not implement speech to text endpoint yet.".into(),
+            "HuggingFace does not implement speech to text endpoint yet.".into(),
         ))
     }
 }
 
 #[async_trait]
-impl TextToSpeechProvider for OpenRouter {}
+impl TextToSpeechProvider for HuggingFace {}
 
 #[async_trait]
-impl ModelsProvider for OpenRouter {
+impl ModelsProvider for HuggingFace {
     async fn list_models(
         &self,
         _request: Option<&ModelListRequest>,
     ) -> Result<Box<dyn ModelListResponse>, LLMError> {
         if self.api_key.is_empty() {
             return Err(LLMError::AuthError(
-                "Missing OpenRouter API key".to_string(),
+                "Missing HuggingFace API key".to_string(),
             ));
         }
 
-        let url = format!("{}models", OpenRouterConfig::DEFAULT_BASE_URL);
+        let url = format!("{}/models", HuggingFaceConfig::DEFAULT_BASE_URL);
 
         let resp = self
             .client
@@ -135,7 +135,7 @@ impl ModelsProvider for OpenRouter {
 
         let result = StandardModelListResponse {
             inner: resp.json().await?,
-            backend: LLMBackend::OpenRouter,
+            backend: LLMBackend::HuggingFace,
         };
         Ok(Box::new(result))
     }

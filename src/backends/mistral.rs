@@ -2,6 +2,8 @@
 //!
 //! This module provides integration with Mistral's LLM models through their API.
 
+use crate::builder::LLMBackend;
+use crate::models::{ModelListRequest, ModelListResponse, StandardModelListResponse};
 use crate::providers::openai_compatible::{OpenAICompatibleProvider, OpenAIProviderConfig};
 use crate::{
     chat::{StructuredOutputFormat, Tool, ToolChoice},
@@ -167,11 +169,25 @@ impl EmbeddingProvider for Mistral {
 impl ModelsProvider for Mistral {
     async fn list_models(
         &self,
-        _request: Option<&crate::models::ModelListRequest>,
-    ) -> Result<Box<dyn crate::models::ModelListResponse>, LLMError> {
-        Err(LLMError::ProviderError(
-            "Mistral does not provide a models listing endpoint".into(),
-        ))
+        _request: Option<&ModelListRequest>,
+    ) -> Result<Box<dyn ModelListResponse>, LLMError> {
+        if self.api_key.is_empty() {
+            return Err(LLMError::AuthError("Missing Mistral API key".to_string()));
+        }
+        let url = format!("{}models", MistralConfig::DEFAULT_BASE_URL);
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let result = StandardModelListResponse {
+            inner: resp.json().await?,
+            backend: LLMBackend::Mistral,
+        };
+        Ok(Box::new(result))
     }
 }
 

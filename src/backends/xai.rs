@@ -3,10 +3,13 @@
 //! This module provides integration with X.AI's models through their API.
 //! It implements chat and completion capabilities using the X.AI API endpoints.
 
+use crate::ToolCall;
 #[cfg(feature = "xai")]
 use crate::{
     builder::LLMBackend,
-    chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool, Usage},
+    chat::{
+        ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool, Usage,
+    },
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
@@ -15,7 +18,6 @@ use crate::{
     tts::TextToSpeechProvider,
     LLMProvider,
 };
-use crate::ToolCall;
 use async_trait::async_trait;
 use futures::stream::Stream;
 use reqwest::Client;

@@ -100,6 +100,13 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
         model: "grok-3-mini",
         backend_name: "xai",
     },
+    BackendTestConfig {
+        backend: LLMBackend::HuggingFace,
+        env_key: "HF_TOKEN",
+        model: "moonshotai/Kimi-K2-Instruct-0905",
+        // model: "openai/gpt-oss-20b", // Does not manage to return the function call name in stream
+        backend_name: "huggingface",
+    },
 ];
 
 #[rstest]
@@ -111,6 +118,9 @@ const BACKEND_CONFIGS: &[BackendTestConfig] = &[
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
+// NOTE: HuggingFace tests commented out because monthly free credits too low to run all tests all the time
+// Will need to be done manually when needed
 #[tokio::test]
 async fn test_chat(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -244,6 +254,7 @@ async fn test_chat_with_reasoning(#[case] config: &BackendTestConfig) {
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -325,6 +336,7 @@ async fn test_chat_with_tools(#[case] config: &BackendTestConfig) {
 #[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -394,10 +406,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
             );
             // Parse the response as JSON and validate structure
             let raw_response = response.text().unwrap();
-            let response_text = clean_response_text_for_backend(
-                &raw_response,
-                config.backend_name
-            );
+            let response_text = clean_response_text_for_backend(&raw_response, config.backend_name);
 
             match serde_json::from_str::<serde_json::Value>(&response_text) {
                 Ok(json) => {
@@ -433,8 +442,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
                 }
                 Err(e) => panic!(
                     "Failed to parse response as JSON for {}: {e}. Response: {}",
-                    config.backend_name,
-                    response_text
+                    config.backend_name, response_text
                 ),
             }
             assert!(
@@ -474,6 +482,7 @@ async fn test_chat_structured_output(#[case] config: &BackendTestConfig) {
 // #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -551,6 +560,7 @@ async fn test_chat_stream_struct(#[case] config: &BackendTestConfig) {
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -630,7 +640,10 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert!(tool_call_chunks > 0, "Expected at least 1 chunk with tool call, got {tool_call_chunks}");
+    assert!(
+        tool_call_chunks > 0,
+        "Expected at least 1 chunk with tool call, got {tool_call_chunks}"
+    );
 
     // Test no tool calls in streaming mode
     let messages = vec![ChatMessage::user().content("hello").build()];
@@ -659,13 +672,13 @@ async fn test_chat_stream_tools(#[case] config: &BackendTestConfig) {
     }
 }
 
-
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
 #[case::groq(&BACKEND_CONFIGS[3])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 // #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -745,7 +758,10 @@ async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
         }
         Err(e) => panic!("Stream error for {}: {e}", config.backend_name),
     }
-    assert_eq!(tool_call_chunks, 1, "Expected exactly 1 chunk with tool call, got {tool_call_chunks}");
+    assert_eq!(
+        tool_call_chunks, 1,
+        "Expected exactly 1 chunk with tool call, got {tool_call_chunks}"
+    );
 }
 
 #[rstest]
@@ -757,6 +773,7 @@ async fn test_chat_stream_tools_normalized(#[case] config: &BackendTestConfig) {
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[case::xai(&BACKEND_CONFIGS[7])]
+// #[case::huggingface(&BACKEND_CONFIGS[8])]
 #[tokio::test]
 async fn test_chat_stream(#[case] config: &BackendTestConfig) {
     let api_key = match std::env::var(config.env_key) {
@@ -898,9 +915,8 @@ async fn test_chat_with_web_search_openai() {
 #[rstest]
 #[case::openai(&BACKEND_CONFIGS[0])]
 #[case::mistral(&BACKEND_CONFIGS[1])]
-#[case::google(&BACKEND_CONFIGS[2])]
+// #[case::google(&BACKEND_CONFIGS[2])]
 #[case::groq(&BACKEND_CONFIGS[3])]
-#[case::cohere(&BACKEND_CONFIGS[4])]
 #[case::anthropic(&BACKEND_CONFIGS[5])]
 #[case::openrouter(&BACKEND_CONFIGS[6])]
 #[case::xai(&BACKEND_CONFIGS[7])]

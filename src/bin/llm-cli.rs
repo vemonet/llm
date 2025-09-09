@@ -171,6 +171,10 @@ fn get_api_key(backend: &LLMBackend, args: &CliArgs) -> Option<String> {
                 .get("OPENROUTER_API_KEY")
                 .cloned()
                 .or_else(|| std::env::var("OPENROUTER_API_KEY").ok()),
+            LLMBackend::HuggingFace => store
+                .get("HF_TOKEN")
+                .cloned()
+                .or_else(|| std::env::var("HF_TOKEN").ok()),
         }
     })
 }

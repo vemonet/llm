@@ -49,6 +49,8 @@ pub enum LLMBackend {
     Mistral,
     /// OpenRouter API provider
     OpenRouter,
+    /// HuggingFace Inference Providers API
+    HuggingFace,
 }
 
 /// Implements string parsing for LLMBackend enum.
@@ -94,6 +96,8 @@ impl std::str::FromStr for LLMBackend {
             "elevenlabs" => Ok(LLMBackend::ElevenLabs),
             "cohere" => Ok(LLMBackend::Cohere),
             "mistral" => Ok(LLMBackend::Mistral),
+            "openrouter" => Ok(LLMBackend::OpenRouter),
+            "huggingface" => Ok(LLMBackend::HuggingFace),
             _ => Err(LLMError::InvalidRequest(format!(
                 "Unknown LLM backend: {s}"
             ))),
@@ -948,6 +952,42 @@ impl LLMBuilder {
                         self.embedding_dimensions,
                     );
                     Box::new(cohere)
+                }
+            }
+            LLMBackend::HuggingFace => {
+                #[cfg(not(feature = "huggingface"))]
+                return Err(LLMError::InvalidRequest(
+                    "huggingface feature not enabled".to_string(),
+                ));
+
+                #[cfg(feature = "huggingface")]
+                {
+                    let api_key = self.api_key.ok_or_else(|| {
+                        LLMError::InvalidRequest(
+                            "No API key provided for HuggingFace Inference Providers".to_string(),
+                        )
+                    })?;
+
+                    let llm = crate::backends::huggingface::HuggingFace::with_config(
+                        api_key,
+                        self.base_url,
+                        self.model,
+                        self.max_tokens,
+                        self.temperature,
+                        self.timeout_seconds,
+                        self.system,
+                        self.top_p,
+                        self.top_k,
+                        self.tools,
+                        self.tool_choice,
+                        None, // embedding_encoding_format
+                        None, // embedding_dimensions
+                        None, // reasoning_effort
+                        self.json_schema,
+                        self.enable_parallel_tool_use,
+                        self.normalize_response,
+                    );
+                    Box::new(llm)
                 }
             }
             LLMBackend::Mistral => {
