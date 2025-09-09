@@ -6,12 +6,12 @@ use llm::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Get Groq API key from environment variable or use test key as fallback
+    // Get API key from environment variable or use test key as fallback
     let api_key = std::env::var("HF_TOKEN").unwrap_or("gsk-TESTKEY".into());
 
     // Initialize and configure the LLM client
     let llm = LLMBuilder::new()
-        .backend(LLMBackend::Groq) // Use HuggingFace as the LLM provider
+        .backend(LLMBackend::HuggingFace) // Use HuggingFace as the LLM provider
         .api_key(api_key) // Set the API key
         .model("moonshotai/Kimi-K2-Instruct-0905")
         .max_tokens(512) // Limit response length
@@ -35,6 +35,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(text) => println!("Chat response:\n{text}"),
         Err(e) => eprintln!("Chat error: {e}"),
     }
-
     Ok(())
 }
